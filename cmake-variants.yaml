@@ -19,13 +19,13 @@ target_platform:
       settings:
         PICO_BOARD: "pico2_w"
         BUILD_TESTING: "OFF"
-        
 
     mac_host:
       short: Mac Host
       long: Build Unit Tests for macOS
       settings:
         PICO_PLATFORM: "host"
+        PICO_BOARD: "host"          # ADD THIS LINE
         BUILD_TESTING: "ON"
         CMAKE_C_COMPILER: "/usr/bin/clang"
         CMAKE_CXX_COMPILER: "/usr/bin/clang++"

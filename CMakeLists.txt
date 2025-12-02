@@ -1,13 +1,17 @@
 cmake_minimum_required(VERSION 3.15)
 
 # The name of our project
-set(PROJECT_NAME RP2350-FreeRTOS-Template-Multiplatform)
+set(PROJECT_NAME phoenix-avionics)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 23)
 
-# Detect if we're building for host (Mac)
-if(PICO_BOARD STREQUAL "host")
+# Detect if we're building for host (Mac) - check PICO_PLATFORM first
+if(PICO_PLATFORM STREQUAL "host")
+    set(BUILD_FOR_HOST TRUE)
+    set(PICO_BOARD "host" CACHE STRING "Board type" FORCE)
+    message(STATUS "Building for HOST (Mac) - Unit Tests")
+elseif(PICO_BOARD STREQUAL "host")
     set(BUILD_FOR_HOST TRUE)
     message(STATUS "Building for HOST (Mac) - Unit Tests")
 else()
@@ -168,7 +172,6 @@ if(NOT BUILD_FOR_HOST)
             DEPENDS ${TARGET_NAME}
             COMMENT "Flashing ${TARGET_NAME}.uf2 to Pico via picotool"
         )
-        # set_target_properties(flash PROPERTIES EXCLUDE_FROM_ALL FALSE)
     else()
         message(STATUS "picotool not found; 'flash' target will not be available")
     endif()
