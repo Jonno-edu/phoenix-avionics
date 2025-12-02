@@ -1,0 +1,10 @@
+build/
+.DS_Store
+.cache/
+compile_commands.json
+*.uf2
+*.elf
+*.map
+*.dis
+*.hex
+*.bin
