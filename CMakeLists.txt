@@ -134,6 +134,7 @@ target_include_directories(${TARGET_NAME} PRIVATE
 
 if(BUILD_FOR_HOST)
     # Mac host build - only link FreeRTOS for unit testing
+    target_compile_definitions(${TARGET_NAME} PRIVATE HOST_BUILD=1)
     target_link_libraries(${TARGET_NAME} PRIVATE
         freertos_config
         FreeRTOS-Kernel

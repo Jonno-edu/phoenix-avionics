@@ -29,6 +29,19 @@ void vApplicationMallocFailedHook() {
 #endif
 }
 
+// Serial command processing task
+void vSerialCommandTask(void *pvParameters) {
+    (void)pvParameters;
+    
+    while (true) {
+        // Scan buffer and process one command if found
+        serial_process_commands();
+        
+        // Yield to other tasks
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+
 int main() {
 #if PICO_BUILD
     stdio_init_all();
@@ -38,8 +51,19 @@ int main() {
     setvbuf(stdout, NULL, _IONBF, 0);
 #endif
 
+    xTaskCreate(
+        vSerialCommandTask,
+        "SerialCmd",
+        256,
+        NULL,
+        tskIDLE_PRIORITY + 1,
+        NULL
+    );
+
+    vTaskStartScheduler();
+
     while (true) {
-        sleep_ms(100);
+        sleep_ms(1000);
     }
     
     return 0;
