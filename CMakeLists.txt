@@ -123,6 +123,8 @@ endif()
 add_executable(${TARGET_NAME}
     src/main.c
     src/serial.c
+    src/system_data.c
+    src/command_handler.c
 )
 
 target_compile_definitions(${TARGET_NAME} PRIVATE

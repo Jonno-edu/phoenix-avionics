@@ -5,6 +5,7 @@
 #include <FreeRTOS.h>
 #include <task.h>
 #include "serial.h"
+#include "system_data.h"
 
 #if !PICO_BUILD
     #include <unistd.h>
@@ -34,10 +35,7 @@ void vSerialCommandTask(void *pvParameters) {
     (void)pvParameters;
     
     while (true) {
-        // Scan buffer and process one command if found
         serial_process_commands();
-        
-        // Yield to other tasks
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
@@ -46,11 +44,13 @@ int main() {
 #if PICO_BUILD
     stdio_init_all();
     serial_init();
+    system_data_init();
     sleep_ms(2000);
 #else
     setvbuf(stdout, NULL, _IONBF, 0);
 #endif
 
+    // Serial command task
     xTaskCreate(
         vSerialCommandTask,
         "SerialCmd",

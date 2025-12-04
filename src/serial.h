@@ -6,7 +6,7 @@
 #include <stdbool.h>
 
 #define SERIAL_BUFFER_SIZE 256
-#define COMMAND_BYTE 0x80
+#define CMD_GET_IDENTIFICATION 0x80
 
 void serial_send_byte(uint8_t byte);
 void serial_init(void);

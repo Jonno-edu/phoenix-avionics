@@ -1,5 +1,6 @@
 // serial.c
 #include "serial.h"
+#include "command_handler.h"  // Add this include
 #include <stdio.h>
 
 #if !PICO_BUILD
@@ -25,7 +26,6 @@ static void on_usb_rx(void *param) {
         rx_buffer[write_index] = byte;
         write_index = (write_index + 1) % SERIAL_BUFFER_SIZE;
         
-        // If buffer full, move read pointer (overwrite old data)
         if (write_index == read_index) {
             read_index = (read_index + 1) % SERIAL_BUFFER_SIZE;
         }
@@ -45,24 +45,21 @@ void serial_send_byte(uint8_t byte) {
 }
 
 void serial_process_commands(void) {
-    // Scan entire buffer between read_index and write_index
     uint16_t current = read_index;
     
     while (current != write_index) {
         uint8_t byte = rx_buffer[current];
         
         // Found a command!
-        if (byte == COMMAND_BYTE) {
-            // Execute command
-            serial_send_byte(0xAA);
-            serial_send_byte('\n');
+        if (byte == CMD_GET_IDENTIFICATION) {
+            // Process the command
+            command_handler_process(byte);
             
             // Move read pointer to just after this command
             read_index = (current + 1) % SERIAL_BUFFER_SIZE;
-            return;  // Process one command per call
+            return;
         }
         
-        // Move to next byte
         current = (current + 1) % SERIAL_BUFFER_SIZE;
     }
     
