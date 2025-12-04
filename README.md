@@ -1,12 +1,16 @@
-# RP2350-FreeRTOS-Template-Multiplatform
+# Phoenix Avionics
 
-A unified template for developing FreeRTOS applications that run on both the Raspberry Pi Pico (hardware) and macOS (host simulation). This project demonstrates how to maintain a single codebase with dual-target support using CMake variants and VS Code integration.
+Avionics software for RP2350 based flight controller, featuring FreeRTOS and multi-platform support (Pico 2 & macOS host simulation). This project demonstrates how to maintain a single codebase with dual-target support using CMake variants and VS Code integration.
 
 ## Features
 
 - **Multi-platform builds**: Run the same FreeRTOS code on your Mac (simulation) and Pico (hardware).
 - **CMake Variant Switching**: Seamlessly switch between `pico` and `mac_host` targets with full IntelliSense support.
 - **FreeRTOS Support**: Pre-configured FreeRTOS Kernel (via submodule) working on both platforms.
+- **Modular Architecture**:
+  - **Command Handler**: Processes incoming commands.
+  - **System Data**: Manages shared system state.
+  - **Serial**: Handles communication interfaces.
 - **VS Code Integration**: Custom tasks for building, flashing, and monitoring.
 - **Modern Tooling**: Uses Ninja, picotool, and CMake.
 
@@ -23,8 +27,8 @@ A unified template for developing FreeRTOS applications that run on both the Ras
 
 1. **Clone with submodules**:
    ```
-   git clone --recurse-submodules https://github.com/YOUR-ORG/YOUR-PROJECT.git
-   cd YOUR-PROJECT
+   git clone --recurse-submodules https://github.com/Jonno-edu/phoenix-avionics.git
+   cd phoenix-avionics
    ```
 
 2. **Open in VS Code**:
@@ -39,7 +43,7 @@ A unified template for developing FreeRTOS applications that run on both the Ras
 
 This project uses `cmake-variants.yaml` to define build targets. You can switch variants in the VS Code status bar (click the CMake variant selector, usually showing "Debug" or "Release").
 
-- **Debug-pico2 / Debug-pico_w**: Builds for the Raspberry Pi Pico hardware.
+- **Debug-pico2_w**: Builds for the Raspberry Pi Pico 2 W (RP2350) hardware.
 - **Debug-mac_host**: Builds a native executable for macOS.
 
 ## VS Code Tasks
@@ -66,9 +70,11 @@ See `main.c` for examples of how to wrap platform-specific code:
 
 ```c
 #if PICO_BUILD
-    gpio_put(2, 1);
+    stdio_init_all();
+    serial_init();
 #else
-    printf("LED ON (simulated)\n");
+    setvbuf(stdout, NULL, _IONBF, 0);
+    printf("System initialized (simulated)\n");
 #endif
 ```
 
