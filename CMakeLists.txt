@@ -125,6 +125,8 @@ add_executable(${TARGET_NAME}
     src/serial.c
     src/system_data.c
     src/command_handler.c
+    src/baroMS5607.c
+    src/i2c.c
 )
 
 target_compile_definitions(${TARGET_NAME} PRIVATE
@@ -147,6 +149,7 @@ else()
     target_link_libraries(${TARGET_NAME} PRIVATE
         pico_stdlib
         hardware_gpio
+        hardware_i2c
         pico_multicore
         pico_cyw43_arch_none
 

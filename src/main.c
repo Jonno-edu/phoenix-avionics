@@ -6,6 +6,7 @@
 #include <task.h>
 #include "serial.h"
 #include "system_data.h"
+#include "baroMS5607.h"
 
 #if !PICO_BUILD
     #include <unistd.h>
@@ -30,6 +31,7 @@ void vApplicationMallocFailedHook() {
 #endif
 }
 
+
 // Serial command processing task
 void vSerialCommandTask(void *pvParameters) {
     (void)pvParameters;
@@ -45,6 +47,9 @@ int main() {
     stdio_init_all();
     serial_init();
     system_data_init();
+    if (!baro_init()) {
+        printf("CRITICAL: Barometer initialization failed!\n");
+    }
     sleep_ms(2000);
 #else
     setvbuf(stdout, NULL, _IONBF, 0);

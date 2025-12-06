@@ -4,7 +4,8 @@
 
 #include <stdint.h>
 
-#define CMD_GET_IDENTIFICATION 0x80
+#define CMD_GET_IDENTIFICATION  0x80
+#define CMD_GET_BARO            0x20
 
 /**
  * @brief Process a received command byte

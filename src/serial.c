@@ -51,7 +51,7 @@ void serial_process_commands(void) {
         uint8_t byte = rx_buffer[current];
         
         // Found a command!
-        if (byte == CMD_GET_IDENTIFICATION) {
+        if (byte == CMD_GET_IDENTIFICATION || byte == CMD_GET_BARO) {
             // Process the command
             command_handler_process(byte);
             
