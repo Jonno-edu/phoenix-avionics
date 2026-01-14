@@ -32,9 +32,9 @@ static void handle_get_baro(void) {
 
     BAROMS5607_getPressure(&pressure);
 
-    printf("Temp: %f\n", temp);
+    printf("Temp: %f deg C\n", temp);
 
-    printf("Pressure: %f\n", pressure);
+    printf("Pressure: %f kPa\n", pressure);
 
 }
 

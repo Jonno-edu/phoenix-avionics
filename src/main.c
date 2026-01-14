@@ -6,6 +6,7 @@
 #include <task.h>
 #include "serial.h"
 #include "system_data.h"
+#include "i2c.h"
 #include "baroMS5607.h"
 
 #if !PICO_BUILD
@@ -47,7 +48,14 @@ int main() {
     stdio_init_all();
     serial_init();
     system_data_init();
-    if (!baro_init()) {
+
+    if (!I2C_init()) {
+        printf("CRITICAL: I2C initialization failed!\n");
+    }
+
+    I2C_scan_bus();
+
+    if (!BAROMS5607_init()) {
         printf("CRITICAL: Barometer initialization failed!\n");
     }
     sleep_ms(2000);

@@ -125,8 +125,13 @@ add_executable(${TARGET_NAME}
     src/serial.c
     src/system_data.c
     src/command_handler.c
-    src/baroMS5607.c
+    lib/esl-sensors/src/baroMS5607.c
     src/i2c.c
+    lib/esl-math/src/dcm.c
+    lib/esl-math/src/matrix.c
+    lib/esl-math/src/quaternion.c
+    lib/esl-math/src/vector2.c
+    lib/esl-math/src/vector3.c
 )
 
 target_compile_definitions(${TARGET_NAME} PRIVATE
@@ -134,6 +139,8 @@ target_compile_definitions(${TARGET_NAME} PRIVATE
 )
 
 target_include_directories(${TARGET_NAME} PRIVATE
+    lib/esl-sensors/include
+    lib/esl-math/include
 )
 
 if(BUILD_FOR_HOST)

@@ -4,3 +4,9 @@
 [submodule "lib/pico-sdk"]
 	path = lib/pico-sdk
 	url = https://github.com/raspberrypi/pico-sdk.git
+[submodule "lib/esl-sensors"]
+	path = lib/esl-sensors
+	url = https://github.com/esl-sun/esl-sensors.git
+[submodule "lib/esl-math"]
+	path = lib/esl-math
+	url = https://github.com/esl-sun/esl-math.git
