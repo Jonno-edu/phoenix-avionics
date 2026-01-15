@@ -1,31 +1,19 @@
-buildType:
-  default: debug
-  choices:
-    debug:
-      short: Debug
-      long: Emit debug information
-      buildType: Debug
-    release:
-      short: Release
-      long: Optimize for speed
-      buildType: Release
-
 target_platform:
-  default: pico2_w
+  default: rp2350
   choices:
-    pico2_w:
-      short: Pico 2 W
+    rp2350:
+      short: RP2350
       long: Build for RP2350 Wireless
       settings:
         PICO_BOARD: "pico2_w"
         BUILD_TESTING: "OFF"
 
-    mac_host:
-      short: Mac Host
-      long: Build Unit Tests for macOS
+    mac:
+      short: Mac
+      long: Build for macOS
       settings:
         PICO_PLATFORM: "host"
-        PICO_BOARD: "host"          # ADD THIS LINE
+        PICO_BOARD: "host"
         BUILD_TESTING: "ON"
         CMAKE_C_COMPILER: "/usr/bin/clang"
         CMAKE_CXX_COMPILER: "/usr/bin/clang++"

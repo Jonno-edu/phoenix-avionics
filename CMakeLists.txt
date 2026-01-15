@@ -113,7 +113,7 @@ set(TARGET_NAME ${PROJECT_NAME})
 
 # This is required to let FreeRTOS find our FreeRTOSConfig.h config file
 add_library(freertos_config INTERFACE)
-target_include_directories(freertos_config SYSTEM INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(freertos_config SYSTEM INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 # Link freertos_config to FreeRTOS-Kernel for Mac builds too
 if(BUILD_FOR_HOST)
@@ -123,10 +123,10 @@ endif()
 add_executable(${TARGET_NAME}
     src/main.c
     src/serial.c
+    lib/esl-comms/src/rs485_protocol.c
     src/system_data.c
-    src/command_handler.c
     lib/esl-sensors/src/baroMS5607.c
-    src/i2c.c
+    lib/esl-sensors/src/i2c.c
     lib/esl-math/src/dcm.c
     lib/esl-math/src/matrix.c
     lib/esl-math/src/quaternion.c
@@ -139,6 +139,8 @@ target_compile_definitions(${TARGET_NAME} PRIVATE
 )
 
 target_include_directories(${TARGET_NAME} PRIVATE
+    include
+    lib/esl-comms/include
     lib/esl-sensors/include
     lib/esl-math/include
 )

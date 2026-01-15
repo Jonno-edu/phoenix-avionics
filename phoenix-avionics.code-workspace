@@ -5,6 +5,7 @@
 		}
 	],
 	"settings": {
+
 		"cmake.options.statusBarVisibility": "visible",
 		"cmake.options.advanced": {
 			"variant": {
@@ -37,3 +38,4 @@
 		}
 	}
 }
+

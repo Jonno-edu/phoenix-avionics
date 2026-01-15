@@ -10,3 +10,6 @@
 [submodule "lib/esl-math"]
 	path = lib/esl-math
 	url = https://github.com/esl-sun/esl-math.git
+[submodule "lib/esl-comms"]
+	path = lib/esl-comms
+	url = https://github.com/esl-sun/esl-comms.git

@@ -1,12 +1,14 @@
 // serial.c
 #include "serial.h"
-#include "command_handler.h"  // Add this include
 #include <stdio.h>
+#include "FreeRTOS.h"
+#include "task.h"
 
 #if !PICO_BUILD
     #include <unistd.h>
 #else
     #include <pico/stdlib.h>
+    #include <hardware/uart.h>
 #endif
 
 // Circular buffer
@@ -21,14 +23,7 @@ static void on_usb_rx(void *param) {
     
     int ch;
     while ((ch = getchar_timeout_us(0)) != PICO_ERROR_TIMEOUT) {
-        uint8_t byte = (uint8_t)ch;
-        
-        rx_buffer[write_index] = byte;
-        write_index = (write_index + 1) % SERIAL_BUFFER_SIZE;
-        
-        if (write_index == read_index) {
-            read_index = (read_index + 1) % SERIAL_BUFFER_SIZE;
-        }
+        serial_buffer_push((uint8_t)ch);
     }
 }
 #endif
@@ -40,29 +35,45 @@ void serial_init(void) {
 }
 
 void serial_send_byte(uint8_t byte) {
+#if PICO_BUILD
+    if (uart_is_enabled(uart0)) {
+        uart_putc(uart0, byte);
+    } 
+    // Always also send to USB CDC for testing/monitoring
+    putchar_raw(byte);
+#else
     putchar(byte);
     fflush(stdout);
+#endif
+}
+// NOTE: This function is designed to be called from ISR context ONLY.
+// Do NOT call from task context without adding interrupt disable guards.
+void serial_buffer_push(uint8_t byte) {
+    rx_buffer[write_index] = byte;
+    write_index = (write_index + 1) % SERIAL_BUFFER_SIZE;
+    
+    // If buffer full, overwrite oldest data (move read_index)
+    if (write_index == read_index) {
+        read_index = (read_index + 1) % SERIAL_BUFFER_SIZE;
+    }
+}
+    
+bool serial_bytes_available(void) {
+    taskENTER_CRITICAL();
+    bool available = (read_index != write_index);
+    taskEXIT_CRITICAL();
+    return available;
 }
 
-void serial_process_commands(void) {
-    uint16_t current = read_index;
-    
-    while (current != write_index) {
-        uint8_t byte = rx_buffer[current];
-        
-        // Found a command!
-        if (byte == CMD_GET_IDENTIFICATION || byte == CMD_GET_BARO) {
-            // Process the command
-            command_handler_process(byte);
-            
-            // Move read pointer to just after this command
-            read_index = (current + 1) % SERIAL_BUFFER_SIZE;
-            return;
-        }
-        
-        current = (current + 1) % SERIAL_BUFFER_SIZE;
+uint8_t serial_read_byte(void) {
+    taskENTER_CRITICAL();
+    if (read_index == write_index) {
+        taskEXIT_CRITICAL();
+        return 0;
     }
     
-    // No commands found - discard all scanned garbage
-    read_index = write_index;
+    uint8_t byte = rx_buffer[read_index];
+    read_index = (read_index + 1) % SERIAL_BUFFER_SIZE;
+    taskEXIT_CRITICAL();
+    return byte;
 }

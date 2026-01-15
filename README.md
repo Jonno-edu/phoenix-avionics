@@ -1,12 +1,13 @@
 # Phoenix Avionics
 
-Avionics software for RP2350 based flight controller, featuring FreeRTOS and multi-platform support (Pico 2 & macOS host simulation). This project demonstrates how to maintain a single codebase with dual-target support using CMake variants and VS Code integration.
+Avionics software for RP2350 based flight controller, featuring FreeRTOS. Currently focusing on the RP2350 target with plans to implement Software In the Loop (SIL) simulation for macOS in the future.
 
 ## Features
 
-- **Multi-platform builds**: Run the same FreeRTOS code on your Mac (simulation) and Pico (hardware).
-- **CMake Variant Switching**: Seamlessly switch between `pico` and `mac_host` targets with full IntelliSense support.
-- **FreeRTOS Support**: Pre-configured FreeRTOS Kernel (via submodule) working on both platforms.
+- **RP2350 Support**: Full support for a custom RP2350-based On-Board Computer (OBC).
+- **CMake Variant Switching**: Seamlessly switch between target platforms.
+- **FreeRTOS Support**: Pre-configured FreeRTOS Kernel (via submodule) working on the RP2350.
+- **Planned SIL Support**: Future support for running the same FreeRTOS code on your Mac (simulation).
 - **Modular Architecture**:
   - **Command Handler**: Processes incoming commands.
   - **System Data**: Manages shared system state.
@@ -41,10 +42,10 @@ Avionics software for RP2350 based flight controller, featuring FreeRTOS and mul
 
 ## Build Variants
 
-This project uses `cmake-variants.yaml` to define build targets. You can switch variants in the VS Code status bar (click the CMake variant selector, usually showing "Debug" or "Release").
+This project uses `cmake-variants.yaml` to define build targets. You can switch variants in the VS Code status bar (click the CMake variant selector).
 
-- **Debug-pico2_w**: Builds for the Raspberry Pi Pico 2 W (RP2350) hardware.
-- **Debug-mac_host**: Builds a native executable for macOS.
+- **rp2350**: Builds for the custom RP2350 OBC hardware.
+- **mac_host**: (Planned) Placeholder for future macOS SIL support. Currently not operational.
 
 ## VS Code Tasks
 
@@ -53,18 +54,18 @@ Press `Cmd+Shift+P` and type `Run Task` to access the pre-configured tasks:
 - **Build Active Variant**: Compiles the code for the currently selected CMake variant.
 - **Build & Flash Active Variant**:
   - *Host*: Builds and runs the simulation.
-  - *Pico*: Builds and flashes the `.uf2` file to a connected Pico in BOOTSEL mode.
+  - *Hardware*: Builds and flashes the `.uf2` file to the connected RP2350 OBC in BOOTSEL mode.
 - **Build, Flash & Monitor Active Variant**:
   - *Host*: Builds and runs.
-  - *Pico*: Builds, flashes, and opens a serial monitor (requires `screen`).
+  - *Hardware*: Builds, flashes, and opens a serial monitor (requires `screen`).
 - **Clean Workspace**: Removes the `build/` directory.
 
 ## FreeRTOS Configuration
 
 The project handles platform differences using the `PICO_BUILD` macro (defined in `CMakeLists.txt`):
 
-- **Pico Build**: Uses `pico/stdlib.h`, `hardware/gpio.h`, and hardware timers.
-- **Host Build**: Uses standard C headers (`stdio.h`, `unistd.h`) and simulates GPIO/Timing.
+- **Hardware Build**: Uses `pico/stdlib.h`, `hardware/gpio.h`, and hardware timers on the custom OBC.
+- **Host Build (Planned)**: Will use standard C headers (`stdio.h`, `unistd.h`) and simulate GPIO/Timing.
 
 See `main.c` for examples of how to wrap platform-specific code:
 
@@ -79,11 +80,6 @@ See `main.c` for examples of how to wrap platform-specific code:
 ```
 
 ## Troubleshooting
-
-### Picotool Issues
-
-- **"No accessible RP2040 devices in BOOTSEL mode"**: Ensure you hold the BOOTSEL button while plugging in the Pico.
-- **Permission denied**: You might need `sudo` or udev rules (on Linux) to access the USB device.
 
 ### CMake Configuration
 

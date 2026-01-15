@@ -6,10 +6,13 @@
 #include <stdbool.h>
 
 #define SERIAL_BUFFER_SIZE 256
-#define CMD_GET_IDENTIFICATION 0x80
 
 void serial_send_byte(uint8_t byte);
 void serial_init(void);
-void serial_process_commands(void);
+
+// Circular Buffer Access
+void serial_buffer_push(uint8_t byte);
+uint8_t serial_read_byte(void);
+bool serial_bytes_available(void);
 
 #endif // SERIAL_H
