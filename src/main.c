@@ -25,11 +25,11 @@ int main() {
     system_data_init();
 
 #if PICO_BUILD
-    // Ensure RS485 protocol is initialized with the HAL TX callback
-    rs485_init(rs485_hal_send_byte);
+    // Ensure RS485 protocol is initialized with the HAL TX callback and OBC address
+    rs485_init(rs485_hal_send_byte, ADDR_OBC);
     bsp_peripheral_init();
 #else
-    rs485_init(console_send_byte);
+    rs485_init(console_send_byte, ADDR_OBC);
 #endif
 
     tasks_create_all();
