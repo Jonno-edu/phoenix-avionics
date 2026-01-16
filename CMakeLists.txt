@@ -120,13 +120,12 @@ if(BUILD_FOR_HOST)
     target_link_libraries(FreeRTOS-Kernel PUBLIC freertos_config)
 endif()
 
-add_executable(${TARGET_NAME}
+# Common source files for both hardware and SIL
+set(COMMON_SOURCES
     src/main.c
-    src/serial.c
+    src/usb_console.c
     lib/esl-comms/src/rs485_protocol.c
     src/system_data.c
-    lib/esl-sensors/src/baroMS5607.c
-    lib/esl-sensors/src/i2c.c
     lib/esl-math/src/dcm.c
     lib/esl-math/src/matrix.c
     lib/esl-math/src/quaternion.c
@@ -134,16 +133,38 @@ add_executable(${TARGET_NAME}
     lib/esl-math/src/vector3.c
 )
 
+# Hardware-only source files (sensors, I2C, etc.)
+set(HARDWARE_SOURCES
+    lib/esl-sensors/src/baroMS5607.c
+    lib/esl-sensors/src/i2c.c
+)
+
+# Build executable with appropriate sources
+if(BUILD_FOR_HOST)
+    # SIL: Only common sources, no hardware sensors
+    add_executable(${TARGET_NAME} ${COMMON_SOURCES})
+else()
+    # Hardware: Include everything
+    add_executable(${TARGET_NAME} ${COMMON_SOURCES} ${HARDWARE_SOURCES})
+endif()
+
 target_compile_definitions(${TARGET_NAME} PRIVATE
     $<$<NOT:$<BOOL:${BUILD_FOR_HOST}>>:PICO_BUILD=1>
 )
 
+# Common includes for both builds
 target_include_directories(${TARGET_NAME} PRIVATE
     include
     lib/esl-comms/include
-    lib/esl-sensors/include
     lib/esl-math/include
 )
+
+# Hardware-only includes
+if(NOT BUILD_FOR_HOST)
+    target_include_directories(${TARGET_NAME} PRIVATE
+        lib/esl-sensors/include
+    )
+endif()
 
 if(BUILD_FOR_HOST)
     # Mac host build - only link FreeRTOS for unit testing

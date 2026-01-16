@@ -24,10 +24,25 @@ static struct {
 // Boot time reference
 static uint32_t boot_time_ms = 0;
 
+#if !PICO_BUILD
+// Host boot time reference (milliseconds)
+static uint64_t host_boot_time_ms = 0;
+
+static uint64_t host_time_ms(void) {
+    // Use a monotonic clock so system time changes don't affect uptime.
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ((uint64_t)ts.tv_sec * 1000ULL) + ((uint64_t)ts.tv_nsec / 1000000ULL);
+}
+#endif
+
 void system_data_init(void) {
 #if PICO_BUILD
     // Capture boot time
     boot_time_ms = to_ms_since_boot(get_absolute_time());
+#else
+    // Capture host boot time reference
+    host_boot_time_ms = host_time_ms();
 #endif
 }
 
@@ -50,9 +65,17 @@ void system_data_get(SystemData_t *data) {
     data->runtime_seconds = uptime_ms / 1000;
     data->runtime_milliseconds = uptime_ms % 1000;
 #else
-    // Host build - use clock
-    data->runtime_seconds = 0;
-    data->runtime_milliseconds = 0;
+    // Host build: monotonic uptime since system_data_init()
+    uint64_t current_ms = host_time_ms();
+    uint64_t uptime_ms = (current_ms >= host_boot_time_ms) ? (current_ms - host_boot_time_ms) : 0;
+
+    // SystemData_t uses uint16_t fields, so clamp to prevent overflow (~65s max)
+    if (uptime_ms > 65535ULL * 1000ULL + 999ULL) {
+        uptime_ms = 65535ULL * 1000ULL + 999ULL;
+    }
+
+    data->runtime_seconds = (uint16_t)(uptime_ms / 1000ULL);
+    data->runtime_milliseconds = (uint16_t)(uptime_ms % 1000ULL);
 #endif
 }
 

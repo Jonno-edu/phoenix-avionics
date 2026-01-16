@@ -1,7 +1,7 @@
 import time
 import sys
 import serial.tools.list_ports
-from rs485_lib import RS485Interface, OBCLink, MSG_TC_ACK
+from rs485_lib import RS485Interface, OBCLink, MSG_TC_ACK, Packet, make_desc, MSG_TC
 
 def select_port():
     ports = list(serial.tools.list_ports.comports())
@@ -49,24 +49,68 @@ link.start_listening()
 
 # 2. Define Callback for ACK
 def on_ack(pkt):
-    print(f"\n✅ SUCCESS! Received ACK from Device {pkt['src']}")
+    print(f"✅ SUCCESS! Received ACK from Device {pkt['src']}")
 
 # 3. Register Callback
-# We expect an ACK for Command ID 1 (Reset) 
-# Note: You might want to use a safer ID like SLEEP/WAKE for testing if RESET actually reboots!
 CMD_ID = 1 # RESET
 link.dispatcher.register(MSG_TC_ACK, CMD_ID, on_ack)
 
-# 4. Send Command
-print(f"Sending Command ID {CMD_ID} to device 1 (OBC)...")
-link.send_telecommand(dest=1, cmd_id=CMD_ID)
+# --- TEST SCENARIOS ---
 
-# 5. Wait
-try:
-    for i in range(20):
+def test_bad_crc():
+    print(f"\n🔍 [Negative Test] Sending Command with BAD CRC...")
+    # Build a valid packet
+    desc = make_desc(MSG_TC, CMD_ID)
+    pkt = bytearray(Packet.build(dest=1, src=240, desc=desc, data=b""))
+    
+    # Corrupt the last data byte (before ESC EOM)
+    # Packet ends with: ... [CRC_LO] [ESC] [EOM]
+    # We target index -3 (CRC_LO) or -4 (CRC_HI) depending on escaping.
+    # Simplest way: just flip the 3rd to last byte. 
+    # Even if it's an escaped byte, it will break CRC or Framing, which is what we want.
+    pkt[-3] = (pkt[-3] + 1) % 256
+    
+    link.iface.send(bytes(pkt))
+    # Give it time to potentially wrongly respond
+    time.sleep(1.0)
+    print("   (Should verify no ACK above)")
+
+def test_truncated():
+    print(f"\n🔍 [Negative Test] Sending Truncated Packet (No EOM)...")
+    desc = make_desc(MSG_TC, CMD_ID)
+    pkt = Packet.build(dest=1, src=240, desc=desc, data=b"")
+    
+    # Send all except last 2 bytes (ESC EOM)
+    short_pkt = pkt[:-2]
+    
+    link.iface.send(short_pkt)
+    time.sleep(1.0)
+    print("   (Should verify no ACK above)")
+
+def test_garbage():
+    print(f"\n🔍 [Negative Test] Sending Random Garbage...")
+    garbage = b"\xDE\xAD\xBE\xEF\x00\x1F\x00" # Has an ESC but no valid frame
+    link.iface.send(garbage)
+    time.sleep(1.0)
+    print("   (Should verify no ACK above)")
+
+def test_valid():
+    print(f"\n🚀 [Positive Test] Sending VALID Command ID {CMD_ID}...")
+    link.send_telecommand(dest=1, cmd_id=CMD_ID)
+    
+    # Wait for callback
+    for i in range(10):
         time.sleep(0.1)
+
+# 4. Run Tests
+try:
+    test_bad_crc()
+    test_truncated()
+    test_garbage()
+    test_valid()
 except KeyboardInterrupt:
     pass
-
-link.stop_listening()
-link.iface.disconnect()
+finally:
+    print("\nTests Complete. Closing connection.")
+    link.stop_listening()
+    link.iface.disconnect()
