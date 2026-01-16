@@ -123,6 +123,12 @@ endif()
 # Common source files for both hardware and SIL
 set(COMMON_SOURCES
     src/main.c
+    src/bsp/bsp_init.c
+    src/hal/platform_hal.c
+    src/tasks/task_manager.c
+    src/tasks/heartbeat_task.c
+    src/tasks/eps_polling_task.c
+    src/tasks/rs485_task.c
     src/usb_console.c
     lib/esl-comms/src/rs485_protocol.c
     src/system_data.c
