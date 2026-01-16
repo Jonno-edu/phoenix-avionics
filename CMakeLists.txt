@@ -133,8 +133,9 @@ set(COMMON_SOURCES
     lib/esl-math/src/vector3.c
 )
 
-# Hardware-only source files (sensors, I2C, etc.)
+# Hardware-only source files (sensors, I2C, RS485 HAL, etc.)
 set(HARDWARE_SOURCES
+    src/rs485_hal.c
     lib/esl-sensors/src/baroMS5607.c
     lib/esl-sensors/src/i2c.c
 )

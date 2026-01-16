@@ -6,6 +6,7 @@
 #include <task.h>
 #include "usb_console.h"
 #include "rs485_protocol.h"
+#include "rs485_hal.h"
 #include "system_data.h"
 
 #if PICO_BUILD
@@ -17,9 +18,6 @@
     #include <unistd.h>
 #else
     #include <pico/stdlib.h>
-    #include <hardware/gpio.h>
-    #include <hardware/uart.h>
-    #include <hardware/irq.h>
 #endif
 
 void vApplicationStackOverflowHook(TaskHandle_t xTask, char* pcTaskName) {
@@ -38,15 +36,46 @@ void vApplicationMallocFailedHook() {
 #endif
 }
 
+// Send to both RS485 bus and USB Console
+void mux_send_byte(uint8_t byte) {
 #if PICO_BUILD
-// UART RX Interrupt handler
-void on_uart_rx() {
-    while (uart_is_readable(uart0)) {
-        uint8_t ch = uart_getc(uart0);
-        console_buffer_push(ch);
+    // Send to real RS485 bus
+    rs485_hal_send_byte(byte);
+#endif
+    // Also send to USB console (for debugging/monitoring)
+    console_send_byte(byte);
+}
+
+// Heartbeat Task - Prints status every 5 seconds
+void vHeartbeatTask(void *pvParameters) {
+    (void)pvParameters;
+    while (true) {
+        printf("[HB] Phoenix Avionics Alive - Uptime: %lu s\n", 
+               (unsigned long)(xTaskGetTickCount() * portTICK_PERIOD_MS / 1000));
+        vTaskDelay(pdMS_TO_TICKS(5000));
     }
 }
-#endif
+
+
+// EPS Polling Task
+void vEPSPollingTask(void *pvParameters) {
+    (void)pvParameters;
+    
+    printf("Starting EPS Polling Task...\n");
+    
+    while (true) {
+        // Send Status/Identification Request to EPS
+        printf("[OBC -> EPS] Polling Status...\n");
+        
+        uint8_t msg_desc = BUILD_MSG_DESC(MSG_TYPE_TLM_REQ, ID_TLM_IDENTIFICATION);
+        rs485_send_packet(ADDR_EPS, msg_desc, NULL, 0);
+        
+        printf("\n");
+
+        // Wait 5 seconds
+        vTaskDelay(pdMS_TO_TICKS(5000));
+    }
+}
 
 // RS485 Processing Task
 void vRS485Task(void *pvParameters) {
@@ -56,9 +85,22 @@ void vRS485Task(void *pvParameters) {
     
     while (true) {
         // Feed buffered bytes into the protocol parser
+#if PICO_BUILD
+        // 1. Process bytes from real RS485 Hardware (Bus A)
+        while (rs485_hal_bytes_available()) {
+            rs485_process_byte(rs485_hal_read_byte());
+        }
+
+        // 2. Process bytes from USB Console (Debug/Test)
         while (console_bytes_available()) {
             rs485_process_byte(console_read_byte());
         }
+#else
+        // SIL: Read from Virtual Serial Port (Console)
+        while (console_bytes_available()) {
+            rs485_process_byte(console_read_byte());
+        }
+#endif
 
         if (rs485_get_packet(&packet)) {
             // Is it for us? (OBC = 1)
@@ -96,22 +138,26 @@ void vRS485Task(void *pvParameters) {
 int main() {
 #if PICO_BUILD
     stdio_init_all();
+    
+    // Give USB a moment to stabilize so we don't miss early messages
+    for (int i = 0; i < 5; i++) {
+        printf("Booting in %d...\n", 5-i);
+        sleep_ms(200);
+    }
+    
+    printf("\n--- Phoenix Avionics Starting ---\n");
+    
     console_init();
     system_data_init();
 
-    // UART Setup for RS485
-    uart_init(uart0, 115200);
-    gpio_set_function(0, GPIO_FUNC_UART); // TX
-    gpio_set_function(1, GPIO_FUNC_UART); // RX
-    
-    // Enable UART Interrupts
-    uart_set_irq_enables(uart0, true, false);
-    irq_set_exclusive_handler(UART0_IRQ, on_uart_rx);
-    irq_set_enabled(UART0_IRQ, true);
+    printf("Initializing RS485 HAL...\n");
+    // RS485 Bus A hardware (UART1: GPIO 4/5, DE/RE: GPIO 3)
+    rs485_hal_init();
 
-    // NOW it's safe to register the callback
-    rs485_init(console_send_byte);
+    // Register RS485 protocol TX callback to the Mux (sends to both RS485 and USB)
+    rs485_init(mux_send_byte);
 
+    printf("Initializing Sensors...\n");
     // Initialize hardware sensors
     if (!I2C_init()) {
         printf("CRITICAL: I2C initialization failed!\n");
@@ -122,7 +168,8 @@ int main() {
     if (!BAROMS5607_init()) {
         printf("CRITICAL: Barometer initialization failed!\n");
     }
-    sleep_ms(2000);
+    printf("Init complete, starting scheduler.\n");
+    sleep_ms(1000);
 #else
     setvbuf(stdout, NULL, _IONBF, 0);
     console_init();
@@ -149,6 +196,26 @@ int main() {
         1024,
         NULL,
         tskIDLE_PRIORITY + 2,
+        NULL
+    );
+
+    // EPS Polling task
+    xTaskCreate(
+        vEPSPollingTask,
+        "EPS_Poll",
+        1024,
+        NULL,
+        tskIDLE_PRIORITY + 2,
+        NULL
+    );
+
+    // Heartbeat task
+    xTaskCreate(
+        vHeartbeatTask,
+        "Heartbeat",
+        512,
+        NULL,
+        tskIDLE_PRIORITY + 1,
         NULL
     );
 
