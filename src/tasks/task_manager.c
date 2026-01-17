@@ -6,7 +6,7 @@
 #include <task.h>
 
 #if !PICO_BUILD
-    #include "usb_console.h"
+    #include "core/usb_console.h"
 #endif
 
 void tasks_create_all(void) {

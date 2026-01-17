@@ -4,10 +4,10 @@
 #include <stdlib.h>
 #include <FreeRTOS.h>
 #include <task.h>
-#include "usb_console.h"
+#include "core/usb_console.h"
 #include "rs485_protocol.h"
-#include "rs485_hal.h"
-#include "system_data.h"
+#include "hal/rs485_hal.h"
+#include "core/system_data.h"
 #include "bsp/bsp_init.h"
 #include "tasks/task_manager.h"
 #include "hal/platform_hal.h"

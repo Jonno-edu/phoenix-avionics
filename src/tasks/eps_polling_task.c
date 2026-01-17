@@ -4,23 +4,24 @@
 #include <FreeRTOS.h>
 #include <task.h>
 #include <stdio.h>
+#include "core/logging.h"
+
+static const char *TAG = "EPS_POLL";
 
 static void vEPSPollingTask(void *pvParameters) {
     (void)pvParameters;
     
-    printf("Starting EPS Polling Task...\n");
+    ESP_LOGI(TAG, "Starting EPS Polling Task...");
     
     while (true) {
         // Send Status/Identification Request to EPS
-        printf("[OBC -> EPS] Polling Status...\n");
+        ESP_LOGI(TAG, "[OBC -> EPS] Polling Status...");
         
         uint8_t msg_desc = BUILD_MSG_DESC(MSG_TYPE_TLM_REQ, ID_TLM_IDENTIFICATION);
         rs485_send_packet(ADDR_EPS, msg_desc, NULL, 0);
         
-        printf("\n");
-
         // Wait 5 seconds
-        vTaskDelay(pdMS_TO_TICKS(5000));
+        vTaskDelay(pdMS_TO_TICKS(500));
     }
 }
 

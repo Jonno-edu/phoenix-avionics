@@ -1,0 +1,56 @@
+#ifndef LOGGING_H
+#define LOGGING_H
+
+#include <stdio.h>
+
+#if PICO_BUILD
+    #include <pico/stdlib.h>
+    #define LOG_GET_TIME() (to_ms_since_boot(get_absolute_time()))
+#else
+    #include <time.h>
+    // Fallback for SIL/Host builds
+    static inline uint32_t get_host_time_ms(void) {
+        struct timespec ts;
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        return (uint32_t)((ts.tv_sec * 1000) + (ts.tv_nsec / 1000000));
+    }
+    #define LOG_GET_TIME() (get_host_time_ms())
+#endif
+
+// ANSI Color Codes
+#define LOG_COLOR_RESET   "\033[0m"
+#define LOG_COLOR_RED     "\033[31m"
+#define LOG_COLOR_GREEN   "\033[32m"
+#define LOG_COLOR_YELLOW  "\033[33m"
+#define LOG_COLOR_CYAN    "\033[36m"
+#define LOG_COLOR_BLUE    "\033[34m"
+
+// ESP-style Logging Macros
+// Format: L (Timestamp) [TAG]: Message
+#define ESP_LOGI(tag, fmt, ...) \
+    printf(LOG_COLOR_GREEN "I (%lu) [%s]: " fmt LOG_COLOR_RESET "\n", (unsigned long)LOG_GET_TIME(), tag, ##__VA_ARGS__)
+
+#define ESP_LOGW(tag, fmt, ...) \
+    printf(LOG_COLOR_YELLOW "W (%lu) [%s]: " fmt LOG_COLOR_RESET "\n", (unsigned long)LOG_GET_TIME(), tag, ##__VA_ARGS__)
+
+#define ESP_LOGE(tag, fmt, ...) \
+    printf(LOG_COLOR_RED "E (%lu) [%s]: " fmt LOG_COLOR_RESET "\n", (unsigned long)LOG_GET_TIME(), tag, ##__VA_ARGS__)
+
+#define ESP_LOGD(tag, fmt, ...) \
+    printf(LOG_COLOR_CYAN "D (%lu) [%s]: " fmt LOG_COLOR_RESET "\n", (unsigned long)LOG_GET_TIME(), tag, ##__VA_ARGS__)
+
+#define ESP_LOGV(tag, fmt, ...) \
+    printf(LOG_COLOR_BLUE "V (%lu) [%s]: " fmt LOG_COLOR_RESET "\n", (unsigned long)LOG_GET_TIME(), tag, ##__VA_ARGS__)
+
+// Raw hex dump helper
+static inline void ESP_LOG_BUFFER_HEX(const char *tag, const void *buffer, uint16_t buff_len) {
+    if (buff_len == 0) return;
+    const uint8_t *ptr = (const uint8_t *)buffer;
+    printf(LOG_COLOR_CYAN "D (%lu) [%s]: ", (unsigned long)LOG_GET_TIME(), tag);
+    for (uint16_t i = 0; i < buff_len; i++) {
+        printf("%02X ", ptr[i]);
+    }
+    printf(LOG_COLOR_RESET "\n");
+}
+
+#endif // LOGGING_H

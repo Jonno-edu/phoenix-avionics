@@ -1,5 +1,5 @@
 // system_data.c
-#include "system_data.h"
+#include "core/system_data.h"
 #include <string.h>
 
 #if PICO_BUILD
