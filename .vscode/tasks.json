@@ -13,9 +13,9 @@
             "detail": "Builds the active variant locally"
         },
         {
-            "label": "Remote Flash (SSH)",
+            "label": "Flash via SSH Rockchip",
             "type": "shell",
-            "command": "BUILD_DIR=\"${command:cmake.buildDirectory}\"; cmake --build \"$BUILD_DIR\" && scp \"$BUILD_DIR\"/*.uf2 rock@100.115.224.114:~/firmware.uf2 && ssh -t rock@100.115.224.114 'sudo picotool load -f firmware.uf2'",
+            "command": "BUILD_DIR=\"${command:cmake.buildDirectory}\"; cmake --build \"$BUILD_DIR\" && scp \"$BUILD_DIR\"/*.uf2 rock@100.115.224.114:~/firmware.uf2 && ssh -t rock@100.115.224.114 'PICO_PORT=$(ls /dev/serial/by-id/usb-Raspberry_Pi_Pico* 2>/dev/null | head -n 1); if [ -n \"$PICO_PORT\" ]; then echo \"Found at $PICO_PORT\"; REAL_PORT=$(readlink -f \"$PICO_PORT\"); echo \"Clearing sessions on $REAL_PORT...\"; sudo fuser -k \"$REAL_PORT\" >/dev/null 2>&1; fi; sudo picotool load -f firmware.uf2'",
             "group": {
                 "kind": "build",
                 "isDefault": false
@@ -27,11 +27,10 @@
             },
             "detail": "Builds locally, copies to Rockchip, and flashes via picotool (auto-reboots)."
         },
-
         {
-            "label": "Remote Monitor (SSH) Auto",
+            "label": "Monitor via SSH Rockchip",
             "type": "shell",
-            "command": "ssh -t rock@100.115.224.114 'PICO_PORT=$(ls /dev/serial/by-id/usb-Raspberry_Pi_Pico* | head -n 1); if [ -z \"$PICO_PORT\" ]; then echo \"Pico not found!\"; exit 1; fi; minicom -D \"$PICO_PORT\" -b 115200'",
+            "command": "ssh -t rock@100.115.224.114 'echo \"Waiting for Pico...\"; for i in {1..10}; do PICO_PORT=$(ls /dev/serial/by-id/usb-Raspberry_Pi_Pico* 2>/dev/null | head -n 1); if [ -n \"$PICO_PORT\" ]; then echo \"Found at $PICO_PORT\"; REAL_PORT=$(readlink -f \"$PICO_PORT\"); echo \"Clearing sessions on $REAL_PORT...\"; sudo fuser -k \"$REAL_PORT\" >/dev/null 2>&1; minicom -D \"$PICO_PORT\" -b 115200; exit 0; fi; sleep 1; done; echo \"Pico not found!\"; exit 1'",
             "group": "build",
             "problemMatcher": [],
             "presentation": {
@@ -41,5 +40,15 @@
             },
             "detail": "Automatically finds the Raspberry Pi Pico and opens a remote serial monitor"
         },
+        {
+            "label": "Flash and Monitor via SSH Rockchip",
+            "dependsOn": [
+                "Flash via SSH Rockchip",
+                "Monitor via SSH Rockchip"
+            ],
+            "dependsOrder": "sequence",
+            "problemMatcher": [],
+            "group": "build"
+        }
     ]
 }
