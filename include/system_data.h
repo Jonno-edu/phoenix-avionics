@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 #define TLM_ID_IDENTIFICATION 128
-#define SYSTEM_DATA_FRAME_LENGTH 8
+#define SYSTEM_DATA_FRAME_LENGTH 9
 
 // System identification data structure
 typedef struct {
@@ -15,6 +15,7 @@ typedef struct {
     uint8_t firmware_minor_version;
     uint16_t runtime_seconds;
     uint16_t runtime_milliseconds;
+    uint8_t status_flags;  // <--- NEW: Status Flags (e.g. Pending Command)
 } SystemData_t;
 
 void system_data_get(SystemData_t *data);

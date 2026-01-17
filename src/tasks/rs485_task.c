@@ -8,6 +8,10 @@
 #include <task.h>
 #include <stdio.h>
 
+#if PICO_BUILD
+#include <hardware/watchdog.h>
+#endif
+
 static void vRS485Task(void *pvParameters) {
     (void)pvParameters;
     
@@ -40,12 +44,18 @@ static void vRS485Task(void *pvParameters) {
                 uint8_t id   = GET_MSG_ID(packet.msg_desc);
 
                 if (type == MSG_TYPE_TELECOMMAND) {
-                    if (id == ID_CMD_RESET) {
-                        printf("RESET COMMAND RECEIVED!\n");
-                    }
-                    // Echo back an ACK
+                    // Echo back an ACK (for all telecommands)
                     uint8_t ack_desc = BUILD_MSG_DESC(MSG_TYPE_TC_ACK, id);
                     rs485_send_packet(packet.src_addr, ack_desc, NULL, 0);
+
+                    // Handle telecommand IDs
+                    if (id == ID_CMD_RESET) {
+                        printf("RESET COMMAND RECEIVED! Rebooting...\n");
+                        vTaskDelay(pdMS_TO_TICKS(20));
+#if PICO_BUILD
+                        watchdog_reboot(0, 0, 0);
+#endif
+                    }
                 }
                 else if (type == MSG_TYPE_TLM_REQ) {
                     if (id == ID_TLM_IDENTIFICATION) {
@@ -71,14 +81,22 @@ static void vRS485Task(void *pvParameters) {
                         }
                         printf("\n");
 
-                        // If payload matches SystemData_t pack format (8 bytes), decode it
+                        // Decode identification frame (now 9 bytes with status_flags)
                         if (packet.length == SYSTEM_DATA_FRAME_LENGTH) {
                             uint16_t runtime_s = ((uint16_t)packet.data[4] << 8) | packet.data[5];
                             uint16_t runtime_ms = ((uint16_t)packet.data[6] << 8) | packet.data[7];
+                            uint8_t status_flags = packet.data[8];
 
-                            printf("EPS node_type=%u iface=%u fw=%u.%u uptime=%us %ums\n",
+                            printf("EPS node_type=%u iface=%u fw=%u.%u uptime=%us %ums flags=0x%02X\n",
                                    packet.data[0], packet.data[1], packet.data[2], packet.data[3],
-                                   runtime_s, runtime_ms);
+                                   runtime_s, runtime_ms, status_flags);
+
+                            // Piggyback: if EPS reports a pending command, ask it to send it.
+                            if (status_flags & STATUS_FLAG_CMD_PENDING) {
+                                printf("[OBC] EPS indicates CMD_PENDING -> requesting pending command...\n");
+                                uint8_t get_desc = BUILD_MSG_DESC(MSG_TYPE_TELECOMMAND, ID_CMD_GET_PENDING_MSG);
+                                rs485_send_packet(packet.src_addr, get_desc, NULL, 0);
+                            }
                         }
                     }
                 }

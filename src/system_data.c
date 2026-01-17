@@ -77,6 +77,10 @@ void system_data_get(SystemData_t *data) {
     data->runtime_seconds = (uint16_t)(uptime_ms / 1000ULL);
     data->runtime_milliseconds = (uint16_t)(uptime_ms % 1000ULL);
 #endif
+    
+    // Status flags are populated by the caller (OBC logic) if needed, 
+    // but initialized to 0 here by default.
+    data->status_flags = 0;
 }
 
 void system_data_pack(const SystemData_t *data, uint8_t *buffer) {
@@ -92,4 +96,5 @@ void system_data_pack(const SystemData_t *data, uint8_t *buffer) {
     buffer[5] = data->runtime_seconds & 0xFF;
     buffer[6] = (data->runtime_milliseconds >> 8) & 0xFF;
     buffer[7] = data->runtime_milliseconds & 0xFF;
+    buffer[8] = data->status_flags;
 }
