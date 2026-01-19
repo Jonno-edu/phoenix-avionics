@@ -1,91 +1,71 @@
-# Phoenix Avionics
+# Phoenix Avionics (OBC Firmware)
 
-Avionics software for RP2350 based flight controller, featuring FreeRTOS. Currently focusing on the RP2350 target with plans to implement Software In the Loop (SIL) simulation for macOS in the future.
+Avionics software for the Phoenix mission's On-Board Computer (OBC), based on the Raspberry Pi Pico 2 (RP2350). The system runs on FreeRTOS and acts as the central command and control unit, communicating with subsystems via RS485.
 
-## Features
+## System Capabilities
 
-- **RP2350 Support**: Full support for a custom RP2350-based On-Board Computer (OBC).
-- **CMake Variant Switching**: Seamlessly switch between target platforms.
-- **FreeRTOS Support**: Pre-configured FreeRTOS Kernel (via submodule) working on the RP2350.
-- **Planned SIL Support**: Future support for running the same FreeRTOS code on your Mac (simulation).
-- **Modular Architecture**:
-  - **Command Handler**: Processes incoming commands.
-  - **System Data**: Manages shared system state.
-  - **Serial**: Handles communication interfaces.
-- **VS Code Integration**: Custom tasks for building, flashing, and monitoring.
-- **Modern Tooling**: Uses Ninja, picotool, and CMake.
+- **Role**: RS485 Bus Master (Address `0x01`).
+- **OS**: FreeRTOS Kernel (SMP enabled).
+- **Telemetry**: USB Console (CDC) for debugging + RS485 for subsystem comms.
 
-## Prerequisites
+### Architecture
+The firmware is structured into modular FreeRTOS tasks:
+- **`rs485_task`**: Manages the RS485 bus protocol, handles packet reception/transmission, and routes commands.
+- **`eps_polling_task`**: Periodically (1Hz) polls the Electrical Power System (EPS) for status and health.
+- **`heartbeat_task`**: Provides visual system health indication via LED.
 
-1. **VS Code** with the **CMake Tools** extension
-2. **CMake** (3.13+) and **Ninja** build tools
-3. **GCC ARM toolchain** or system GCC (for mac_host builds)
-4. **picotool** (for flashing)
+### Communication Protocol
+Uses a custom **HDLC-inspired RS485 protocol** provided by `lib/esl-comms`:
+- **Physical**: UART 115200 8N1.
+- **Framing**: Start/End markers with byte stuffing (COBS-like escaping).
+- **Integrity**: 16-bit CRC (CCITT).
+- **Mode**: Half-Duplex (Master/Slave architecture).
+- **Updates**: Recently optimized for block-based DMA-friendly transmission to improve bus efficiency.
 
-**Note**: No need to install Pico SDK separately - it's included as a submodule!
+## Hardware Configuration (RP2350)
+
+| Interface     | Pin   | Function          |
+| ------------- | ----- | ----------------- |
+| **RS485 TX**  | GP4   | UART1 TX          |
+| **RS485 RX**  | GP5   | UART1 RX          |
+| **RS485 DE/RE**| GP3   | Direction Control |
+| **Console**   | USB   | CDC Serial        |
+
+## Software-in-the-Loop (SIL)
+
+The project includes a functional SIL target for macOS/Linux. This allows running the full flight software on your host machine without hardware.
+
+- **Variant**: Select `mac_host` (or linux) in CMake.
+- **IO**: Stubs the hardware UART and redirects RS485 traffic to a **Virtual Serial Port (PTY)**.
+- **Testing**: Python tools in `tools/` can connect to this virtual port to simulate the EPS or other subsystems.
 
 ## Getting Started
 
-1. **Clone with submodules**:
-   ```
+1. **Clone**:
+   ```bash
    git clone --recurse-submodules https://github.com/Jonno-edu/phoenix-avionics.git
-   cd phoenix-avionics
    ```
 
-2. **Open in VS Code**:
-   ```
-   code .
-   ```
+2. **Build (Hardware)**:
+   - Select `Debug-rp2350` variant.
+   - Run task: **"Flash and Monitor via SSH Rockchip"** (if using remote lab) or regular Build.
 
-3. **Select build variant** in CMake Tools status bar
-4. **Build and run!**
+3. **Build (Simulation)**:
+   - Select `Debug-mac` variant.
+   - Build and Run.
+   - The terminal will display: `SIL Virtual Serial Port Created: /dev/pts/X`.
+   - Run `python tools/test_ping.py --port /dev/pts/X` to talk to the simulated OBC.
 
-## Build Variants
+## Project Structure
 
-This project uses `cmake-variants.yaml` to define build targets. You can switch variants in the VS Code status bar (click the CMake variant selector).
-
-- **rp2350**: Builds for the custom RP2350 OBC hardware.
-- **mac_host**: (Planned) Placeholder for future macOS SIL support. Currently not operational.
-
-## VS Code Tasks
-
-Press `Cmd+Shift+P` and type `Run Task` to access the pre-configured tasks:
-
-- **Build Active Variant**: Compiles the code for the currently selected CMake variant.
-- **Build & Flash Active Variant**:
-  - *Host*: Builds and runs the simulation.
-  - *Hardware*: Builds and flashes the `.uf2` file to the connected RP2350 OBC in BOOTSEL mode.
-- **Build, Flash & Monitor Active Variant**:
-  - *Host*: Builds and runs.
-  - *Hardware*: Builds, flashes, and opens a serial monitor (requires `screen`).
-- **Clean Workspace**: Removes the `build/` directory.
-
-## FreeRTOS Configuration
-
-The project handles platform differences using the `PICO_BUILD` macro (defined in `CMakeLists.txt`):
-
-- **Hardware Build**: Uses `pico/stdlib.h`, `hardware/gpio.h`, and hardware timers on the custom OBC.
-- **Host Build (Planned)**: Will use standard C headers (`stdio.h`, `unistd.h`) and simulate GPIO/Timing.
-
-See `main.c` for examples of how to wrap platform-specific code:
-
-```c
-#if PICO_BUILD
-    stdio_init_all();
-    serial_init();
-#else
-    setvbuf(stdout, NULL, _IONBF, 0);
-    printf("System initialized (simulated)\n");
-#endif
 ```
-
-## Troubleshooting
-
-### CMake Configuration
-
-- If CMake fails to configure, try running the **Clean Workspace** task and re-configuring.
-- Ensure `PICO_SDK_PATH` is correctly set in your environment or VS Code settings.
-
-## License
-
-MIT License. See [LICENSE](LICENSE) for details.
+├── lib/
+│   ├── esl-comms/       # Protocol definitions
+│   └── FreeRTOS-Kernel/ # RTOS Source
+├── src/
+│   ├── apps/           # High-level logic (OBC state machine)
+│   ├── tasks/          # FreeRTOS tasks
+│   ├── hal/            # Hardware Abstraction (RP2350 + SIL)
+│   └── core/           # System logging types
+└── tools/              # Python test scripts for SIL/HIL
+```
