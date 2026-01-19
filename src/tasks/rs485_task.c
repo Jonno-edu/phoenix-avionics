@@ -63,13 +63,13 @@ static void vRS485Task(void *pvParameters) {
                 else if (type == MSG_TYPE_TLM_REQ) {
                     if (id == ID_TLM_IDENTIFICATION) {
                         SystemData_t sys_data;
-                        uint8_t frame_buffer[SYSTEM_DATA_FRAME_LENGTH];
+                        uint8_t frame_buffer[sizeof(SystemData_t)];
                         
                         system_data_get(&sys_data);
                         system_data_pack(&sys_data, frame_buffer);
                         
                         uint8_t resp_desc = BUILD_MSG_DESC(MSG_TYPE_TLM_RESP, id);
-                        rs485_send_packet(packet.src_addr, resp_desc, frame_buffer, SYSTEM_DATA_FRAME_LENGTH);
+                        rs485_send_packet(packet.src_addr, resp_desc, frame_buffer, sizeof(SystemData_t));
                     }
                 }
                 else if (type == MSG_TYPE_TLM_RESP) {
@@ -80,18 +80,18 @@ static void vRS485Task(void *pvParameters) {
                         // Print payload bytes
                         ESP_LOG_BUFFER_HEX(TAG, packet.data, packet.length);
 
-                        // Decode identification frame (now 9 bytes with status_flags)
-                        if (packet.length == SYSTEM_DATA_FRAME_LENGTH) {
-                            uint16_t runtime_s = ((uint16_t)packet.data[4] << 8) | packet.data[5];
-                            uint16_t runtime_ms = ((uint16_t)packet.data[6] << 8) | packet.data[7];
-                            uint8_t status_flags = packet.data[8];
+                        // Decode identification frame
+                        if (packet.length == sizeof(TlmIdentificationPayload_t)) {
+                            TlmIdentificationPayload_t *tlm = (TlmIdentificationPayload_t *)packet.data;
 
+                            // For now, assuming raw mapping (Little Endian to Little Endian)
                             ESP_LOGI(TAG, "EPS node_type=%u iface=%u fw=%u.%u uptime=%us %ums flags=0x%02X",
-                                   packet.data[0], packet.data[1], packet.data[2], packet.data[3],
-                                   runtime_s, runtime_ms, status_flags);
+                                   tlm->node_type, tlm->interface_version, 
+                                   tlm->firmware_major, tlm->firmware_minor,
+                                   tlm->uptime_seconds, tlm->uptime_milliseconds, tlm->status_flags);
 
                             // Piggyback: if EPS reports a pending command, ask it to send it.
-                            if (status_flags & STATUS_FLAG_CMD_PENDING) {
+                            if (tlm->status_flags & STATUS_FLAG_CMD_PENDING) {
                                 ESP_LOGI(TAG, "[OBC] EPS indicates CMD_PENDING -> requesting pending command...");
                                 uint8_t get_desc = BUILD_MSG_DESC(MSG_TYPE_TELECOMMAND, ID_CMD_GET_PENDING_MSG);
                                 rs485_send_packet(packet.src_addr, get_desc, NULL, 0);

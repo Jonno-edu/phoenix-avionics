@@ -54,16 +54,16 @@ void system_data_get(SystemData_t *data) {
     // Copy static configuration
     data->node_type = system_config.node_type;
     data->interface_version = system_config.interface_version;
-    data->firmware_major_version = system_config.firmware_major_version;
-    data->firmware_minor_version = system_config.firmware_minor_version;
+    data->firmware_major = system_config.firmware_major_version;
+    data->firmware_minor = system_config.firmware_minor_version;
     
     // Calculate runtime on-demand
 #if PICO_BUILD
     uint32_t current_ms = to_ms_since_boot(get_absolute_time());
     uint32_t uptime_ms = current_ms - boot_time_ms;
     
-    data->runtime_seconds = uptime_ms / 1000;
-    data->runtime_milliseconds = uptime_ms % 1000;
+    data->uptime_seconds = uptime_ms / 1000;
+    data->uptime_milliseconds = uptime_ms % 1000;
 #else
     // Host build: monotonic uptime since system_data_init()
     uint64_t current_ms = host_time_ms();
@@ -74,8 +74,8 @@ void system_data_get(SystemData_t *data) {
         uptime_ms = 65535ULL * 1000ULL + 999ULL;
     }
 
-    data->runtime_seconds = (uint16_t)(uptime_ms / 1000ULL);
-    data->runtime_milliseconds = (uint16_t)(uptime_ms % 1000ULL);
+    data->uptime_seconds = (uint16_t)(uptime_ms / 1000ULL);
+    data->uptime_milliseconds = (uint16_t)(uptime_ms % 1000ULL);
 #endif
     
     // Status flags are populated by the caller (OBC logic) if needed, 
@@ -88,13 +88,9 @@ void system_data_pack(const SystemData_t *data, uint8_t *buffer) {
         return;
     }
     
-    buffer[0] = data->node_type;
-    buffer[1] = data->interface_version;
-    buffer[2] = data->firmware_major_version;
-    buffer[3] = data->firmware_minor_version;
-    buffer[4] = (data->runtime_seconds >> 8) & 0xFF;
-    buffer[5] = data->runtime_seconds & 0xFF;
-    buffer[6] = (data->runtime_milliseconds >> 8) & 0xFF;
-    buffer[7] = data->runtime_milliseconds & 0xFF;
-    buffer[8] = data->status_flags;
+    // Copy the entire packed struct directly
+    memcpy(buffer, data, sizeof(SystemData_t));
+
+    // Note: If cross-architecture endianness is a concern (e.g. Big Endian network protocol),
+    // you would swap bytes here. For now, we are doing a direct binary map.
 }
