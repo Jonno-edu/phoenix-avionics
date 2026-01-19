@@ -52,11 +52,11 @@ void platform_panic(const char *msg) {
 #endif
 }
 
-void platform_send_byte_mux(uint8_t byte) {
+void platform_send_mux(const uint8_t *data, uint16_t len) {
 #if PICO_BUILD
     // Send to real RS485 bus
-    rs485_hal_send_byte(byte);
+    rs485_hal_send(data, len);
 #endif
     // Also send to USB console (for debugging/monitoring)
-    console_send_byte(byte);
+    console_send(data, len);
 }

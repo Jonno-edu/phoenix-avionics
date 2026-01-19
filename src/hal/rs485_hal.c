@@ -51,16 +51,15 @@
         printf("[RS485 HAL] Bus A initialized on UART1 (GPIO 4/5), DE/RE on GPIO 3\n");
     }
 
-    void rs485_hal_send_byte(uint8_t byte) {
+    void rs485_hal_send(const uint8_t *data, uint16_t len) {
         // Step 1: Enable transmitter (set DE/RE HIGH)
         gpio_put(RS485_DE_RE_PIN, 1);
         
         // Small delay to allow transceiver to switch modes (~1-2 us typical)
-        // At 150 MHz, a few NOPs is sufficient
         __asm volatile("nop\nnop\nnop\nnop\nnop");
         
-        // Step 2: Send the byte
-        uart_putc_raw(RS485_UART_ID, byte);
+        // Step 2: Send the buffer
+        uart_write_blocking(RS485_UART_ID, data, len);
         
         // Step 3: Wait for UART to finish transmission
         uart_tx_wait_blocking(RS485_UART_ID);
@@ -75,10 +74,11 @@
         printf("[RS485 HAL] SIL mode - hardware init skipped\n");
     }
 
-    void rs485_hal_send_byte(uint8_t byte) {
+    void rs485_hal_send(const uint8_t *data, uint16_t len) {
         // In SIL, RS485 HAL doesn't actually send anything.
         // The protocol layer will use the console PTY for testing.
-        (void)byte;
+        (void)data;
+        (void)len;
     }
 #endif
 

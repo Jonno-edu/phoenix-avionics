@@ -21,7 +21,7 @@ static void vEPSPollingTask(void *pvParameters) {
         rs485_send_packet(ADDR_EPS, msg_desc, NULL, 0);
         
         // Wait 5 seconds
-        vTaskDelay(pdMS_TO_TICKS(500));
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 

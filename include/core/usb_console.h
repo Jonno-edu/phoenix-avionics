@@ -7,7 +7,7 @@
 
 #define CONSOLE_BUFFER_SIZE 256
 
-void console_send_byte(uint8_t byte);
+void console_send(const uint8_t *data, uint16_t len);
 void console_init(void);
 
 // Circular Buffer Access

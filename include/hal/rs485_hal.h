@@ -19,17 +19,18 @@
 void rs485_hal_init(void);
 
 /**
- * @brief Send a single byte over RS485 Bus A.
+ * @brief Send a block of data over RS485 Bus A.
  * 
  * Automatically handles direction control:
  * 1. Sets DE/RE HIGH (enable transmitter)
- * 2. Sends the byte via UART1
+ * 2. Sends the entire buffer via UART1
  * 3. Waits for transmission to complete
  * 4. Sets DE/RE LOW (enable receiver)
  * 
- * @param byte The byte to transmit.
+ * @param data Pointer to data buffer.
+ * @param len  Length of data to send.
  */
-void rs485_hal_send_byte(uint8_t byte);
+void rs485_hal_send(const uint8_t *data, uint16_t len);
 
 /**
  * @brief Push a received byte into the RS485 RX circular buffer.

@@ -11,9 +11,9 @@ void platform_panic(const char *msg);
 
 /**
  * @brief  Multiplexed send function.
- *         Sends byte to both RS485 (if available) and debug console.
+ *         Sends data to both RS485 (if available) and debug console.
  *         Used as the callback for the RS485 protocol layer.
  */
-void platform_send_byte_mux(uint8_t byte);
+void platform_send_mux(const uint8_t *data, uint16_t len);
 
 #endif // PLATFORM_HAL_H

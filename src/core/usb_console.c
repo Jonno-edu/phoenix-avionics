@@ -83,24 +83,29 @@ void console_init(void) {
 #endif
 }
 
-void console_send_byte(uint8_t byte) {
+void console_send(const uint8_t *data, uint16_t len) {
 #if PICO_BUILD
     // Always send to USB CDC for testing/monitoring
-    putchar_raw(byte);
+    // uart_write_blocking is not for USB CDC. 
+    // USB CDC usually uses stdio or tud_cdc_write.
+    // Assuming putchar_raw loop for now if direct write isn't available via easier API.
+    for(uint16_t i=0; i<len; i++) {
+        putchar_raw(data[i]);
+    }
 #else
     // SIL: Write to PTY (virtual serial port)
     if (pty_master_fd >= 0) {
-        ssize_t written = write(pty_master_fd, &byte, 1);
+        ssize_t written = write(pty_master_fd, data, len);
         if (written < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
             // Only log errors that aren't just "buffer full"
             printf("[SIL] PTY write error: %s\n", strerror(errno));
         }
     }
     
-    // Also echo to stdout for debugging
-    // Comment this out if it gets too noisy
-    // putchar(byte);
-    // fflush(stdout);
+    // Also echo to stdout for debugging (hex dump for larger blocks might be noisy, but byte by byte is too)
+    // printf("[SIL TX] "); 
+    // for(int i=0; i<len; i++) printf("%02X ", data[i]);
+    // printf("\n");
 #endif
 }
 // NOTE: This function is designed to be called from ISR context ONLY.
