@@ -2,9 +2,36 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "label": "Clean and Reconfigure",
+            "type": "shell",
+            "windows": {
+                "command": "if exist \"${command:cmake.buildDirectory}\" rmdir /s /q \"${command:cmake.buildDirectory}\" && cmake -B \"${command:cmake.buildDirectory}\" -S \"${workspaceFolder}\""
+            },
+            "linux": {
+                "command": "rm -rf \"${command:cmake.buildDirectory}\" && cmake -B \"${command:cmake.buildDirectory}\" -S \"${workspaceFolder}\""
+            },
+            "osx": {
+                "command": "rm -rf \"${command:cmake.buildDirectory}\" && cmake -B \"${command:cmake.buildDirectory}\" -S \"${workspaceFolder}\""
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "problemMatcher": "$gcc",
+            "detail": "Removes build directory and reconfigures CMake from scratch"
+        },
+        {
             "label": "Build Active Variant",
             "type": "shell",
-            "command": "BUILD_DIR=\"${command:cmake.buildDirectory}\"; cmake --build \"$BUILD_DIR\"",
+            "windows": {
+                "command": "set BUILD_DIR=\"${command:cmake.buildDirectory}\" && cmake --build \"%BUILD_DIR%\""
+            },
+            "linux": {
+                "command": "BUILD_DIR=\"${command:cmake.buildDirectory}\"; cmake --build \"$BUILD_DIR\""
+            },
+            "osx": {
+                "command": "BUILD_DIR=\"${command:cmake.buildDirectory}\"; cmake --build \"$BUILD_DIR\""
+            },
             "group": {
                 "kind": "build",
                 "isDefault": false
@@ -15,7 +42,15 @@
         {
             "label": "Flash via SSH Rockchip",
             "type": "shell",
-            "command": "BUILD_DIR=\"${command:cmake.buildDirectory}\"; cmake --build \"$BUILD_DIR\" && scp \"$BUILD_DIR\"/*.uf2 rock@100.115.224.114:~/firmware.uf2 && ssh -t rock@100.115.224.114 'PICO_PORT=$(ls /dev/serial/by-id/usb-Raspberry_Pi_Pico* 2>/dev/null | head -n 1); if [ -n \"$PICO_PORT\" ]; then echo \"Found at $PICO_PORT\"; REAL_PORT=$(readlink -f \"$PICO_PORT\"); echo \"Clearing sessions on $REAL_PORT...\"; sudo fuser -k \"$REAL_PORT\" >/dev/null 2>&1; fi; sudo picotool load -f firmware.uf2'",
+            "windows": {
+                "command": "set BUILD_DIR=\"${command:cmake.buildDirectory}\" && cmake --build \"%BUILD_DIR%\" && scp \"%BUILD_DIR%\"/*.uf2 rock@100.115.224.114:~/firmware.uf2 && ssh -t rock@100.115.224.114 \"PICO_PORT=$(ls /dev/serial/by-id/usb-Raspberry_Pi_Pico* 2>/dev/null | head -n 1); if [ -n \\\"$PICO_PORT\\\" ]; then echo \\\"Found at $PICO_PORT\\\"; REAL_PORT=$(readlink -f \\\"$PICO_PORT\\\"); echo \\\"Clearing sessions on $REAL_PORT...\\\"; sudo fuser -k \\\"$REAL_PORT\\\" >/dev/null 2>&1; fi; sudo picotool load -f firmware.uf2\""
+            },
+            "linux": {
+                "command": "BUILD_DIR=\"${command:cmake.buildDirectory}\"; cmake --build \"$BUILD_DIR\" && scp \"$BUILD_DIR\"/*.uf2 rock@100.115.224.114:~/firmware.uf2 && ssh -t rock@100.115.224.114 'PICO_PORT=$(ls /dev/serial/by-id/usb-Raspberry_Pi_Pico* 2>/dev/null | head -n 1); if [ -n \"$PICO_PORT\" ]; then echo \"Found at $PICO_PORT\"; REAL_PORT=$(readlink -f \"$PICO_PORT\"); echo \"Clearing sessions on $REAL_PORT...\"; sudo fuser -k \"$REAL_PORT\" >/dev/null 2>&1; fi; sudo picotool load -f firmware.uf2'"
+            },
+            "osx": {
+                "command": "BUILD_DIR=\"${command:cmake.buildDirectory}\"; cmake --build \"$BUILD_DIR\" && scp \"$BUILD_DIR\"/*.uf2 rock@100.115.224.114:~/firmware.uf2 && ssh -t rock@100.115.224.114 'PICO_PORT=$(ls /dev/serial/by-id/usb-Raspberry_Pi_Pico* 2>/dev/null | head -n 1); if [ -n \"$PICO_PORT\" ]; then echo \"Found at $PICO_PORT\"; REAL_PORT=$(readlink -f \"$PICO_PORT\"); echo \"Clearing sessions on $REAL_PORT...\"; sudo fuser -k \"$REAL_PORT\" >/dev/null 2>&1; fi; sudo picotool load -f firmware.uf2'"
+            },
             "group": {
                 "kind": "build",
                 "isDefault": false
