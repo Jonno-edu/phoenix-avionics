@@ -59,6 +59,25 @@ static void vRS485Task(void *pvParameters) {
                         watchdog_reboot(0, 0, 0);
 #endif
                     }
+                    else if (id == ID_CMD_SET_SIM_STATE) {
+                        if (packet.length >= 1) {
+                            bool enable = (packet.data[0] == 1);
+                            system_config_set_sim_mode(enable);
+                            ESP_LOGI(TAG, "CMD: Set Sim Mode = %d", enable);
+                        }
+                    }
+                    else if (id == ID_CMD_SET_LOG_LEVEL) {
+                        if (packet.length >= 1) {
+                            system_config_set_log_level(packet.data[0]);
+                            ESP_LOGI(TAG, "CMD: Set Log Level = %d", packet.data[0]);
+                        }
+                    }
+                    else if (id == ID_CMD_SET_TELEM_RATE) {
+                        if (packet.length >= 1) {
+                            system_config_set_telem_rate(packet.data[0]);
+                            ESP_LOGI(TAG, "CMD: Set Telem Rate = %d Hz", packet.data[0]);
+                        }
+                    }
                 }
                 else if (type == MSG_TYPE_TLM_REQ) {
                     if (id == ID_TLM_IDENTIFICATION) {

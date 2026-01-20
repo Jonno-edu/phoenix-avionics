@@ -1,6 +1,7 @@
 #include "eps_polling_task.h"
 #include "task_manager.h"
 #include "rs485_protocol.h"
+#include "core/system_data.h"
 #include <FreeRTOS.h>
 #include <task.h>
 #include <stdio.h>
@@ -20,8 +21,11 @@ static void vEPSPollingTask(void *pvParameters) {
         uint8_t msg_desc = BUILD_MSG_DESC(MSG_TYPE_TLM_REQ, ID_TLM_IDENTIFICATION);
         rs485_send_packet(ADDR_EPS, msg_desc, NULL, 0);
         
-        // Wait 5 seconds
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        // Use dynamic telemetry rate
+        uint8_t rate = system_config_get_telem_rate();
+        uint32_t delay_ms = (rate > 0) ? (1000 / rate) : 1000;
+        
+        vTaskDelay(pdMS_TO_TICKS(delay_ms));
     }
 }
 

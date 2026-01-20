@@ -21,6 +21,13 @@ static struct {
     .firmware_minor_version = 1
 };
 
+// Runtime configuration
+static volatile SystemConfig_t sys_config = {
+    .log_level = 2,         // Default: Info
+    .sim_mode_enabled = false,
+    .telem_rate_hz = 1      // Default: 1Hz
+};
+
 // Boot time reference
 static uint32_t boot_time_ms = 0;
 
@@ -94,3 +101,24 @@ void system_data_pack(const SystemData_t *data, uint8_t *buffer) {
     // Note: If cross-architecture endianness is a concern (e.g. Big Endian network protocol),
     // you would swap bytes here. For now, we are doing a direct binary map.
 }
+
+void system_config_init(void) {
+    // If you have NVS/Flash storage, load saved config here.
+    // For now, defaults are fine.
+}
+
+void system_config_set_log_level(uint8_t level) {
+    if(level <= 3) sys_config.log_level = level;
+}
+
+void system_config_set_sim_mode(bool enabled) {
+    sys_config.sim_mode_enabled = enabled;
+}
+
+void system_config_set_telem_rate(uint8_t rate_hz) {
+    if(rate_hz > 0) sys_config.telem_rate_hz = rate_hz;
+}
+
+uint8_t system_config_get_log_level(void) { return sys_config.log_level; }
+bool system_config_get_sim_mode(void) { return sys_config.sim_mode_enabled; }
+uint8_t system_config_get_telem_rate(void) { return sys_config.telem_rate_hz; }

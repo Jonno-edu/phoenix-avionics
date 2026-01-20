@@ -23,6 +23,7 @@ int main() {
     
     console_init();
     system_data_init();
+    system_config_init();
 
 #if PICO_BUILD
     // Ensure RS485 protocol is initialized with the HAL TX callback and OBC address
