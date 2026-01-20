@@ -129,9 +129,12 @@ set(COMMON_SOURCES
     src/tasks/heartbeat_task.c
     src/tasks/eps_polling_task.c
     src/tasks/rs485_task.c
+    src/tasks/telemetry_task.c
+    src/tasks/sensors_task.c
     src/core/usb_console.c
     lib/esl-comms/src/rs485_protocol.c
     src/core/system_data.c
+    src/core/rocket_data.c
     lib/esl-math/src/dcm.c
     lib/esl-math/src/matrix.c
     lib/esl-math/src/quaternion.c
@@ -143,6 +146,7 @@ set(COMMON_SOURCES
 set(HARDWARE_SOURCES
     src/hal/rs485_hal.c
     lib/esl-sensors/src/baroMS5607.c
+    lib/esl-sensors/src/tempTMP117.c
     lib/esl-sensors/src/i2c.c
 )
 

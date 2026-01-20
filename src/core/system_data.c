@@ -23,7 +23,7 @@ static struct {
 
 // Runtime configuration
 static volatile SystemConfig_t sys_config = {
-    .log_level = 2,         // Default: Info
+    .log_level = 3,         // Default: Info
     .sim_mode_enabled = false,
     .telem_rate_hz = 1      // Default: 1Hz
 };

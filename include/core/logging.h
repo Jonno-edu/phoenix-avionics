@@ -3,6 +3,8 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include "FreeRTOS.h"
+#include "task.h"
 #include "core/system_data.h"
 
 #if PICO_BUILD
@@ -27,30 +29,41 @@
 #define LOG_COLOR_CYAN    "\033[36m"
 #define LOG_COLOR_BLUE    "\033[34m"
 
+static inline const char* log_get_task_name(void) {
+    if (xTaskGetSchedulerState() == taskSCHEDULER_NOT_STARTED) {
+        return "init";
+    }
+    const char *name = pcTaskGetName(NULL);
+    return name ? name : "none";
+}
+
 // ESP-style Logging Macros
-// Format: L (Timestamp) [TAG]: Message
+// Format: L (Timestamp) [TASK] [TAG]: Message
 #define ESP_LOGE(tag, fmt, ...) \
-    do { if (system_config_get_log_level() >= 1) printf(LOG_COLOR_RED "E (%lu) [%s]: " fmt LOG_COLOR_RESET "\n", (unsigned long)LOG_GET_TIME(), tag, ##__VA_ARGS__); } while(0)
+    do { if (system_config_get_log_level() >= 1) printf(LOG_COLOR_RED "E (%lu) [%s] [%s]: " fmt LOG_COLOR_RESET "\n", (unsigned long)LOG_GET_TIME(), log_get_task_name(), tag, ##__VA_ARGS__); } while(0)
 
 #define ESP_LOGW(tag, fmt, ...) \
-    do { if (system_config_get_log_level() >= 2) printf(LOG_COLOR_YELLOW "W (%lu) [%s]: " fmt LOG_COLOR_RESET "\n", (unsigned long)LOG_GET_TIME(), tag, ##__VA_ARGS__); } while(0)
+    do { if (system_config_get_log_level() >= 2) printf(LOG_COLOR_YELLOW "W (%lu) [%s] [%s]: " fmt LOG_COLOR_RESET "\n", (unsigned long)LOG_GET_TIME(), log_get_task_name(), tag, ##__VA_ARGS__); } while(0)
 
 #define ESP_LOGI(tag, fmt, ...) \
-    do { if (system_config_get_log_level() >= 2) printf(LOG_COLOR_GREEN "I (%lu) [%s]: " fmt LOG_COLOR_RESET "\n", (unsigned long)LOG_GET_TIME(), tag, ##__VA_ARGS__); } while(0)
+    do { if (system_config_get_log_level() >= 2) printf(LOG_COLOR_GREEN "I (%lu) [%s] [%s]: " fmt LOG_COLOR_RESET "\n", (unsigned long)LOG_GET_TIME(), log_get_task_name(), tag, ##__VA_ARGS__); } while(0)
 
 #define ESP_LOGD(tag, fmt, ...) \
-    do { if (system_config_get_log_level() >= 3) printf(LOG_COLOR_CYAN "D (%lu) [%s]: " fmt LOG_COLOR_RESET "\n", (unsigned long)LOG_GET_TIME(), tag, ##__VA_ARGS__); } while(0)
+    do { if (system_config_get_log_level() >= 3) printf(LOG_COLOR_CYAN "D (%lu) [%s] [%s]: " fmt LOG_COLOR_RESET "\n", (unsigned long)LOG_GET_TIME(), log_get_task_name(), tag, ##__VA_ARGS__); } while(0)
 
 #define ESP_LOGV(tag, fmt, ...) \
-    do { if (system_config_get_log_level() >= 3) printf(LOG_COLOR_BLUE "V (%lu) [%s]: " fmt LOG_COLOR_RESET "\n", (unsigned long)LOG_GET_TIME(), tag, ##__VA_ARGS__); } while(0)
+    do { if (system_config_get_log_level() >= 3) printf(LOG_COLOR_BLUE "V (%lu) [%s] [%s]: " fmt LOG_COLOR_RESET "\n", (unsigned long)LOG_GET_TIME(), log_get_task_name(), tag, ##__VA_ARGS__); } while(0)
 
 // Raw hex dump helper
 static inline void ESP_LOG_BUFFER_HEX(const char *tag, const void *buffer, uint16_t buff_len) {
     if (system_config_get_log_level() < 3) return;
     if (buff_len == 0) return;
     const uint8_t *ptr = (const uint8_t *)buffer;
-    printf(LOG_COLOR_CYAN "D (%lu) [%s]: ", (unsigned long)LOG_GET_TIME(), tag);
     for (uint16_t i = 0; i < buff_len; i++) {
+        if (i % 16 == 0) {
+            if (i > 0) printf(LOG_COLOR_RESET "\n");
+            printf(LOG_COLOR_CYAN "D (%lu) [%s] [%s]: ", (unsigned long)LOG_GET_TIME(), log_get_task_name(), tag);
+        }
         printf("%02X ", ptr[i]);
     }
     printf(LOG_COLOR_RESET "\n");

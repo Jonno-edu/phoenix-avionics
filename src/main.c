@@ -8,6 +8,7 @@
 #include "rs485_protocol.h"
 #include "hal/rs485_hal.h"
 #include "core/system_data.h"
+#include "core/rocket_data.h"
 #include "bsp/bsp_init.h"
 #include "tasks/task_manager.h"
 #include "hal/platform_hal.h"
@@ -23,6 +24,9 @@ int main() {
     
     console_init();
     system_data_init();
+    rocket_data_init();
+    // Pre-load with test values so we can see data immediately
+    rocket_data_fill_test_values();
     system_config_init();
 
 #if PICO_BUILD
