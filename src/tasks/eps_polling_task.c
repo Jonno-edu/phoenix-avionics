@@ -1,7 +1,7 @@
 #include "eps_polling_task.h"
 #include "task_manager.h"
 #include "rs485_protocol.h"
-#include "core/system_data.h"
+#include "core/obc_data.h"
 #include <FreeRTOS.h>
 #include <task.h>
 #include <stdio.h>
@@ -18,8 +18,7 @@ static void vEPSPollingTask(void *pvParameters) {
         // Send Status/Identification Request to EPS
         ESP_LOGI(TAG, "[OBC -> EPS] Polling Status...");
         
-        uint8_t msg_desc = BUILD_MSG_DESC(MSG_TYPE_TLM_REQ, ID_TLM_IDENTIFICATION);
-        rs485_send_packet(ADDR_EPS, msg_desc, NULL, 0);
+        rs485_send_packet(ADDR_EPS, MSG_TYPE_TLM_REQ, ID_TLM_IDENTIFICATION, NULL, 0);
         
         // Use dynamic telemetry rate
         uint8_t rate = system_config_get_telem_rate();

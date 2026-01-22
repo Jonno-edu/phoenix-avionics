@@ -23,29 +23,32 @@ static void vTelemetryTask(void *pvParameters) {
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
 
         // 1. Get latest atomic snapshot of the tracking data
-        rocket_data_get_beacon(&beacon);
-
-        // 2. Construct Protocol Description for Tracking Beacon
-        uint8_t msg_desc = BUILD_MSG_DESC(MSG_TYPE_TLM_RESP, ID_TLM_TRACKING_BEACON);
+        getRocketTrackingInfo(&beacon);
         
         // 3. Broadcast packet via RS485
         // Addressed to BROADCAST (0xFF) so both GSE and Tracking Radio receive it.
-        ESP_LOGI(TAG, "Broadcasting Tracking Beacon (%zu bytes)", sizeof(TlmTrackingBeaconPayload_t));
-        ESP_LOG_BUFFER_HEX(TAG, &beacon, sizeof(TlmTrackingBeaconPayload_t));
 
-        // Detailed field logging (Debug level)
-        ESP_LOGD(TAG, "  Runtime: %u.%03u s | State: %u", 
-                 beacon.runtime_seconds, beacon.runtime_milliseconds, beacon.avionics_state);
-        ESP_LOGD(TAG, "  Est Pos: Lat=%.7f, Lon=%.7f, Alt=%d mm", 
-                 beacon.est_lat/1e7, beacon.est_lon/1e7, beacon.est_alt);
-        ESP_LOGD(TAG, "  Stack Temp: %.2f C", beacon.temp_stack / 128.0f);
+        // ESP_LOGI(TAG, "Broadcasting Tracking Beacon (%zu bytes)", sizeof(TlmTrackingBeaconPayload_t));
+        // ESP_LOG_BUFFER_HEX(TAG, &beacon, sizeof(TlmTrackingBeaconPayload_t));
+
+        // // Detailed field logging (Debug level)
+        // ESP_LOGD(TAG, "  Runtime: %u.%03u s | State: %u", 
+        //         beacon.runtime_seconds, beacon.runtime_milliseconds, beacon.avionics_state);
+        // ESP_LOGD(TAG, "  Est Pos: Lat=%.7f, Lon=%.7f, Alt=%d mm", 
+        //         beacon.est_lat/1e7, beacon.est_lon/1e7, beacon.est_alt);
+        // ESP_LOGD(TAG, "  Stack Temp: %.2f C", beacon.temp_stack / 128.0f);
 
         rs485_send_packet(
-            ADDR_BROADCAST,
-            msg_desc,
+            RS485_ADDR_BROADCAST,
+            MSG_TYPE_TLM_RESP,
+            ID_TLM_TRACKING_BEACON,
             (uint8_t*)&beacon,
             sizeof(TlmTrackingBeaconPayload_t)
         );
+
+        // Send status request to Tracking Radio
+        rs485_send_packet(ADDR_TRACKING_RADIO, MSG_TYPE_TLM_REQ, ID_TLM_STATUS, NULL, 0);
+
     }
 }
 

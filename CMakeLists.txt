@@ -133,7 +133,8 @@ set(COMMON_SOURCES
     src/tasks/sensors_task.c
     src/core/usb_console.c
     lib/esl-comms/src/rs485_protocol.c
-    src/core/system_data.c
+    src/tctlm.c
+    src/core/obc_data.c
     src/core/rocket_data.c
     lib/esl-math/src/dcm.c
     lib/esl-math/src/matrix.c

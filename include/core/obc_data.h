@@ -1,12 +1,23 @@
-// system_data.h
-#ifndef SYSTEM_DATA_H
-#define SYSTEM_DATA_H
+// obc_data.h
+#ifndef OBC_DATA_H
+#define OBC_DATA_H
 
 #include <stdint.h>
 #include <stdbool.h>
 #include "telemetry_defs.h"
 
 #define TLM_ID_IDENTIFICATION 128
+
+// ID: ID_TLM_IDENTIFICATION
+typedef struct {
+    uint8_t node_type;              // 1=OBC, 2=EPS
+    uint8_t interface_version;
+    uint8_t firmware_major;
+    uint8_t firmware_minor;
+    uint16_t uptime_seconds;
+    uint16_t uptime_milliseconds;
+    uint8_t status_flags;           // Bit 0: CMD_PENDING
+} PACKED_STRUCT TlmIdentificationPayload_t;
 
 // System identification data structure
 typedef TlmIdentificationPayload_t SystemData_t;
@@ -17,7 +28,7 @@ typedef struct {
     uint8_t telem_rate_hz;  // Frequency of telemetry broadcasts
 } SystemConfig_t;
 
-void system_data_get(SystemData_t *data);
+void getSystemIdentInfo(SystemData_t *data);
 void system_data_init(void);
 void system_data_pack(const SystemData_t *data, uint8_t *buffer);
 
@@ -31,4 +42,4 @@ uint8_t system_config_get_log_level(void);
 bool system_config_get_sim_mode(void);
 uint8_t system_config_get_telem_rate(void);
 
-#endif // SYSTEM_DATA_H
+#endif // OBC_DATA_H

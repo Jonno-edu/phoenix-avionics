@@ -117,7 +117,7 @@ void rocket_data_update_apogee_votes(uint8_t votes) {
 // GETTERS
 // ============================================================================
 
-void rocket_data_get_beacon(TlmTrackingBeaconPayload_t *out_beacon) {
+void getRocketTrackingInfo(TlmTrackingBeaconPayload_t *out_beacon) {
     LOCK_DATA();
     memcpy(out_beacon, &_rocket_data, sizeof(TlmTrackingBeaconPayload_t));
     UNLOCK_DATA();

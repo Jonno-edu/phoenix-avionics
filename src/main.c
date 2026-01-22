@@ -7,7 +7,7 @@
 #include "core/usb_console.h"
 #include "rs485_protocol.h"
 #include "hal/rs485_hal.h"
-#include "core/system_data.h"
+#include "core/obc_data.h"
 #include "core/rocket_data.h"
 #include "bsp/bsp_init.h"
 #include "tasks/task_manager.h"

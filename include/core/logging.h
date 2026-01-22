@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include "FreeRTOS.h"
 #include "task.h"
-#include "core/system_data.h"
+#include "core/obc_data.h"
 
 #if PICO_BUILD
     #include <pico/stdlib.h>

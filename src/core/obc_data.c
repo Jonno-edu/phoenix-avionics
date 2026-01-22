@@ -1,5 +1,5 @@
-// system_data.c
-#include "core/system_data.h"
+// obc_data.c
+#include "core/obc_data.h"
 #include <string.h>
 
 #if PICO_BUILD
@@ -53,7 +53,7 @@ void system_data_init(void) {
 #endif
 }
 
-void system_data_get(SystemData_t *data) {
+void getSystemIdentInfo(SystemData_t *data) {
     if (data == NULL) {
         return;
     }

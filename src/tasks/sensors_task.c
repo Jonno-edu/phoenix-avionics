@@ -18,6 +18,9 @@ static const char *TAG = "SensorsTask";
 static void vSensorsTask(void *pvParameters) {
     (void)pvParameters;
 
+    // Delay 2 seconds to allow user to connect serial monitor before init logs/scan
+    vTaskDelay(pdMS_TO_TICKS(2000));
+
 #if PICO_BUILD
     ESP_LOGI(TAG, "Initializing I2C...");
     if (!I2C_init()) {
