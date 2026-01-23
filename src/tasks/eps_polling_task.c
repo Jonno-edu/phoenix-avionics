@@ -17,6 +17,7 @@ static void vEPSPollingTask(void *pvParameters) {
     while (true) {
         // Send Status/Identification Request to EPS
         ESP_LOGI(TAG, "[OBC -> EPS] Polling Status...");
+        ESP_LOGD(TAG, "Raw bytes: [00 %02X %02X %02X]", ADDR_EPS, ADDR_OBC, (ID_TLM_IDENTIFICATION << 3) | MSG_TYPE_TLM_REQ);
         
         rs485_send_packet(ADDR_EPS, MSG_TYPE_TLM_REQ, ID_TLM_IDENTIFICATION, NULL, 0);
         

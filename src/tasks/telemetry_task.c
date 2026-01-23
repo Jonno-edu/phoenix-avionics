@@ -26,17 +26,17 @@ static void vTelemetryTask(void *pvParameters) {
         getRocketTrackingInfo(&beacon);
         
         // 3. Broadcast packet via RS485
-        // Addressed to BROADCAST (0xFF) so both GSE and Tracking Radio receive it.
+        //Addressed to BROADCAST (0xFF) so both GSE and Tracking Radio receive it.
 
-        // ESP_LOGI(TAG, "Broadcasting Tracking Beacon (%zu bytes)", sizeof(TlmTrackingBeaconPayload_t));
-        // ESP_LOG_BUFFER_HEX(TAG, &beacon, sizeof(TlmTrackingBeaconPayload_t));
+        ESP_LOGI(TAG, "Broadcasting Tracking Beacon (%zu bytes)", sizeof(TlmTrackingBeaconPayload_t));
+        ESP_LOG_BUFFER_HEX(TAG, &beacon, sizeof(TlmTrackingBeaconPayload_t));
 
-        // // Detailed field logging (Debug level)
-        // ESP_LOGD(TAG, "  Runtime: %u.%03u s | State: %u", 
-        //         beacon.runtime_seconds, beacon.runtime_milliseconds, beacon.avionics_state);
-        // ESP_LOGD(TAG, "  Est Pos: Lat=%.7f, Lon=%.7f, Alt=%d mm", 
-        //         beacon.est_lat/1e7, beacon.est_lon/1e7, beacon.est_alt);
-        // ESP_LOGD(TAG, "  Stack Temp: %.2f C", beacon.temp_stack / 128.0f);
+        // Detailed field logging (Debug level)
+        ESP_LOGD(TAG, "  Runtime: %u.%03u s | State: %u", 
+                beacon.runtime_seconds, beacon.runtime_milliseconds, beacon.avionics_state);
+        ESP_LOGD(TAG, "  Est Pos: Lat=%.7f, Lon=%.7f, Alt=%d mm", 
+                beacon.est_lat/1e7, beacon.est_lon/1e7, beacon.est_alt);
+        ESP_LOGD(TAG, "  Stack Temp: %.2f C", beacon.temp_stack / 128.0f);
 
         rs485_send_packet(
             RS485_ADDR_BROADCAST,

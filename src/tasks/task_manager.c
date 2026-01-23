@@ -25,7 +25,7 @@ void tasks_create_all(void) {
 #endif
 
     rs485_task_init();
-    telemetry_task_init();
+    // telemetry_task_init();
     eps_polling_task_init();
     sensors_task_init();
     heartbeat_task_init();

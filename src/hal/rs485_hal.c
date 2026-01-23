@@ -3,6 +3,9 @@
 #include <stdio.h>
 #include "FreeRTOS.h"
 #include "task.h"
+#include "core/logging.h"
+
+static const char *TAG = "RS485_HAL";
 
 #if PICO_BUILD
     #include <pico/stdlib.h>
@@ -48,7 +51,7 @@
         irq_set_exclusive_handler(UART1_IRQ, on_rs485_uart_rx);
         irq_set_enabled(UART1_IRQ, true);
         
-        printf("[RS485 HAL] Bus A initialized on UART1 (GPIO 4/5), DE/RE on GPIO 3\n");
+        ESP_LOGI(TAG, "Bus A initialized on UART1 (GPIO 4/5), DE/RE on GPIO 3");
     }
 
     void rs485_hal_send(const uint8_t *data, uint16_t len) {
@@ -66,6 +69,8 @@
         
         // Step 4: Disable transmitter, enable receiver (set DE/RE LOW)
         gpio_put(RS485_DE_RE_PIN, 0);
+
+        ESP_LOGD(TAG, "Sent %d bytes", len);
     }
 
 #else

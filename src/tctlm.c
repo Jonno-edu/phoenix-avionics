@@ -76,16 +76,40 @@ void TCTLM_processTelemetryResponse(RS485_packet_t *pkt) {
     uint8_t id = pkt->msg_desc.id;
     ESP_LOGI(TAG, "Telemetry Response %d from %02X", id, pkt->src_addr);
     
+    // Log full raw packet: [Len Dest Src Desc] [Payload...]
+    char raw_buf[256] = {0};
+    int offset = 0;
+    
+    // Header
+    offset += snprintf(raw_buf + offset, sizeof(raw_buf) - offset, "%02X %02X %02X %02X ",
+                       pkt->length, pkt->dest_addr, pkt->src_addr, pkt->msg_desc.raw);
+                       
+    // Payload
+    for(int i=0; i<pkt->length && offset < (sizeof(raw_buf) - 4); i++) {
+        offset += snprintf(raw_buf + offset, sizeof(raw_buf) - offset, "%02X ", pkt->data[i]);
+    }
+    ESP_LOGI(TAG, "RX Raw: [%s]", raw_buf);
+
     if (id == ID_TLM_IDENTIFICATION) {
-        if (pkt->length == sizeof(TlmIdentificationPayload_t)) {
-            TlmIdentificationPayload_t *tlm = (TlmIdentificationPayload_t *)pkt->data;
-            ESP_LOGI(TAG, "Node %02X: fw %d.%d, uptime %us", 
-                     pkt->src_addr, tlm->firmware_major, tlm->firmware_minor, tlm->uptime_seconds);
+        // Accept 8 bytes (legacy/EPS) or more (upto full struct size)
+        if (pkt->length >= 8 && pkt->length <= sizeof(TlmIdentificationPayload_t)) {
+            TlmIdentificationPayload_t tlm = {0};
+            // Safely copy available data
+            memcpy(&tlm, pkt->data, pkt->length);
             
-            if (tlm->status_flags & 0x01) { // STATUS_FLAG_CMD_PENDING
-                ESP_LOGI(TAG, "Node %02X indicates CMD_PENDING", pkt->src_addr);
-                // Maybe request it
+            ESP_LOGI(TAG, "Node %02X (Type %d, Ver %d): fw %d.%d, uptime %us.%03u", 
+                     pkt->src_addr, tlm.node_type, tlm.interface_version,
+                     tlm.firmware_major, tlm.firmware_minor, 
+                     tlm.uptime_seconds, tlm.uptime_milliseconds);
+            
+            if (pkt->length >= 9) {
+                ESP_LOGI(TAG, "Flags 0x%02X", tlm.status_flags);
+                if (tlm.status_flags & 0x01) { // STATUS_FLAG_CMD_PENDING
+                    ESP_LOGI(TAG, "Node %02X indicates CMD_PENDING", pkt->src_addr);
+                }
             }
+        } else {
+             ESP_LOGW(TAG, "ID_TLM_IDENTIFICATION: Unexpected length %d", pkt->length);
         }
     }
 }
