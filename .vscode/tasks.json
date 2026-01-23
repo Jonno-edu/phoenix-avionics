@@ -2,70 +2,49 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Clean and Reconfigure",
+            "label": "Build",
             "type": "shell",
-            "windows": {
-                "command": "if exist \"${command:cmake.buildDirectory}\" rmdir /s /q \"${command:cmake.buildDirectory}\" && cmake -B \"${command:cmake.buildDirectory}\" -S \"${workspaceFolder}\""
-            },
-            "linux": {
-                "command": "rm -rf \"${command:cmake.buildDirectory}\" && cmake -B \"${command:cmake.buildDirectory}\" -S \"${workspaceFolder}\""
-            },
-            "osx": {
-                "command": "rm -rf \"${command:cmake.buildDirectory}\" && cmake -B \"${command:cmake.buildDirectory}\" -S \"${workspaceFolder}\""
-            },
-            "group": {
-                "kind": "build",
-                "isDefault": false
-            },
+            "command": "cmake --build /workspace/build/Debug-rp2350",
+            "group": "build",
             "problemMatcher": "$gcc",
-            "detail": "Removes build directory and reconfigures CMake from scratch"
+            "detail": "Build the project"
         },
         {
-            "label": "Build Active Variant",
+            "label": "Clean Build",
             "type": "shell",
-            "windows": {
-                "command": "set BUILD_DIR=\"${command:cmake.buildDirectory}\" && cmake --build \"%BUILD_DIR%\""
-            },
-            "linux": {
-                "command": "BUILD_DIR=\"${command:cmake.buildDirectory}\"; cmake --build \"$BUILD_DIR\""
-            },
-            "osx": {
-                "command": "BUILD_DIR=\"${command:cmake.buildDirectory}\"; cmake --build \"$BUILD_DIR\""
-            },
-            "group": {
-                "kind": "build",
-                "isDefault": false
-            },
+            "command": "rm -rf /workspace/build/Debug-rp2350 && cmake -B /workspace/build/Debug-rp2350 -S /workspace -G Ninja",
+            "group": "build",
             "problemMatcher": "$gcc",
-            "detail": "Builds the active variant locally"
+            "detail": "Remove build directory and reconfigure CMake"
         },
         {
-            "label": "Flash via SSH Rockchip",
+            "label": "Flash",
             "type": "shell",
-            "windows": {
-                "command": "set BUILD_DIR=\"${command:cmake.buildDirectory}\" && cmake --build \"%BUILD_DIR%\" && scp \"%BUILD_DIR%\"/*.uf2 rock@100.115.224.114:~/firmware.uf2 && ssh -t rock@100.115.224.114 \"PICO_PORT=$(ls /dev/serial/by-id/usb-Raspberry_Pi_Pico* 2>/dev/null | head -n 1); if [ -n \\\"$PICO_PORT\\\" ]; then echo \\\"Found at $PICO_PORT\\\"; REAL_PORT=$(readlink -f \\\"$PICO_PORT\\\"); echo \\\"Clearing sessions on $REAL_PORT...\\\"; sudo fuser -k \\\"$REAL_PORT\\\" >/dev/null 2>&1; fi; sudo picotool load -f firmware.uf2\""
-            },
-            "linux": {
-                "command": "BUILD_DIR=\"${command:cmake.buildDirectory}\"; cmake --build \"$BUILD_DIR\" && scp \"$BUILD_DIR\"/*.uf2 rock@100.115.224.114:~/firmware.uf2 && ssh -t rock@100.115.224.114 'PICO_PORT=$(ls /dev/serial/by-id/usb-Raspberry_Pi_Pico* 2>/dev/null | head -n 1); if [ -n \"$PICO_PORT\" ]; then echo \"Found at $PICO_PORT\"; REAL_PORT=$(readlink -f \"$PICO_PORT\"); echo \"Clearing sessions on $REAL_PORT...\"; sudo fuser -k \"$REAL_PORT\" >/dev/null 2>&1; fi; sudo picotool load -f firmware.uf2'"
-            },
-            "osx": {
-                "command": "BUILD_DIR=\"${command:cmake.buildDirectory}\"; cmake --build \"$BUILD_DIR\" && scp \"$BUILD_DIR\"/*.uf2 rock@100.115.224.114:~/firmware.uf2 && ssh -t rock@100.115.224.114 'PICO_PORT=$(ls /dev/serial/by-id/usb-Raspberry_Pi_Pico* 2>/dev/null | head -n 1); if [ -n \"$PICO_PORT\" ]; then echo \"Found at $PICO_PORT\"; REAL_PORT=$(readlink -f \"$PICO_PORT\"); echo \"Clearing sessions on $REAL_PORT...\"; sudo fuser -k \"$REAL_PORT\" >/dev/null 2>&1; fi; sudo picotool load -f firmware.uf2'"
-            },
-            "group": {
-                "kind": "build",
-                "isDefault": false
-            },
+            "command": "cmake --build /workspace/build/Debug-rp2350 && scp /workspace/build/Debug-rp2350/*.uf2 rock@100.115.224.114:~/firmware.uf2 && ssh -t rock@100.115.224.114 'sudo fuser -k /dev/ttyOBC 2>/dev/null; sudo picotool load -f ~/firmware.uf2'",
+            "group": "build",
             "problemMatcher": "$gcc",
             "presentation": {
                 "reveal": "always",
                 "panel": "shared"
             },
-            "detail": "Builds locally, copies to Rockchip, and flashes via picotool (auto-reboots)."
+            "detail": "Build, transfer to Rock Pi, and flash via picotool"
         },
         {
-            "label": "Monitor via SSH Rockchip",
+            "label": "Flash (Skip Build)",
             "type": "shell",
-            "command": "ssh -t rock@100.115.224.114 'echo \"Waiting for Pico...\"; for i in {1..10}; do PICO_PORT=$(ls /dev/serial/by-id/usb-Raspberry_Pi_Pico* 2>/dev/null | head -n 1); if [ -n \"$PICO_PORT\" ]; then echo \"Found at $PICO_PORT\"; REAL_PORT=$(readlink -f \"$PICO_PORT\"); echo \"Clearing sessions on $REAL_PORT...\"; sudo fuser -k \"$REAL_PORT\" >/dev/null 2>&1; minicom -D \"$PICO_PORT\" -b 115200; exit 0; fi; sleep 1; done; echo \"Pico not found!\"; exit 1'",
+            "command": "scp /workspace/build/Debug-rp2350/*.uf2 rock@100.115.224.114:~/firmware.uf2 && ssh -t rock@100.115.224.114 'sudo fuser -k /dev/ttyOBC 2>/dev/null; sudo picotool load -f ~/firmware.uf2'",
+            "group": "build",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "detail": "Flash existing UF2 without rebuilding"
+        },
+        {
+            "label": "Monitor",
+            "type": "shell",
+            "command": "ssh -t rock@100.115.224.114 'sudo fuser -k /dev/ttyOBC 2>/dev/null; sudo rm -f /var/lock/LCK..ttyOBC; sleep 0.5; minicom -D /dev/ttyOBC -b 115200'",
             "group": "build",
             "problemMatcher": [],
             "presentation": {
@@ -73,17 +52,26 @@
                 "panel": "dedicated",
                 "focus": true
             },
-            "detail": "Automatically finds the Raspberry Pi Pico and opens a remote serial monitor"
+            "detail": "Open serial monitor on /dev/ttyOBC"
         },
         {
-            "label": "Flash and Monitor via SSH Rockchip",
+            "label": "Flash and Monitor",
             "dependsOn": [
-                "Flash via SSH Rockchip",
-                "Monitor via SSH Rockchip"
+                "Flash",
+                "Monitor"
             ],
             "dependsOrder": "sequence",
+            "group": "build",
             "problemMatcher": [],
-            "group": "build"
+            "detail": "Build, flash, then open serial monitor"
+        },
+        {
+            "label": "Reboot Pico",
+            "type": "shell",
+            "command": "ssh -t rock@100.115.224.114 'sudo picotool reboot'",
+            "group": "build",
+            "problemMatcher": [],
+            "detail": "Reboot the Pico without flashing"
         }
     ]
 }
