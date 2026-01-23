@@ -5,37 +5,6 @@
 		}
 	],
 	"settings": {
-
-		"cmake.options.statusBarVisibility": "visible",
-		"cmake.options.advanced": {
-			"variant": {
-				"statusBarVisibility": "visible"
-			},
-			"kit": {
-				"statusBarVisibility": "hidden"
-			},
-			"build": {
-				"statusBarVisibility": "hidden"
-			},
-			"launch": {
-				"statusBarVisibility": "hidden"
-			},
-			"debug": {
-				"statusBarVisibility": "hidden"
-			},
-			"buildTarget": {
-				"statusBarVisibility": "hidden"
-			},
-			"cpack": {
-				"statusBarVisibility": "hidden"
-			},
-			"workflow": {
-				"statusBarVisibility": "hidden"
-			},
-			"test": {
-				"statusBarVisibility": "hidden"
-			}
-		}
+		"cmake.launchBehavior": "reuseTerminal"
 	}
 }
-

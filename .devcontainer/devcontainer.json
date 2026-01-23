@@ -1,0 +1,46 @@
+{
+    "name": "Phoenix Avionics - Pico 2 Dev",
+    "dockerComposeFile": "../docker-compose.yml",
+    "service": "pico-dev",
+    "workspaceFolder": "/workspace",
+    
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-vscode.cpptools",
+                "ms-vscode.cmake-tools",
+                "ms-vscode.cpptools-extension-pack",
+                "twxs.cmake",
+                "marus25.cortex-debug",
+                "dan-c-underwood.arm",
+                "zixuanwang.linkerscript",
+                "ms-vscode.makefile-tools"
+            ],
+            "settings": {
+                "cmake.configureOnOpen": true,
+                "cmake.generator": "Ninja",
+                "cmake.buildDirectory": "${workspaceFolder}/build/${buildType}",
+                "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+                "C_Cpp.intelliSenseEngine": "default",
+                "files.associations": {
+                    "*.h": "c",
+                    "*.c": "c"
+                },
+                "terminal.integrated.defaultProfile.linux": "bash"
+            }
+        }
+    },
+    
+    "postCreateCommand": "bash scripts/setup-submodules.sh",
+    
+    "remoteUser": "root",
+    
+    "mounts": [
+        "source=${localEnv:HOME}/.ssh,target=/root/.ssh,type=bind,readonly"
+    ],
+    
+    "containerEnv": {
+        "ROCK_PI_HOST": "${localEnv:ROCK_PI_HOST:-100.115.224.114}",
+        "ROCK_PI_USER": "${localEnv:ROCK_PI_USER:-rock}"
+    }
+}

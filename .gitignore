@@ -8,3 +8,12 @@ compile_commands.json
 *.dis
 *.hex
 *.bin
+
+# Docker
+.env
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
