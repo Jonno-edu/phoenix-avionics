@@ -17,11 +17,8 @@ void bsp_hardware_init(void) {
 #if PICO_BUILD
     stdio_init_all();
     
-    // Give USB a moment to stabilize so we don't miss early messages
-    for (int i = 0; i < 25; i++) {
-        ESP_LOGI(TAG, "Booting in %d...", 25-i);
-        sleep_ms(200);
-    }
+    // Give USB a moment to stabilize
+    sleep_ms(1000);
     
     ESP_LOGI(TAG, "--- Phoenix Avionics Starting ---");
 
@@ -35,9 +32,6 @@ void bsp_hardware_init(void) {
 
 void bsp_peripheral_init(void) {
 #if PICO_BUILD
-    // Extra delay before hardware probe to ensure serial monitor is attached
-    sleep_ms(3000);
-
     ESP_LOGI(TAG, "Initializing Sensors...");
     // Initialize hardware sensors
     if (!I2C_init()) {
@@ -50,6 +44,5 @@ void bsp_peripheral_init(void) {
         ESP_LOGE(TAG, "CRITICAL: Barometer initialization failed!");
     }
     ESP_LOGI(TAG, "Init complete, starting scheduler.");
-    sleep_ms(2000); // Give user time to read init logs before tasks spam
 #endif
 }

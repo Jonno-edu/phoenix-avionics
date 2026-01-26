@@ -141,7 +141,7 @@ set(COMMON_SOURCES
     src/hal/platform_hal.c
     src/tasks/task_manager.c
     src/tasks/heartbeat_task.c
-    src/tasks/eps_polling_task.c
+    src/tasks/identification_polling_task.c
     src/tasks/rs485_task.c
     src/tasks/telemetry_task.c
     src/tasks/sensors_task.c

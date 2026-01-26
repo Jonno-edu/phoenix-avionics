@@ -7,7 +7,7 @@
 // Task Priorities
 #define PRIORITY_CONSOLE_RX       (tskIDLE_PRIORITY + 3)
 #define PRIORITY_RS485_PROCESSING (tskIDLE_PRIORITY + 2)
-#define PRIORITY_EPS_POLLING      (tskIDLE_PRIORITY + 2)
+#define PRIORITY_ID_POLLING       (tskIDLE_PRIORITY + 2)
 #define PRIORITY_SENSORS          (tskIDLE_PRIORITY + 1)
 #define PRIORITY_HEARTBEAT        (tskIDLE_PRIORITY + 1)
 
