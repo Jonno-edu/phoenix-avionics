@@ -2,6 +2,7 @@
     "configurations": [
         {
             "name": "Pico",
+            "compileCommands": "${workspaceFolder}/build/Debug-rp2350/compile_commands.json",
             "configurationProvider": "ms-vscode.cmake-tools"
         }
     ],
