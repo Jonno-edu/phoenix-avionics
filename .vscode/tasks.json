@@ -23,7 +23,7 @@
             "label": "Configure Active Variant",
             "type": "shell",
             "group": "build",
-            "command": "VARIANT=\"${input:selectVariant}\"; if [ \"$VARIANT\" = \"OBC\" ]; then PLATFORM=\"rp2040\"; BUILD_DIR=\"${workspaceFolder}/build/obc\"; elif [ \"$VARIANT\" = \"HIL\" ]; then PLATFORM=\"rp2350\"; BUILD_DIR=\"${workspaceFolder}/build/hil\"; fi; echo \"🔧 Configuring $VARIANT for $PLATFORM in $BUILD_DIR...\"; rm -f \"$BUILD_DIR/CMakeCache.txt\"; cmake -B \"$BUILD_DIR\" -S \"${workspaceFolder}\" -DPICO_PLATFORM=$PLATFORM -DBUILD_TARGET=$VARIANT",
+            "command": "VARIANT=\"${input:selectVariant}\"; if [ \"$VARIANT\" = \"OBC\" ]; then PLATFORM=\"rp2040\"; BUILD_DIR=\"${workspaceFolder}/build/obc\"; elif [ \"$VARIANT\" = \"HIL\" ]; then PLATFORM=\"rp2350\"; BUILD_DIR=\"${workspaceFolder}/build/hil\"; fi; echo \"Configuring $VARIANT for $PLATFORM in $BUILD_DIR...\"; rm -f \"$BUILD_DIR/CMakeCache.txt\"; cmake -B \"$BUILD_DIR\" -S \"${workspaceFolder}\" -DPICO_PLATFORM=$PLATFORM -DBUILD_TARGET=$VARIANT",
             "problemMatcher": [],
             "detail": "Selects variant (OBC/HIL), sets the correct PICO_PLATFORM, and runs CMake configure."
         },
@@ -48,7 +48,7 @@
             "type": "shell",
             "group": "build",
             "linux": {
-                "command": "BUILD_DIR=\"${command:cmake.buildDirectory}\"; echo \"Using Build Dir: $BUILD_DIR\"; VARIANT=$(grep \"BUILD_TARGET:STRING\" \"$BUILD_DIR/CMakeCache.txt\" | cut -d= -f2); echo \"Target Variant: $VARIANT\"; if [ \"$VARIANT\" = \"OBC\" ]; then UF2=\"phoenix-avionics.uf2\"; BUS=\"8\"; DEV=\"/dev/ttyOBC\"; elif [ \"$VARIANT\" = \"HIL\" ]; then UF2=\"hil_node.uf2\"; BUS=\"7\"; DEV=\"/dev/ttyHIL\"; else echo \"❌ Current variant is '$VARIANT'. Please select 'Main OBC' or 'HIL Node' from the CMake Variant selector (bottom bar) instead of 'ALL/Debug'.\"; exit 1; fi; echo \"✅ Flashing $UF2 to Bus $BUS...\"; cmake --build \"$BUILD_DIR\" && find \"$BUILD_DIR\" -name \"$UF2\" -exec scp {} rock@100.115.224.114:~/firmware.uf2 \\; && ssh -t rock@100.115.224.114 \"sudo fuser -k $DEV 2>/dev/null; echo '🔄 Rebooting to Bootloader...'; sudo picotool reboot --bus $BUS -f -u; echo '⏳ Waiting for USB...'; sleep 3; echo '💾 Flashing...'; sudo picotool load -x ~/firmware.uf2\""
+                "command": "BUILD_DIR=\"${command:cmake.buildDirectory}\"; echo \"Using Build Dir: $BUILD_DIR\"; VARIANT=$(grep \"BUILD_TARGET:STRING\" \"$BUILD_DIR/CMakeCache.txt\" | cut -d= -f2); echo \"Target Variant: $VARIANT\"; if [ \"$VARIANT\" = \"OBC\" ]; then UF2=\"phoenix-avionics.uf2\"; BUS=\"8\"; DEV=\"/dev/ttyOBC\"; elif [ \"$VARIANT\" = \"HIL\" ]; then UF2=\"hil_node.uf2\"; BUS=\"7\"; DEV=\"/dev/ttyACM3\"; else echo \"Current variant is '$VARIANT'. Please select 'Main OBC' or 'HIL Node' from the CMake Variant selector (bottom bar) instead of 'ALL/Debug'.\"; exit 1; fi; echo \"Flashing $UF2 to Bus $BUS...\"; cmake --build \"$BUILD_DIR\" && find \"$BUILD_DIR\" -name \"$UF2\" -exec scp {} rock@100.115.224.114:~/firmware.uf2 \\; && ssh -t rock@100.115.224.114 \"sudo fuser -k $DEV 2>/dev/null; echo 'Rebooting to Bootloader...'; sudo picotool reboot --bus $BUS -f -u; echo 'Waiting for USB...'; sleep 3; echo 'Flashing...'; sudo picotool load -x ~/firmware.uf2\""
             },
             "problemMatcher": "$gcc",
             "detail": "Builds and flashes the currently selected CMake Variant"
@@ -58,7 +58,7 @@
             "type": "shell",
             "group": "build",
             "linux": {
-                "command": "BUILD_DIR=\"${command:cmake.buildDirectory}\"; VARIANT=$(grep \"BUILD_TARGET:STRING\" \"$BUILD_DIR/CMakeCache.txt\" | cut -d= -f2); if [ \"$VARIANT\" = \"OBC\" ]; then DEV=\"/dev/ttyOBC\"; elif [ \"$VARIANT\" = \"HIL\" ]; then DEV=\"/dev/ttyHIL\"; else echo \"❌ Invalid variant selected.\"; exit 1; fi; echo \"Opening Monitor for $VARIANT on $DEV...\"; ssh -t rock@100.115.224.114 \"sudo fuser -k $DEV 2>/dev/null; sudo rm -f /var/lock/LCK..*; sleep 1; sudo minicom -D $DEV -b 115200\""
+                "command": "BUILD_DIR=\"${command:cmake.buildDirectory}\"; VARIANT=$(grep \"BUILD_TARGET:STRING\" \"$BUILD_DIR/CMakeCache.txt\" | cut -d= -f2); if [ \"$VARIANT\" = \"OBC\" ]; then DEV=\"/dev/ttyOBC\"; elif [ \"$VARIANT\" = \"HIL\" ]; then DEV=\"/dev/ttyHIL\"; else echo \"Invalid variant selected.\"; exit 1; fi; echo \"Opening Monitor for $VARIANT on $DEV...\"; ssh -t rock@100.115.224.114 \"sudo fuser -k $DEV 2>/dev/null; sudo rm -f /var/lock/LCK..*; sleep 1; sudo minicom -D $DEV -b 115200\""
             },
             "presentation": {
                 "reveal": "always",
