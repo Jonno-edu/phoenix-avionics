@@ -8,12 +8,12 @@ target_platform:
         PICO_BOARD: "pico2_w"
         BUILD_TARGET: "OBC"
         BUILD_TESTING: "OFF"
-    sensor:
-      short: Sensor Node
+    hil:
+      short: HIL Node
       buildType: Debug
       settings:
         PICO_BOARD: "pico2_w"
-        BUILD_TARGET: "SENSOR"
+        BUILD_TARGET: "HIL"
         BUILD_TESTING: "OFF"
     mac:
       short: Mac Host

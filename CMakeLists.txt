@@ -19,6 +19,6 @@ if(BUILD_TARGET STREQUAL "OBC" OR BUILD_TARGET STREQUAL "ALL")
     add_subdirectory(apps/main-obc)
 endif()
 
-if(BUILD_TARGET STREQUAL "SENSOR" OR BUILD_TARGET STREQUAL "ALL")
-    add_subdirectory(apps/sensor-node)
+if(BUILD_TARGET STREQUAL "HIL" OR BUILD_TARGET STREQUAL "ALL")
+    add_subdirectory(apps/hil-node)
 endif()
