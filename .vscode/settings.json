@@ -1,6 +1,6 @@
 {
     "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
-    "cmake.buildDirectory": "${workspaceFolder}/build/${buildType}-${variant:target_platform}",
+    "cmake.buildDirectory": "${workspaceFolder}/build/${variant:target_platform}",
     "cmake.configureOnOpen": true,
     "C_Cpp.intelliSenseEngine": "default",
     "cmake.buildBeforeRun": true,

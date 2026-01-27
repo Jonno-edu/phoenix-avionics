@@ -1,20 +1,25 @@
 target_platform:
-  default: rp2350
+  default: obc
   choices:
-    rp2350:
-      short: RP2350
-      long: Build for RP2350 Wireless
+    obc:
+      short: Main OBC
+      buildType: Debug
       settings:
         PICO_BOARD: "pico2_w"
+        BUILD_TARGET: "OBC"
         BUILD_TESTING: "OFF"
-
+    sensor:
+      short: Sensor Node
+      buildType: Debug
+      settings:
+        PICO_BOARD: "pico2_w"
+        BUILD_TARGET: "SENSOR"
+        BUILD_TESTING: "OFF"
     mac:
-      short: Mac
-      long: Build for macOS
+      short: Mac Host
+      buildType: Debug
       settings:
         PICO_PLATFORM: "host"
         PICO_BOARD: "host"
+        BUILD_TARGET: "ALL"
         BUILD_TESTING: "ON"
-        CMAKE_C_COMPILER: "/usr/bin/clang"
-        CMAKE_CXX_COMPILER: "/usr/bin/clang++"
-        CMAKE_ASM_COMPILER: "/usr/bin/clang"

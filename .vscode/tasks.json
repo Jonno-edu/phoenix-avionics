@@ -4,74 +4,59 @@
         {
             "label": "Build",
             "type": "shell",
-            "command": "cmake --build /workspace/build/Debug-rp2350",
+            "command": "cmake --build \"${command:cmake.buildDirectory}\"",
             "group": "build",
             "problemMatcher": "$gcc",
-            "detail": "Build the project"
+            "detail": "Build the project for the selected variant"
         },
         {
             "label": "Clean Build",
             "type": "shell",
-            "command": "rm -rf /workspace/build/Debug-rp2350 && cmake -B /workspace/build/Debug-rp2350 -S /workspace -G Ninja",
+            "command": "cmake --build \"${command:cmake.buildDirectory}\" --target clean",
             "group": "build",
             "problemMatcher": "$gcc",
-            "detail": "Remove build directory and reconfigure CMake"
+            "detail": "Clean build artifacts (preserves configuration)"
         },
         {
-            "label": "Flash",
+            "label": "Flash Configuration",
             "type": "shell",
-            "command": "cmake --build /workspace/build/Debug-rp2350 && scp /workspace/build/Debug-rp2350/*.uf2 rock@100.115.224.114:~/firmware.uf2 && ssh -t rock@100.115.224.114 'sudo fuser -k /dev/ttyOBC 2>/dev/null; sudo picotool load -f ~/firmware.uf2'",
             "group": "build",
+            "linux": {
+                "command": "BUILD_DIR=\"${command:cmake.buildDirectory}\"; echo \"Using Build Dir: $BUILD_DIR\"; VARIANT=$(grep \"BUILD_TARGET:STRING\" \"$BUILD_DIR/CMakeCache.txt\" | cut -d= -f2); echo \"Target Variant: $VARIANT\"; if [ \"$VARIANT\" = \"OBC\" ]; then UF2=\"phoenix-avionics.uf2\"; BUS=\"8\"; DEV=\"/dev/ttyOBC\"; elif [ \"$VARIANT\" = \"SENSOR\" ]; then UF2=\"sensor_node.uf2\"; BUS=\"7\"; DEV=\"/dev/ttySENSOR\"; else echo \"❌ Current variant is '$VARIANT'. Please select 'Main OBC' or 'Sensor Node' from the CMake Variant selector (bottom bar) instead of 'ALL/Debug'.\"; exit 1; fi; echo \"✅ Flashing $UF2 to Bus $BUS...\"; cmake --build \"$BUILD_DIR\" && find \"$BUILD_DIR\" -name \"$UF2\" -exec scp {} rock@100.115.224.114:~/firmware.uf2 \\; && ssh -t rock@100.115.224.114 \"sudo fuser -k $DEV 2>/dev/null; sudo picotool load --bus $BUS -f ~/firmware.uf2\""
+            },
             "problemMatcher": "$gcc",
-            "presentation": {
-                "reveal": "always",
-                "panel": "shared"
-            },
-            "detail": "Build, transfer to Rock Pi, and flash via picotool"
+            "detail": "Builds and flashes the currently selected CMake Variant"
         },
         {
-            "label": "Flash (Skip Build)",
+            "label": "Monitor Active Variant",
             "type": "shell",
-            "command": "scp /workspace/build/Debug-rp2350/*.uf2 rock@100.115.224.114:~/firmware.uf2 && ssh -t rock@100.115.224.114 'sudo fuser -k /dev/ttyOBC 2>/dev/null; sudo picotool load -f ~/firmware.uf2'",
-            "group": "build",
-            "problemMatcher": [],
-            "presentation": {
-                "reveal": "always",
-                "panel": "shared"
+            "group": "test",
+            "linux": {
+                "command": "BUILD_DIR=\"${command:cmake.buildDirectory}\"; VARIANT=$(grep \"BUILD_TARGET:STRING\" \"$BUILD_DIR/CMakeCache.txt\" | cut -d= -f2); if [ \"$VARIANT\" = \"OBC\" ]; then DEV=\"/dev/ttyOBC\"; elif [ \"$VARIANT\" = \"SENSOR\" ]; then DEV=\"/dev/ttySENSOR\"; else echo \"❌ Invalid variant selected.\"; exit 1; fi; echo \"Opening Monitor for $VARIANT on $DEV...\"; ssh -t rock@100.115.224.114 \"sudo fuser -k $DEV 2>/dev/null; sudo rm -f /var/lock/LCK..*; sleep 0.5; minicom -D $DEV -b 115200\""
             },
-            "detail": "Flash existing UF2 without rebuilding"
-        },
-        {
-            "label": "Monitor",
-            "type": "shell",
-            "command": "ssh -t rock@100.115.224.114 'sudo fuser -k /dev/ttyOBC 2>/dev/null; sudo rm -f /var/lock/LCK..ttyOBC; sleep 0.5; minicom -D /dev/ttyOBC -b 115200'",
-            "group": "build",
-            "problemMatcher": [],
             "presentation": {
                 "reveal": "always",
                 "panel": "dedicated",
                 "focus": true
             },
-            "detail": "Open serial monitor on /dev/ttyOBC"
+            "detail": "Opens minicom for the currently selected CMake Variant"
         },
         {
             "label": "Flash and Monitor",
             "dependsOn": [
-                "Flash",
-                "Monitor"
+                "Flash Active Variant",
+                "Monitor Active Variant"
             ],
             "dependsOrder": "sequence",
             "group": "build",
             "problemMatcher": [],
-            "detail": "Build, flash, then open serial monitor"
+            "detail": "Build, Flash, and then Open Monitor"
         },
         {
             "label": "Reboot Pico",
             "type": "shell",
             "command": "ssh -t rock@100.115.224.114 'sudo picotool reboot'",
-            "group": "build",
-            "problemMatcher": [],
-            "detail": "Reboot the Pico without flashing"
+            "detail": "Reboot any connected Pico (Warning: might reboot both)"
         }
     ]
 }
