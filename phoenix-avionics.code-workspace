@@ -5,6 +5,7 @@
 		}
 	],
 	"settings": {
-		"cmake.launchBehavior": "reuseTerminal"
+		"cmake.launchBehavior": "reuseTerminal",
+		"cmake.options.statusBarVisibility": "compact"
 	}
 }
