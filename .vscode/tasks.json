@@ -28,29 +28,13 @@
             "detail": "Selects variant (OBC/HIL), sets the correct PICO_PLATFORM, and runs CMake configure."
         },
         {
-            "label": "Build",
-            "type": "shell",
-            "command": "cmake --build \"${command:cmake.buildDirectory}\"",
-            "group": "build",
-            "problemMatcher": "$gcc",
-            "detail": "Build the project for the selected variant"
-        },
-        {
-            "label": "Clean Build",
-            "type": "shell",
-            "command": "cmake --build \"${command:cmake.buildDirectory}\" --target clean",
-            "group": "build",
-            "problemMatcher": "$gcc",
-            "detail": "Clean build artifacts (preserves configuration)"
-        },
-        {
             "label": "Flash Configuration",
             "type": "shell",
             "group": "build",
             "linux": {
-                "command": "BUILD_DIR=\"${command:cmake.buildDirectory}\"; echo \"Using Build Dir: $BUILD_DIR\"; VARIANT=$(grep \"BUILD_TARGET:STRING\" \"$BUILD_DIR/CMakeCache.txt\" | cut -d= -f2); echo \"Target Variant: $VARIANT\"; if [ \"$VARIANT\" = \"OBC\" ]; then UF2=\"phoenix-avionics.uf2\"; BUS=\"8\"; DEV=\"/dev/ttyOBC\"; elif [ \"$VARIANT\" = \"HIL\" ]; then UF2=\"hil_node.uf2\"; BUS=\"7\"; DEV=\"/dev/ttyACM3\"; else echo \"Current variant is '$VARIANT'. Please select 'Main OBC' or 'HIL Node' from the CMake Variant selector (bottom bar) instead of 'ALL/Debug'.\"; exit 1; fi; echo \"Flashing $UF2 to Bus $BUS...\"; cmake --build \"$BUILD_DIR\" && find \"$BUILD_DIR\" -name \"$UF2\" -exec scp {} rock@100.115.224.114:~/firmware.uf2 \\; && ssh -t rock@100.115.224.114 \"sudo fuser -k $DEV 2>/dev/null; echo 'Rebooting to Bootloader...'; sudo picotool reboot --bus $BUS -f -u; echo 'Waiting for USB...'; sleep 3; echo 'Flashing...'; sudo picotool load -x ~/firmware.uf2\""
+                "command": "BUILD_DIR=\"${command:cmake.buildDirectory}\"; echo \"Using Build Dir: $BUILD_DIR\"; VARIANT=$(grep \"BUILD_TARGET:STRING\" \"$BUILD_DIR/CMakeCache.txt\" | cut -d= -f2); echo \"Target Variant: $VARIANT\"; if [ \"$VARIANT\" = \"OBC\" ]; then UF2=\"phoenix-avionics.uf2\"; BUS=\"8\"; DEV=\"/dev/ttyOBC\"; elif [ \"$VARIANT\" = \"HIL\" ]; then UF2=\"hil_node.uf2\"; BUS=\"7\"; DEV=\"/dev/ttyACM3\"; else echo \"Current variant is '$VARIANT'. Please select 'Main OBC' or 'HIL Node' from the CMake Variant selector (bottom bar) instead of 'ALL/Debug'.\"; exit 1; fi; echo \"Flashing $UF2 to Bus $BUS...\"; cmake --build \"$BUILD_DIR\" && find \"$BUILD_DIR\" -name \"$UF2\" -exec scp {} rock@100.115.224.114:~/firmware.uf2 \\; && ssh -t rock@100.115.224.114 \"sudo fuser -k $DEV 2>/dev/null; echo 'Rebooting to Bootloader...'; sudo picotool reboot --bus $BUS -f -u; echo 'Waiting for USB...'; sleep 3; echo 'Flashing...'; sudo picotool load --bus $BUS -x ~/firmware.uf2\""
             },
-            "problemMatcher": "$gcc",
+            "problemMatcher": [],
             "detail": "Builds and flashes the currently selected CMake Variant"
         },
         {
@@ -84,6 +68,57 @@
             "group": "build",
             "command": "ssh -t rock@100.115.224.114 'sudo picotool reboot -f -u'",
             "detail": "Reboot any connected Pico (Warning: might reboot both)"
+        },
+        {
+            "label": "Flash HIL Node",
+            "type": "shell",
+            "group": "build",
+            "command": "BUILD_DIR=\"/workspace/build/hil\"; UF2=\"hil_node.uf2\"; BUS=\"7\"; DEV=\"/dev/ttyACM3\"; echo \"Flashing HIL Node...\"; cmake --build \"$BUILD_DIR\" && find \"$BUILD_DIR\" -name \"$UF2\" -exec scp {} rock@100.115.224.114:~/firmware.uf2 \\; && ssh -t rock@100.115.224.114 \"sudo fuser -k $DEV 2>/dev/null; echo 'Rebooting to Bootloader...'; sudo picotool reboot --bus $BUS -f -u; echo 'Waiting for USB...'; sleep 3; echo 'Flashing...'; sudo picotool load --bus $BUS -x ~/firmware.uf2\"",
+            "problemMatcher": [],
+            "detail": "Explicitly builds and flashes the HIL Node"
+        },
+        {
+            "label": "Flash OBC",
+            "type": "shell",
+            "group": "build",
+            "command": "BUILD_DIR=\"/workspace/build/obc\"; UF2=\"phoenix-avionics.uf2\"; BUS=\"8\"; DEV=\"/dev/ttyOBC\"; echo \"Flashing OBC...\"; cmake --build \"$BUILD_DIR\" && find \"$BUILD_DIR\" -name \"$UF2\" -exec scp {} rock@100.115.224.114:~/firmware.uf2 \\; && ssh -t rock@100.115.224.114 \"sudo fuser -k $DEV 2>/dev/null; echo 'Rebooting to Bootloader...'; sudo picotool reboot --bus $BUS -f -u; echo 'Waiting for USB...'; sleep 3; echo 'Flashing...'; sudo picotool load --bus $BUS -x ~/firmware.uf2\"",
+            "problemMatcher": [],
+            "detail": "Explicitly builds and flashes the Main OBC"
+        },
+        {
+            "label": "Monitor HIL Node",
+            "type": "shell",
+            "group": "build",
+            "command": "DEV=\"/dev/ttyHIL\"; echo \"Opening Monitor for HIL on $DEV...\"; ssh -t rock@100.115.224.114 \"sudo fuser -k $DEV 2>/dev/null; sudo rm -f /var/lock/LCK..*; sleep 1; sudo minicom -D $DEV -b 115200\"",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "focus": true
+            },
+            "detail": "Explicitly opens minicom for the HIL Node"
+        },
+        {
+            "label": "Monitor OBC",
+            "type": "shell",
+            "group": "build",
+            "command": "DEV=\"/dev/ttyOBC\"; echo \"Opening Monitor for OBC on $DEV...\"; ssh -t rock@100.115.224.114 \"sudo fuser -k $DEV 2>/dev/null; sudo rm -f /var/lock/LCK..*; sleep 1; sudo minicom -D $DEV -b 115200\"",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "focus": true
+            },
+            "detail": "Explicitly opens minicom for the Main OBC"
+        },
+        {
+            "label": "Flash All",
+            "dependsOn": [
+                "Flash HIL Node",
+                "Flash OBC"
+            ],
+            "dependsOrder": "sequence",
+            "group": "build",
+            "problemMatcher": [],
+            "detail": "Flashes both HIL Node and OBC"
         }
     ]
 }

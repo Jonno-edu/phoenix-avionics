@@ -91,6 +91,9 @@ void TCTLM_processTelemetryResponse(RS485_packet_t *pkt) {
     ESP_LOGI(TAG, "RX Raw: [%s]", raw_buf);
 
     if (id == ID_TLM_IDENTIFICATION) {
+        if (pkt->src_addr == 0x03) {
+            ESP_LOGI(TAG, "!!! RECEIVED IDENTIFICATION FROM TARGET 0x03 !!!");
+        }
         // Accept 8 bytes (legacy/EPS) or more (upto full struct size)
         if (pkt->length >= 8 && pkt->length <= sizeof(TlmIdentificationPayload_t)) {
             TlmIdentificationPayload_t tlm = {0};

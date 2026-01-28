@@ -126,6 +126,7 @@ set(COMMON_SOURCES
     src/tasks/rs485_task.c
     src/tasks/telemetry_task.c
     src/tasks/sensors_task.c
+    src/tasks/hil_sensor_task.c
     src/core/usb_console.c
     ${CMAKE_SOURCE_DIR}/lib/esl-comms/src/rs485_protocol.c
     src/tctlm.c
@@ -162,6 +163,7 @@ target_compile_definitions(${TARGET_NAME} PRIVATE
 # Common includes for both builds
 target_include_directories(${TARGET_NAME} PRIVATE
     include
+    ${CMAKE_SOURCE_DIR}/common/include
     ${CMAKE_SOURCE_DIR}/lib/esl-comms/include
     ${CMAKE_SOURCE_DIR}/lib/esl-math/include
 )

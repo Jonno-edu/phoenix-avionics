@@ -4,6 +4,7 @@
 #include "rs485_task.h"
 #include "telemetry_task.h"
 #include "sensors_task.h"
+#include "hil_sensor_task.h"
 #include <FreeRTOS.h>
 #include <task.h>
 
@@ -27,6 +28,7 @@ void tasks_create_all(void) {
     rs485_task_init();
     // telemetry_task_init();
     identification_polling_task_init();
-    sensors_task_init();
-    heartbeat_task_init();
+    hil_sensor_task_init();
+    // sensors_task_init();
+    // heartbeat_task_init();
 }

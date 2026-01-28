@@ -1,5 +1,11 @@
 add_executable(hil_node
     src/main.c
+    src/i2c.c
+)
+
+target_include_directories(hil_node PRIVATE 
+    include
+    ${CMAKE_SOURCE_DIR}/common/include
 )
 
 # Reference definitions
@@ -15,6 +21,8 @@ pico_enable_stdio_uart(hil_node 0)
 target_link_libraries(hil_node
     pico_stdlib
     pico_cyw43_arch_none
+    hardware_i2c
+    pico_i2c_slave
 )
 
 # Generate UF2
