@@ -7,7 +7,7 @@
             "description": "Select Variant to Configure",
             "options": [
                 {
-                    "label": "Main OBC (RP2040)",
+                    "label": "Main OBC (RP2350)",
                     "value": "OBC"
                 },
                 {
@@ -23,7 +23,7 @@
             "label": "Configure Active Variant",
             "type": "shell",
             "group": "build",
-            "command": "VARIANT=\"${input:selectVariant}\"; if [ \"$VARIANT\" = \"OBC\" ]; then PLATFORM=\"rp2040\"; BUILD_DIR=\"${workspaceFolder}/build/obc\"; elif [ \"$VARIANT\" = \"HIL\" ]; then PLATFORM=\"rp2350\"; BUILD_DIR=\"${workspaceFolder}/build/hil\"; fi; echo \"Configuring $VARIANT for $PLATFORM in $BUILD_DIR...\"; rm -f \"$BUILD_DIR/CMakeCache.txt\"; cmake -B \"$BUILD_DIR\" -S \"${workspaceFolder}\" -DPICO_PLATFORM=$PLATFORM -DBUILD_TARGET=$VARIANT",
+            "command": "VARIANT=\"${input:selectVariant}\"; if [ \"$VARIANT\" = \"OBC\" ]; then PLATFORM=\"rp2350\"; BUILD_DIR=\"${workspaceFolder}/build/obc\"; elif [ \"$VARIANT\" = \"HIL\" ]; then PLATFORM=\"rp2350\"; BUILD_DIR=\"${workspaceFolder}/build/hil\"; fi; echo \"Configuring $VARIANT for $PLATFORM in $BUILD_DIR...\"; rm -f \"$BUILD_DIR/CMakeCache.txt\"; cmake -B \"$BUILD_DIR\" -S \"${workspaceFolder}\" -DPICO_PLATFORM=$PLATFORM -DBUILD_TARGET=$VARIANT",
             "problemMatcher": [],
             "detail": "Selects variant (OBC/HIL), sets the correct PICO_PLATFORM, and runs CMake configure."
         },
