@@ -17,7 +17,8 @@ static void vIdentificationPollingTask(void *pvParameters) {
 
     // List of devices to poll for identification/status
     const uint8_t device_addresses[] = {
-        0x03 // Temporarily only poll 0x03
+        ADDR_EPS,
+        ADDR_TRACKING_RADIO,
     };
     const size_t num_devices = sizeof(device_addresses) / sizeof(device_addresses[0]);
     

@@ -2,200 +2,172 @@
 #include "task_manager.h"
 #include "core/logging.h"
 #include "core/rocket_data.h"
-#include "hil_protocol.h"
+// This header contains the correct Baud/Regs/Structs
+#include "hil_protocol.h" 
+
 #include <FreeRTOS.h>
 #include <task.h>
+#include <stdio.h>
 
 #if PICO_BUILD
 #include "pico/stdlib.h"
 #include "hardware/i2c.h"
 
-// I2C Hardware Configuration
+// Hardware Pin Config (Specific to this Board/Task)
 #define HIL_I2C_PORT       i2c1
 #define HIL_PIN_SDA        6
 #define HIL_PIN_SCL        7
-#define HIL_I2C_OE_PIN     46  // OBC v2.0 - adjust if using v1.0 (GPIO 15)
+#define HIL_I2C_OE_PIN     46
 
 #endif
 
 static const char *TAG = "HILSensorTask";
 
 #if PICO_BUILD
-/**
- * @brief Initialize I2C hardware for HIL communication
- * @return true if successful, false otherwise
- */
+
+// --- I2C SCANNER ---
+static void scan_i2c_bus(void) {
+    ESP_LOGI(TAG, "--- Starting I2C Bus Scan ---");
+    int found_count = 0;
+    
+    // Standard I2C 7-bit address range (0x08 to 0x77)
+    // We skip reserved addresses (0x00-0x07 and 0x78-0x7F)
+    for (int addr = 0x08; addr < 0x78; addr++) {
+        uint8_t rx_data;
+        // Try to read 1 byte. If it returns > 0, a device ACKed.
+        int ret = i2c_read_blocking(HIL_I2C_PORT, addr, &rx_data, 1, false);
+        
+        if (ret >= 0) {
+            ESP_LOGI(TAG, "DEVICE FOUND AT ADDRESS: 0x%02X", addr);
+            found_count++;
+        }
+    }
+    
+    if (found_count == 0) {
+        ESP_LOGE(TAG, "Scan complete: NO DEVICES FOUND!");
+        ESP_LOGE(TAG, "Troubleshooting: 1. Check Pull-up Resistors (SDA/SCL to 3V3)");
+        ESP_LOGE(TAG, "Troubleshooting: 2. Check wiring (SDA->SDA, SCL->SCL)");
+        ESP_LOGE(TAG, "Troubleshooting: 3. Verify HIL Node has power and is running");
+    } else {
+        ESP_LOGI(TAG, "Scan complete: Found %d device(s).", found_count);
+    }
+}
+
 static bool hil_i2c_init(void) {
-    // Enable I2C output buffer
+    // 1. Enable Output Buffer (Level Shifter)
     gpio_init(HIL_I2C_OE_PIN);
     gpio_set_dir(HIL_I2C_OE_PIN, GPIO_OUT);
     gpio_put(HIL_I2C_OE_PIN, 1);
     
-    // Initialize I2C peripheral
-    i2c_init(HIL_I2C_PORT, HIL_I2C_BAUDRATE);
+    // 2. Init I2C Hardware using settings from hil_protocol.h
+    uint32_t real_baud = i2c_init(HIL_I2C_PORT, HIL_I2C_BAUDRATE); 
+
     gpio_set_function(HIL_PIN_SDA, GPIO_FUNC_I2C);
     gpio_set_function(HIL_PIN_SCL, GPIO_FUNC_I2C);
     gpio_pull_up(HIL_PIN_SDA);
     gpio_pull_up(HIL_PIN_SCL);
     
-    ESP_LOGI(TAG, "I2C initialized: Port=i2c1, Baud=%u, SDA=%u, SCL=%u, OE=%u",
-             HIL_I2C_BAUDRATE, HIL_PIN_SDA, HIL_PIN_SCL, HIL_I2C_OE_PIN);
+    // Allow electrical settling time
+    sleep_ms(100); 
     
-    // Test I2C by setting pointer to register 0x00
-    uint8_t reg_ptr = HIL_REG_FAST;
-    int ret = i2c_write_blocking(HIL_I2C_PORT, HIL_I2C_SLAVE_ADDR, &reg_ptr, 1, false);
-    if (ret < 0) {
-        ESP_LOGE(TAG, "I2C test write failed: %d", ret);
-        return false;
+    ESP_LOGI(TAG, "I2C Init: %u Hz (Target: %d)", real_baud, HIL_I2C_BAUDRATE);
+
+    // 3. Run Bus Scan immediately to verify connectivity
+    scan_i2c_bus();
+    
+    // 4. Specific Ping Test for HIL Node
+    uint8_t reg_ptr = HIL_REG_FAST; 
+    int ret = -1;
+    for (int i = 0; i < 5; i++) {
+        // Just write the register address to see if it ACKs
+        ret = i2c_write_blocking(HIL_I2C_PORT, HIL_SLAVE_ADDR, &reg_ptr, 1, false);
+        if (ret >= 0) return true; // Success!
+        vTaskDelay(pdMS_TO_TICKS(50));
     }
     
-    return true;
+    ESP_LOGE(TAG, "Specific Ping to HIL Node (0x%02X) Failed: %d", HIL_SLAVE_ADDR, ret);
+    return false;
 }
-#endif
 
-/**
- * @brief Main HIL sensor polling task
- * 
- * Runs at 1kHz base rate with multi-rate reads:
- * - Every loop (1ms): Read fast packet (IMU)
- * - Every 10 loops (10ms): Read medium packet (baro/temp)
- * - Every 100 loops (100ms): Read slow packet (GPS)
- */
+static bool read_sensor(uint8_t reg, void* dest, size_t size) {
+    // Write register address, NO STOP (true)
+    int ret = i2c_write_blocking(HIL_I2C_PORT, HIL_SLAVE_ADDR, &reg, 1, true);
+    if (ret < 0) return false;
+    
+    // Read data
+    ret = i2c_read_blocking(HIL_I2C_PORT, HIL_SLAVE_ADDR, (uint8_t*)dest, size, false);
+    return (ret > 0);
+}
+
 static void vHILSensorTask(void *pvParameters) {
     (void)pvParameters;
-    
-    // Delay to allow system initialization
-    vTaskDelay(pdMS_TO_TICKS(1000));
-    
-#if PICO_BUILD
-    ESP_LOGI(TAG, "Initializing HIL I2C interface...");
+    // Wait for system to stabilize
+    vTaskDelay(pdMS_TO_TICKS(2000));
     
     if (!hil_i2c_init()) {
-        ESP_LOGE(TAG, "HIL I2C initialization failed! Task suspended.");
-        vTaskSuspend(NULL);  // Suspend this task permanently
+        ESP_LOGE(TAG, "HIL Hardware Init Failed. Suspending Task.");
+        vTaskSuspend(NULL);
         return;
     }
     
-    ESP_LOGI(TAG, "HIL sensor task started - polling at 1kHz base rate");
-    
-    // Data buffers
-    fast_packet_t fast;
-    medium_packet_t medium;
-    slow_packet_t slow;
-    
-    uint8_t reg_ptr;
-    uint32_t loop_counter = 0;
-    
-    // Reset slave pointer to fast register
-    reg_ptr = HIL_REG_FAST;
-    i2c_write_blocking(HIL_I2C_PORT, HIL_I2C_SLAVE_ADDR, &reg_ptr, 1, false);
-    
+    ESP_LOGI(TAG, "HIL Link Established. Starting Scheduler.");
+
+    uint64_t next_imu_us  = time_us_64();
+    uint64_t next_baro_us = time_us_64();
+    uint64_t next_gps_us  = time_us_64();
+
+    // Structs are defined in hil_protocol.h
+    packet_imu_t  imu = {0};
+    packet_baro_t baro = {0};
+    packet_gps_t  gps = {0};
+
     while (true) {
-        uint64_t start_time = time_us_64();
-        
-        // --- FAST READ (Every 1ms - 1kHz) ---
-        // Pointer assumed to be at 0x00. Direct read.
-        int ret = i2c_read_blocking(HIL_I2C_PORT, HIL_I2C_SLAVE_ADDR, 
-                                    (uint8_t*)&fast, sizeof(fast_packet_t), false);
-        if (ret < 0) {
-            ESP_LOGW(TAG, "Fast read error: %d", ret);
-        } else {
-            // Update rocket data with IMU values
-            rocket_data_update_accel(fast.accel[0], fast.accel[1], fast.accel[2]);
-            rocket_data_update_gyro(fast.gyro[0], fast.gyro[1], fast.gyro[2]);
-        }
-        
-        // --- MEDIUM READ (Every 10ms - 100Hz) ---
-        if (loop_counter % 10 == 0) {
-            reg_ptr = HIL_REG_MEDIUM;
-            i2c_write_blocking(HIL_I2C_PORT, HIL_I2C_SLAVE_ADDR, &reg_ptr, 1, true);  // Restart
-            ret = i2c_read_blocking(HIL_I2C_PORT, HIL_I2C_SLAVE_ADDR, 
-                                   (uint8_t*)&medium, sizeof(medium_packet_t), false);
-            if (ret < 0) {
-                ESP_LOGW(TAG, "Medium read error: %d", ret);
-            } else {
-                // Update rocket data with barometer values
-                // Note: baro_temp in medium packet is int8_t (°C), but rocket_data expects int32_t (°C * 100)
-                rocket_data_update_baro(medium.baro_pres, (int32_t)medium.baro_temp * 100);
-                rocket_data_update_temp_stack(medium.temp_stack);
+        uint64_t now = time_us_64();
+
+        // ------------------------------------------
+        // TASK 1: IMU (1000 Hz)
+        // ------------------------------------------
+        if (now >= next_imu_us) {
+            next_imu_us += 1000;
+            if (read_sensor(HIL_REG_FAST, &imu, sizeof(imu))) {
+                // Update Global Rocket State
+                // Currently only X-axis is populated in HIL
+                rocket_data_update_accel(imu.accel_x, 0, 0); 
             }
-            
-            // Reset pointer to fast register
-            reg_ptr = HIL_REG_FAST;
-            i2c_write_blocking(HIL_I2C_PORT, HIL_I2C_SLAVE_ADDR, &reg_ptr, 1, false);
         }
-        
-        // --- SLOW READ (Every 100ms - 10Hz, PHASE-SHIFTED by 5ms) ---
-        // Runs at ticks 5, 105, 205... to avoid collision with medium reads (0, 10, 20...)
-        else if (loop_counter % 100 == 5) {
-            reg_ptr = HIL_REG_SLOW;
-            i2c_write_blocking(HIL_I2C_PORT, HIL_I2C_SLAVE_ADDR, &reg_ptr, 1, true);  // Restart
-            ret = i2c_read_blocking(HIL_I2C_PORT, HIL_I2C_SLAVE_ADDR, 
-                                   (uint8_t*)&slow, sizeof(slow_packet_t), false);
-            if (ret < 0) {
-                ESP_LOGW(TAG, "Slow read error: %d", ret);
-            } else {
-                // Update rocket data with GPS values
-                // Note: HIL protocol uses mm/s for velocity, but rocket_data expects m/s * 10
-                // Convert: mm/s -> m/s * 10 by dividing by 100
-                rocket_data_update_gps(slow.lat, slow.lon, slow.alt, 
-                                      slow.vel_n / 100, slow.vel_e / 100, slow.vel_d / 100,
-                                      slow.i_tow, slow.gps_week);
+
+        // ------------------------------------------
+        // TASK 2: Baro (100 Hz)
+        // ------------------------------------------
+        if (now >= next_baro_us) {
+            next_baro_us += 10000;
+            if (read_sensor(HIL_REG_MEDIUM, &baro, sizeof(baro))) {
+                rocket_data_update_baro(baro.pressure, 0);
             }
-            
-            // Reset pointer to fast register
-            reg_ptr = HIL_REG_FAST;
-            i2c_write_blocking(HIL_I2C_PORT, HIL_I2C_SLAVE_ADDR, &reg_ptr, 1, false);
         }
-        
-        // --- PERIODIC REPORTING (Every 1000ms - 1Hz) ---
-        // Read from rocket_data to verify the full data pipeline
-        if (loop_counter % 1000 == 0) {
-            TlmTrackingBeaconPayload_t beacon;
-            getRocketTrackingInfo(&beacon);
-            ESP_LOGI(TAG, "RX: HIL Data | Accel:[%d,%d,%d] | Gyro:[%d,%d,%d] | Baro:%u Pa | GPS:[%d,%d,%d]",
-                     beacon.accel_x, beacon.accel_y, beacon.accel_z,
-                     beacon.gyro_x, beacon.gyro_y, beacon.gyro_z,
-                     beacon.baro_pressure,
-                     beacon.gps_lat, beacon.gps_lon, beacon.gps_alt);
-        }
-        
-        // --- TIMING ENFORCEMENT ---
-        uint64_t elapsed_us = time_us_64() - start_time;
-        if (elapsed_us > 1000) {
-            static uint32_t violation_count = 0;
-            if (violation_count % 100 == 0) {
-                ESP_LOGW(TAG, "TIMING VIOLATION: Loop took %llu us (target: 1000 us) [x%u]", 
-                         elapsed_us, violation_count + 1);
+
+        // ------------------------------------------
+        // TASK 3: GPS (10 Hz)
+        // ------------------------------------------
+        if (now >= next_gps_us) {
+            next_gps_us += 100000;
+            if (read_sensor(HIL_REG_SLOW, &gps, sizeof(gps))) {
+                // Logging for verification
+                ESP_LOGI(TAG, "[OBC] T:%u ms | ACC_X:%d | PRES:%d | LAT:%d",
+                       imu.time_ms, imu.accel_x, baro.pressure, gps.lat);
             }
-            violation_count++;
-        } else {
-            // Sleep to maintain 1kHz rate
-            vTaskDelay(pdMS_TO_TICKS(1));  // 1ms delay
         }
-        
-        loop_counter++;
     }
-#else
-    // SIL mode - no HIL hardware available
-    ESP_LOGI(TAG, "HIL sensor task running in SIL mode (no-op)");
-    while (true) {
-        vTaskDelay(pdMS_TO_TICKS(1000));  // Just sleep
-    }
-#endif
 }
+#else
+// Mock task for non-Pico builds
+static void vHILSensorTask(void *pvParameters) {
+    (void)pvParameters;
+    while(1) vTaskDelay(1000);
+}
+#endif
 
 void hil_sensor_task_init(void) {
-    BaseType_t result = xTaskCreate(
-        vHILSensorTask,
-        "HIL_Sensor",
-        2048,  // Stack size - increased for I2C operations
-        NULL,
-        PRIORITY_HIL_SENSORS,
-        NULL
-    );
-    
-    if (result != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create HIL sensor task!");
-    }
+    // Increased stack size to 4096 to be safe with logging/I2C
+    xTaskCreate(vHILSensorTask, "HIL_Sensor", 4096, NULL, PRIORITY_HIL_SENSORS, NULL);
 }
