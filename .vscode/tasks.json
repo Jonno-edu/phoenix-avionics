@@ -119,6 +119,39 @@
             "group": "build",
             "problemMatcher": [],
             "detail": "Flashes both HIL Node and OBC"
+        },
+        {
+            "label": "Deploy HIL Config",
+            "type": "shell",
+            "group": "test",
+            "command": "./tools/deploy_rockchip.sh",
+            "problemMatcher": [],
+            "detail": "Generates sensors.json configs and syncs python scripts to Rockchip"
+        },
+        {
+            "label": "Start HIL Stream",
+            "type": "shell",
+            "group": "build",
+            "command": "ssh -t rock@100.115.224.114 \"/home/rock/phoenix_gsu/run_hil.sh\"",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "focus": true,
+                "clear": true
+            },
+            "problemMatcher": [],
+            "detail": "Runs the HIL streamer wrapper script."
+        },
+        {
+            "label": "Deploy & Stream",
+            "dependsOn": [
+                "Deploy HIL Config",
+                "Start HIL Stream"
+            ],
+            "dependsOrder": "sequence",
+            "group": "build",
+            "problemMatcher": [],
+            "detail": "Updates config, deploys to Rockchip, and immediately starts streaming"
         }
     ]
 }
