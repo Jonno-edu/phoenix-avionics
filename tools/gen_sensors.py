@@ -3,8 +3,6 @@ import os
 import sys
 
 # --- CONFIGURATION ---
-# We determine paths relative to *this script's location* so it works 
-# regardless of where you run the command from.
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 WORKSPACE_ROOT = os.path.dirname(SCRIPT_DIR) # Go up one level from 'tools/'
 
@@ -12,45 +10,47 @@ INPUT_FILE = os.path.join(WORKSPACE_ROOT, 'common', 'sensors.json')
 OUTPUT_H   = os.path.join(WORKSPACE_ROOT, 'common', 'include', 'sensor_config.h')
 OUTPUT_PY  = os.path.join(WORKSPACE_ROOT, 'rockchip', 'sensor_config.py')
 
-def calculate_sensitivity(sensor_data):
+def calculate_sensitivity_value(sensor_data):
     """
-    Calculates the 'Sensitivity' (Value per LSB) based on the JSON data.
+    Helper: returns the float sensitivity given a dictionary of params.
+    Returns None if no sensitivity data is found.
     """
-    # CASE 1: Explicit Sensitivity (Manual Override in JSON)
+    # CASE 1: Explicit Sensitivity
     if 'sensitivity' in sensor_data and sensor_data['sensitivity'] is not None:
-        return sensor_data['sensitivity']
+        return float(sensor_data['sensitivity'])
 
     # CASE 2: Range & Bits (Standard ADC logic)
-    # Sensitivity = Range / (2^(Bits-1))
-    if 'range_g' in sensor_data:
-        val_range = sensor_data['range_g']
-        bits = sensor_data['resolution_bits']
+    bits = sensor_data.get('resolution_bits')
+    if bits:
         max_int = 2**(bits - 1)
-        return val_range / max_int
+        if 'range_g' in sensor_data:
+            return sensor_data['range_g'] / max_int
+        if 'range_dps' in sensor_data:
+            return sensor_data['range_dps'] / max_int
+        if 'range_ut' in sensor_data:
+            return sensor_data['range_ut'] / max_int
 
-    if 'range_dps' in sensor_data:
-        val_range = sensor_data['range_dps']
-        bits = sensor_data['resolution_bits']
-        max_int = 2**(bits - 1)
-        return val_range / max_int
-        
-    if 'range_ut' in sensor_data:
-        val_range = sensor_data['range_ut']
-        bits = sensor_data['resolution_bits']
-        max_int = 2**(bits - 1)
-        return val_range / max_int
-
-    # CASE 3: Scale Factor (Inverse Sensitivity)
-    # Sensitivity = 1.0 / Scale_Factor
+    # CASE 3: Scale Factor (Inverse)
     if 'scale_factor' in sensor_data:
-        return 1.0 / sensor_data['scale_factor']
+        return 1.0 / float(sensor_data['scale_factor'])
 
-    # CASE 4: Lat/Lon Scaling
+    # CASE 4: Lat/Lon Scaling (Legacy support)
     if 'lat_lon_scale' in sensor_data:
-        return 1.0 / sensor_data['lat_lon_scale']
+        return 1.0 / float(sensor_data['lat_lon_scale'])
 
-    # Default fallback
-    return 1.0 
+    return None
+
+def append_definitions(c_list, py_list, name_base, val):
+    """
+    Helper to append lines to the C and Python lists
+    """
+    # C Define
+    def_name = f"SENSOR_{name_base}_SENSITIVITY"
+    c_list.append(f"#define {def_name:<45} {val:.9f}f")
+    
+    # Python Var
+    py_name = f"{name_base}_SENSITIVITY"
+    py_list.append(f"{py_name:<45} = {val}")
 
 def generate():
     # 1. READ JSON
@@ -66,7 +66,6 @@ def generate():
     c_lines = []
     py_lines = []
 
-    # Headers
     c_lines.append("#ifndef SENSOR_CONFIG_H")
     c_lines.append("#define SENSOR_CONFIG_H")
     c_lines.append("// AUTOMATICALLY GENERATED - DO NOT EDIT")
@@ -84,36 +83,30 @@ def generate():
         c_lines.append(f"// --- {name_upper} ---")
         py_lines.append(f"# --- {name_upper} ---")
 
-        # Check for complex sensors (IMU with sub-sensors)
-        sub_sensors = []
-        if 'accel' in params: sub_sensors.append('accel')
-        if 'gyro' in params: sub_sensors.append('gyro')
-        if 'mag' in params: sub_sensors.append('mag')
-        
-        if sub_sensors:
-            # Complex Sensor (e.g., IMU)
-            for sub in sub_sensors:
-                s_data = params[sub]
-                sens = calculate_sensitivity(s_data)
-                
-                # C Define
-                def_name = f"SENSOR_{name_upper}_{sub.upper()}_SENSITIVITY"
-                c_lines.append(f"#define {def_name:<45} {sens:.9f}f")
-                
-                # Python Var
-                py_name = f"{name_upper}_{sub.upper()}_SENSITIVITY"
-                py_lines.append(f"{py_name:<45} = {sens}")
-        else:
-            # Simple Sensor (Baro, GPS, Temp)
-            sens = calculate_sensitivity(params)
-            
-            # C Define
-            def_name = f"SENSOR_{name_upper}_SENSITIVITY"
-            c_lines.append(f"#define {def_name:<45} {sens:.9f}f")
-            
-            # Python Var
-            py_name = f"{name_upper}_SENSITIVITY"
-            py_lines.append(f"{py_name:<45} = {sens}")
+        # --- A. Check Root Level (e.g. Pressure for BMP581, or simple sensors) ---
+        # If the root object itself has sensitivity/units, generate a macro for it.
+        root_sens = calculate_sensitivity_value(params)
+        if root_sens is not None:
+            # If it's a simple sensor, use NAME_SENSITIVITY
+            # If it's a hybrid (like BMP which has pressure at root), this is the base sensitivity
+            append_definitions(c_lines, py_lines, name_upper, root_sens)
+
+        # --- B. Check Standard Sub-Sensors (accel, gyro, mag, temp) ---
+        sub_keys = ['accel', 'gyro', 'mag', 'temp']
+        for sub in sub_keys:
+            if sub in params:
+                sub_sens = calculate_sensitivity_value(params[sub])
+                if sub_sens is not None:
+                    # e.g. SENSOR_IMU_ACCEL_SENSITIVITY or SENSOR_BMP581_TEMP_SENSITIVITY
+                    append_definitions(c_lines, py_lines, f"{name_upper}_{sub.upper()}", sub_sens)
+
+        # --- C. Check Explicit Scaling Map (e.g. GPS: lat_lon, altitude) ---
+        if 'scaling' in params and isinstance(params['scaling'], dict):
+            for scale_key, scale_val in params['scaling'].items():
+                # We assume values in 'scaling' are Divisors (Scale Factors)
+                # Sensitivity = 1.0 / scale_val
+                sens = 1.0 / float(scale_val)
+                append_definitions(c_lines, py_lines, f"{name_upper}_{scale_key.upper()}", sens)
 
         c_lines.append("")
         py_lines.append("")

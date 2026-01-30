@@ -139,15 +139,15 @@ float rocket_data_get_gyro_z_si(void) { return _rocket_data.gyro_z * SENSOR_IMU_
 
 // Baro 
 float rocket_data_get_baro_press_si(void) { return (float)_rocket_data.baro_pressure; }
-float rocket_data_get_baro_temp_si(void) { return _rocket_data.baro_temp / 100.0f; }
+float rocket_data_get_baro_temp_si(void) { return _rocket_data.baro_temp * SENSOR_BMP581_TEMP_SENSITIVITY; }
 
 // GPS
-double rocket_data_get_gps_lat_si(void) { return _rocket_data.gps_lat * (double)SENSOR_GPS_SENSITIVITY; }
-double rocket_data_get_gps_lon_si(void) { return _rocket_data.gps_lon * (double)SENSOR_GPS_SENSITIVITY; }
-float  rocket_data_get_gps_alt_si(void) { return _rocket_data.gps_alt / 1000.0f; } 
-float  rocket_data_get_gps_vel_n_si(void) { return _rocket_data.gps_vel_n / 10.0f; }
-float  rocket_data_get_gps_vel_e_si(void) { return _rocket_data.gps_vel_e / 10.0f; }
-float  rocket_data_get_gps_vel_d_si(void) { return _rocket_data.gps_vel_d / 10.0f; }
+double rocket_data_get_gps_lat_si(void) { return _rocket_data.gps_lat * (double)SENSOR_GPS_LAT_LON_SENSITIVITY; }
+double rocket_data_get_gps_lon_si(void) { return _rocket_data.gps_lon * (double)SENSOR_GPS_LAT_LON_SENSITIVITY; }
+float  rocket_data_get_gps_alt_si(void) { return _rocket_data.gps_alt * SENSOR_GPS_ALTITUDE_SENSITIVITY; } 
+float  rocket_data_get_gps_vel_n_si(void) { return _rocket_data.gps_vel_n * SENSOR_GPS_VELOCITY_SENSITIVITY; }
+float  rocket_data_get_gps_vel_e_si(void) { return _rocket_data.gps_vel_e * SENSOR_GPS_VELOCITY_SENSITIVITY; }
+float  rocket_data_get_gps_vel_d_si(void) { return _rocket_data.gps_vel_d * SENSOR_GPS_VELOCITY_SENSITIVITY; }
 
 // Magnetometer
 float rocket_data_get_mag_x_si(void) { return _rocket_data.mag_x * SENSOR_MAG_SENSITIVITY; }

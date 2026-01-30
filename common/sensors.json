@@ -23,9 +23,12 @@
         "address": "0x46",
         "rate_hz": 50,
         "resolution_bits": 24,
-        "scale_factor": 64.0,
         "unit": "Pa",
-        "sensitivity": 0.015625
+        "scale_factor": 64.0,
+        "temp": {
+            "unit": "C",
+            "scale_factor": 65536.0
+        }
     },
     "ms5607": {
         "model": "MS5607",
@@ -33,18 +36,29 @@
         "address": "0x77",
         "rate_hz": 50,
         "resolution_bits": 24,
-        "scale_factor": 1.0,
         "unit": "Pa",
-        "sensitivity": 1.0
+        "scale_factor": 1.0,
+        "temp": {
+            "unit": "C",
+            "scale_factor": 100.0,
+            "note": "Raw output is in centi-degrees (Integer / 100)"
+        }
     },
     "gps": {
         "model": "NEO-M9N",
         "protocol": "I2C",
         "address": "0x42",
         "rate_hz": 40,
-        "lat_lon_scale": 10000000.0,
-        "unit": "deg",
-        "sensitivity": 0.0000001
+        "units": {
+            "position": "deg",
+            "altitude": "m",
+            "velocity": "m/s"
+        },
+        "scaling": {
+            "lat_lon": 10000000.0,
+            "altitude": 1000.0,
+            "velocity": 1000.0
+        }
     },
     "mag": {
         "model": "BMM350",

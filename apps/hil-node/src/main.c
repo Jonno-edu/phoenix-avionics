@@ -135,10 +135,9 @@ bool simulation_tick(struct repeating_timer *t) {
             reg_imu.accel[1] = (int16_t)(pkt.fast.accel[1] / SENSOR_IMU_ACCEL_SENSITIVITY);
             reg_imu.accel[2] = (int16_t)(pkt.fast.accel[2] / SENSOR_IMU_ACCEL_SENSITIVITY);
 
-            const float R2D = 180.0f / 3.1415926535f;
-            reg_imu.gyro[0] = (int16_t)((pkt.fast.gyro[0] * R2D) / SENSOR_IMU_GYRO_SENSITIVITY);
-            reg_imu.gyro[1] = (int16_t)((pkt.fast.gyro[1] * R2D) / SENSOR_IMU_GYRO_SENSITIVITY);
-            reg_imu.gyro[2] = (int16_t)((pkt.fast.gyro[2] * R2D) / SENSOR_IMU_GYRO_SENSITIVITY);
+            reg_imu.gyro[0] = (int16_t)((pkt.fast.gyro[0]) / SENSOR_IMU_GYRO_SENSITIVITY);
+            reg_imu.gyro[1] = (int16_t)((pkt.fast.gyro[1]) / SENSOR_IMU_GYRO_SENSITIVITY);
+            reg_imu.gyro[2] = (int16_t)((pkt.fast.gyro[2]) / SENSOR_IMU_GYRO_SENSITIVITY);
 
             reg_mag.mag[0] = (int16_t)(pkt.fast.mag[0] / SENSOR_MAG_SENSITIVITY);
             reg_mag.mag[1] = (int16_t)(pkt.fast.mag[1] / SENSOR_MAG_SENSITIVITY);
@@ -152,15 +151,15 @@ bool simulation_tick(struct repeating_timer *t) {
             reg_temp.seq++;
             reg_temp.time_ms = now_ms;
 
-            reg_gps.lat = (int32_t)(pkt.slow.lat / SENSOR_GPS_SENSITIVITY);
-            reg_gps.lon = (int32_t)(pkt.slow.lon / SENSOR_GPS_SENSITIVITY);
-            reg_gps.alt = (int32_t)(pkt.slow.alt * 1000.0f);
-            reg_gps.vel_n = (int32_t)(pkt.slow.vel[0] * 10.0f);
-            reg_gps.vel_e = (int32_t)(pkt.slow.vel[1] * 10.0f);
-            reg_gps.vel_d = (int32_t)(pkt.slow.vel[2] * 10.0f);
+            reg_gps.lat = (int32_t)(pkt.slow.lat / SENSOR_GPS_LAT_LON_SENSITIVITY);
+            reg_gps.lon = (int32_t)(pkt.slow.lon / SENSOR_GPS_LAT_LON_SENSITIVITY);
+            reg_gps.alt = (int32_t)(pkt.slow.alt / SENSOR_GPS_ALTITUDE_SENSITIVITY);
+            reg_gps.vel_n = (int32_t)(pkt.slow.vel[0] / SENSOR_GPS_VELOCITY_SENSITIVITY);
+            reg_gps.vel_e = (int32_t)(pkt.slow.vel[1] / SENSOR_GPS_VELOCITY_SENSITIVITY);
+            reg_gps.vel_d = (int32_t)(pkt.slow.vel[2] / SENSOR_GPS_VELOCITY_SENSITIVITY);
             
             reg_baro.pressure_pa = (uint32_t)(pkt.slow.press / SENSOR_BMP581_SENSITIVITY);
-            reg_baro.temp_c = (int32_t)(pkt.slow.temp_baro * 100.0f);
+            reg_baro.temp_c = (int32_t)(pkt.slow.temp_baro / SENSOR_BMP581_TEMP_SENSITIVITY);
             reg_temp.temp_c = (int16_t)(pkt.slow.temp_stack / SENSOR_TEMP_SENSITIVITY);
         }
         

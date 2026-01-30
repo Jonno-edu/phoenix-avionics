@@ -14,7 +14,7 @@ void TCTLM_processEvent(RS485_packet_t *pkt) {
 
 void TCTLM_processTelecommand(RS485_packet_t *pkt) {
     uint8_t id = pkt->msg_desc.id;
-    ESP_LOGI(TAG, "Telecommand %d received from %02X", id, pkt->src_addr);
+    // ESP_LOGI(TAG, "Telecommand %d received from %02X", id, pkt->src_addr);
 
     // Echo back an ACK
     rs485_send_packet(pkt->src_addr, MSG_TYPE_TC_ACK, id, NULL, 0);
@@ -50,12 +50,12 @@ void TCTLM_processTelecommand(RS485_packet_t *pkt) {
 }
 
 void TCTLM_processTelecommandAck(RS485_packet_t *pkt) {
-    ESP_LOGI(TAG, "TC ACK received from %02X for ID %d", pkt->src_addr, pkt->msg_desc.id);
+    // ESP_LOGI(TAG, "TC ACK received from %02X for ID %d", pkt->src_addr, pkt->msg_desc.id);
 }
 
 void TCTLM_processTelemetryRequest(RS485_packet_t *pkt) {
     uint8_t id = pkt->msg_desc.id;
-    ESP_LOGI(TAG, "Telemetry Request %d from %02X", id, pkt->src_addr);
+    // ESP_LOGI(TAG, "Telemetry Request %d from %02X", id, pkt->src_addr);
 
     switch (id) {
         case ID_TLM_IDENTIFICATION: {
@@ -67,14 +67,14 @@ void TCTLM_processTelemetryRequest(RS485_packet_t *pkt) {
             break;
         }
         default:
-            ESP_LOGW(TAG, "Unknown TLM Req ID: %d", id);
+            // ESP_LOGW(TAG, "Unknown TLM Req ID: %d", id);
             break;
     }
 }
 
 void TCTLM_processTelemetryResponse(RS485_packet_t *pkt) {
     uint8_t id = pkt->msg_desc.id;
-    ESP_LOGI(TAG, "Telemetry Response %d from %02X", id, pkt->src_addr);
+    // ESP_LOGI(TAG, "Telemetry Response %d from %02X", id, pkt->src_addr);
     
     // Log full raw packet: [Len Dest Src Desc] [Payload...]
     char raw_buf[256] = {0};
@@ -88,7 +88,7 @@ void TCTLM_processTelemetryResponse(RS485_packet_t *pkt) {
     for(int i=0; i<pkt->length && offset < (sizeof(raw_buf) - 4); i++) {
         offset += snprintf(raw_buf + offset, sizeof(raw_buf) - offset, "%02X ", pkt->data[i]);
     }
-    ESP_LOGI(TAG, "RX Raw: [%s]", raw_buf);
+    // ESP_LOGI(TAG, "RX Raw: [%s]", raw_buf);
 
     if (id == ID_TLM_IDENTIFICATION) {
         if (pkt->src_addr == 0x03) {
@@ -100,10 +100,10 @@ void TCTLM_processTelemetryResponse(RS485_packet_t *pkt) {
             // Safely copy available data
             memcpy(&tlm, pkt->data, pkt->length);
             
-            ESP_LOGI(TAG, "Node %02X (Type %d, Ver %d): fw %d.%d, uptime %us.%03u", 
-                     pkt->src_addr, tlm.node_type, tlm.interface_version,
-                     tlm.firmware_major, tlm.firmware_minor, 
-                     tlm.uptime_seconds, tlm.uptime_milliseconds);
+            // ESP_LOGI(TAG, "Node %02X (Type %d, Ver %d): fw %d.%d, uptime %us.%03u", 
+            //          pkt->src_addr, tlm.node_type, tlm.interface_version,
+            //          tlm.firmware_major, tlm.firmware_minor, 
+            //          tlm.uptime_seconds, tlm.uptime_milliseconds);
             
             if (pkt->length >= 9) {
                 ESP_LOGI(TAG, "Flags 0x%02X", tlm.status_flags);
@@ -112,7 +112,7 @@ void TCTLM_processTelemetryResponse(RS485_packet_t *pkt) {
                 }
             }
         } else {
-             ESP_LOGW(TAG, "ID_TLM_IDENTIFICATION: Unexpected length %d", pkt->length);
+             // ESP_LOGW(TAG, "ID_TLM_IDENTIFICATION: Unexpected length %d", pkt->length);
         }
     }
 }

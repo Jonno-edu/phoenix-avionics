@@ -70,7 +70,7 @@ static const char *TAG = "RS485_HAL";
         // Step 4: Disable transmitter, enable receiver (set DE/RE LOW)
         gpio_put(RS485_DE_RE_PIN, 0);
 
-        ESP_LOGD(TAG, "Sent %d bytes", len);
+        // ESP_LOGD(TAG, "Sent %d bytes", len);
     }
 
 #else

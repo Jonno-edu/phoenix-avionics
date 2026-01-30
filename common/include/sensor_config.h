@@ -9,12 +9,16 @@
 
 // --- BMP581 ---
 #define SENSOR_BMP581_SENSITIVITY                     0.015625000f
+#define SENSOR_BMP581_TEMP_SENSITIVITY                0.000015259f
 
 // --- MS5607 ---
 #define SENSOR_MS5607_SENSITIVITY                     1.000000000f
+#define SENSOR_MS5607_TEMP_SENSITIVITY                0.010000000f
 
 // --- GPS ---
-#define SENSOR_GPS_SENSITIVITY                        0.000000100f
+#define SENSOR_GPS_LAT_LON_SENSITIVITY                0.000000100f
+#define SENSOR_GPS_ALTITUDE_SENSITIVITY               0.001000000f
+#define SENSOR_GPS_VELOCITY_SENSITIVITY               0.001000000f
 
 // --- MAG ---
 #define SENSOR_MAG_SENSITIVITY                        0.061035156f
