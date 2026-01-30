@@ -148,4 +148,34 @@ void rocket_data_update_apogee_votes(uint8_t votes);
  */
 void getRocketTrackingInfo(TlmTrackingBeaconPayload_t *out_beacon);
 
+// --- SI UNIT GETTERS ---
+
+// IMU (m/s^2 and rad/s)
+float rocket_data_get_accel_x_si(void);
+float rocket_data_get_accel_y_si(void);
+float rocket_data_get_accel_z_si(void);
+float rocket_data_get_gyro_x_si(void);
+float rocket_data_get_gyro_y_si(void);
+float rocket_data_get_gyro_z_si(void);
+
+// Baro (Pa and °C)
+float rocket_data_get_baro_press_si(void);
+float rocket_data_get_baro_temp_si(void);
+
+// GPS (deg, m, m/s)
+double rocket_data_get_gps_lat_si(void);
+double rocket_data_get_gps_lon_si(void);
+float  rocket_data_get_gps_alt_si(void);
+float  rocket_data_get_gps_vel_n_si(void);
+float  rocket_data_get_gps_vel_e_si(void);
+float  rocket_data_get_gps_vel_d_si(void);
+
+// Magnetometer (uT)
+float rocket_data_get_mag_x_si(void);
+float rocket_data_get_mag_y_si(void);
+float rocket_data_get_mag_z_si(void);
+
+// Stack Temperature (°C)
+float rocket_data_get_temp_stack_si(void);
+
 #endif // ROCKET_DATA_H

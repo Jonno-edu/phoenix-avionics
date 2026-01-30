@@ -26,7 +26,7 @@ int main() {
     system_data_init();
     rocket_data_init();
     // Pre-load with test values so we can see data immediately
-    rocket_data_fill_test_values();
+    // rocket_data_fill_test_values();
     system_config_init();
 
 #if PICO_BUILD

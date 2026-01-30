@@ -36,6 +36,7 @@ rsync -avz --progress \
     "$LOCAL_PY_DIR/sensor_config.py" \
     "$LOCAL_PY_DIR/phoenix_sensor_stream.csv" \
     "$LOCAL_PY_DIR/run_hil.sh" \
+    "$LOCAL_PY_DIR//hil_node.uf2" \
     $ROCKCHIP_USER@$ROCKCHIP_IP:$REMOTE_DIR/
 
 if [ $? -eq 0 ]; then

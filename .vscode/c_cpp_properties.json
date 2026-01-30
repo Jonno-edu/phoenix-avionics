@@ -2,8 +2,18 @@
     "configurations": [
         {
             "name": "Pico",
-            "compileCommands": "${workspaceFolder}/build/hil/compile_commands.json",
-            "configurationProvider": "ms-vscode.cmake-tools"
+            "configurationProvider": "ms-vscode.cmake-tools",
+            "compilerPath": "/usr/bin/arm-none-eabi-gcc",
+            "intelliSenseMode": "linux-gcc-arm",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/lib/FreeRTOS-Kernel/include",
+                "${workspaceFolder}/lib/FreeRTOS-Kernel/portable/ThirdParty/Community-Supported-Ports/GCC/RP2350_ARM_NTZ/non_secure"
+            ],
+            "defines": [
+                "PICO_BUILD=1",
+                "PICO_ON_DEVICE=1"
+            ]
         }
     ],
     "version": 4

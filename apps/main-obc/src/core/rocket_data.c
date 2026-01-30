@@ -1,4 +1,7 @@
+// rocket_data.c
+
 #include "core/rocket_data.h"
+#include "sensor_config.h"
 #include <string.h>
 
 // Helper macro for thread safety (placeholder)
@@ -123,63 +126,94 @@ void getRocketTrackingInfo(TlmTrackingBeaconPayload_t *out_beacon) {
     UNLOCK_DATA();
 }
 
+// --- SI UNIT GETTERS ---
+
+// IMU (Sensitivity from sensors.json)
+float rocket_data_get_accel_x_si(void) { return _rocket_data.accel_x * SENSOR_IMU_ACCEL_SENSITIVITY; }
+float rocket_data_get_accel_y_si(void) { return _rocket_data.accel_y * SENSOR_IMU_ACCEL_SENSITIVITY; }
+float rocket_data_get_accel_z_si(void) { return _rocket_data.accel_z * SENSOR_IMU_ACCEL_SENSITIVITY; }
+
+float rocket_data_get_gyro_x_si(void) { return _rocket_data.gyro_x * SENSOR_IMU_GYRO_SENSITIVITY; }
+float rocket_data_get_gyro_y_si(void) { return _rocket_data.gyro_y * SENSOR_IMU_GYRO_SENSITIVITY; }
+float rocket_data_get_gyro_z_si(void) { return _rocket_data.gyro_z * SENSOR_IMU_GYRO_SENSITIVITY; }
+
+// Baro 
+float rocket_data_get_baro_press_si(void) { return (float)_rocket_data.baro_pressure; }
+float rocket_data_get_baro_temp_si(void) { return _rocket_data.baro_temp / 100.0f; }
+
+// GPS
+double rocket_data_get_gps_lat_si(void) { return _rocket_data.gps_lat * (double)SENSOR_GPS_SENSITIVITY; }
+double rocket_data_get_gps_lon_si(void) { return _rocket_data.gps_lon * (double)SENSOR_GPS_SENSITIVITY; }
+float  rocket_data_get_gps_alt_si(void) { return _rocket_data.gps_alt / 1000.0f; } 
+float  rocket_data_get_gps_vel_n_si(void) { return _rocket_data.gps_vel_n / 10.0f; }
+float  rocket_data_get_gps_vel_e_si(void) { return _rocket_data.gps_vel_e / 10.0f; }
+float  rocket_data_get_gps_vel_d_si(void) { return _rocket_data.gps_vel_d / 10.0f; }
+
+// Magnetometer
+float rocket_data_get_mag_x_si(void) { return _rocket_data.mag_x * SENSOR_MAG_SENSITIVITY; }
+float rocket_data_get_mag_y_si(void) { return _rocket_data.mag_y * SENSOR_MAG_SENSITIVITY; }
+float rocket_data_get_mag_z_si(void) { return _rocket_data.mag_z * SENSOR_MAG_SENSITIVITY; }
+
+// Stack Temp
+float rocket_data_get_temp_stack_si(void) { return _rocket_data.temp_stack * SENSOR_TEMP_SENSITIVITY; }
+
 // ============================================================================
 // TEST UTILS
 // ============================================================================
 
-void rocket_data_fill_test_values(void) {
-    LOCK_DATA();
+// void rocket_data_fill_test_values(void) {
+//     LOCK_DATA();
     
-    // System
-    _rocket_data.runtime_seconds = 123;
-    _rocket_data.runtime_milliseconds = 456;
-    _rocket_data.avionics_state = 2; // Enabled
-    _rocket_data.apogee_counter = 0;
-    _rocket_data.battery_current = 450; // 450mA
+//     // System
+//     _rocket_data.runtime_seconds = 123;
+//     _rocket_data.runtime_milliseconds = 456;
+//     _rocket_data.avionics_state = 2; // Enabled
+//     _rocket_data.apogee_counter = 0;
+//     _rocket_data.battery_current = 450; // 450mA
     
-    // GPS (Stellenbosch area)
-    _rocket_data.gps_lat = -339380000;  // -33.9380° (Stellenbosch)
-    _rocket_data.gps_lon = 187600000;   // 18.7600°
-    _rocket_data.gps_alt = 150000;      // 150m MSL
-    _rocket_data.gps_vel_n = 0;
-    _rocket_data.gps_vel_e = 0;
-    _rocket_data.gps_vel_d = -50;       // 5.0 m/s up
-    _rocket_data.gps_itow = 345678900;  // GPS time of week
-    _rocket_data.gps_week = 2260;
-    _rocket_data.time_valid_flags = 0x07; // All time fields valid
+//     // GPS (Stellenbosch area)
+//     _rocket_data.gps_lat = -339380000;  // -33.9380° (Stellenbosch)
+//     _rocket_data.gps_lon = 187600000;   // 18.7600°
+//     _rocket_data.gps_alt = 150000;      // 150m MSL
+//     _rocket_data.gps_vel_n = 0;
+//     _rocket_data.gps_vel_e = 0;
+//     _rocket_data.gps_vel_d = -50;       // 5.0 m/s up
+//     _rocket_data.gps_itow = 345678900;  // GPS time of week
+//     _rocket_data.gps_week = 2260;
+//     _rocket_data.time_valid_flags = 0x07; // All time fields valid
 
-    // Estimation (slightly different from raw GPS)
-    _rocket_data.est_lat = -339380000;
-    _rocket_data.est_lon = 187600000;
-    _rocket_data.est_alt = 150500;      // 150.5m (mm)
-    _rocket_data.est_vel_n = 0;
-    _rocket_data.est_vel_e = 0;
-    _rocket_data.est_vel_d = -52;       // -5.2 m/s (m/s * 10)
+//     // Estimation (slightly different from raw GPS)
+//     _rocket_data.est_lat = -339380000;
+//     _rocket_data.est_lon = 187600000;
+//     _rocket_data.est_alt = 150500;      // 150.5m (mm)
+//     _rocket_data.est_vel_n = 0;
+//     _rocket_data.est_vel_e = 0;
+//     _rocket_data.est_vel_d = -52;       // -5.2 m/s (m/s * 10)
 
-    // Barometer
-    _rocket_data.baro_pressure = 101325; // 1 atm in Pa
-    _rocket_data.baro_temp = 2500;       // 25.00°C (°C * 100)
+//     // Barometer
+//     _rocket_data.baro_pressure = 101325; // 1 atm in Pa
+//     _rocket_data.baro_temp = 2500;       // 25.00°C (°C * 100)
     
-    // Temperature sensor
-    _rocket_data.temp_stack = 0;         // Initialize to 0, wait for sensor update
+//     // Temperature sensor
+//     _rocket_data.temp_stack = 0;         // Initialize to 0, wait for sensor update
     
-    // IMU - Accel (on pad, ~1g down)
-    _rocket_data.accel_x = 10;
-    _rocket_data.accel_y = -20;
-    _rocket_data.accel_z = 16384;        // ~1g (depends on scale factor A)
+//     // IMU - Accel (on pad, ~1g down)
+//     _rocket_data.accel_x = 10;
+//     _rocket_data.accel_y = -20;
+//     _rocket_data.accel_z = 16384;        // ~1g (depends on scale factor A)
     
-    // IMU - Gyro (stationary)
-    _rocket_data.gyro_x = 1;
-    _rocket_data.gyro_y = 2;
-    _rocket_data.gyro_z = 3;
+//     // IMU - Gyro (stationary)
+//     _rocket_data.gyro_x = 1;
+//     _rocket_data.gyro_y = 2;
+//     _rocket_data.gyro_z = 3;
     
-    // Magnetometer (South African field)
-    _rocket_data.mag_x = 200;
-    _rocket_data.mag_y = 150;
-    _rocket_data.mag_z = -400;
+//     // Magnetometer (South African field)
+//     _rocket_data.mag_x = 200;
+//     _rocket_data.mag_y = 150;
+//     _rocket_data.mag_z = -400;
     
-    // Apogee detection
-    _rocket_data.apogee_votes = 0b000;   // No votes yet
+//     // Apogee detection
+//     _rocket_data.apogee_votes = 0b000;   // No votes yet
 
-    UNLOCK_DATA();
-}
+//     UNLOCK_DATA();
+// }

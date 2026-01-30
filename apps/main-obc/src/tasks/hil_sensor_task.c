@@ -1,9 +1,11 @@
+// hil_sensor_task.c
+
 #include "hil_sensor_task.h"
 #include "task_manager.h"
 #include "core/logging.h"
 #include "core/rocket_data.h"
-// This header contains the correct Baud/Regs/Structs
 #include "hil_protocol.h" 
+#include "sensor_config.h" 
 
 #include <FreeRTOS.h>
 #include <task.h>
@@ -13,11 +15,16 @@
 #include "pico/stdlib.h"
 #include "hardware/i2c.h"
 
-// Hardware Pin Config (Specific to this Board/Task)
+// --- HARDWARE CONFIGURATION ---
+// Ensure these match your OBC schematic
 #define HIL_I2C_PORT       i2c1
 #define HIL_PIN_SDA        6
 #define HIL_PIN_SCL        7
-#define HIL_I2C_OE_PIN     46
+#define HIL_I2C_OE_PIN     46 
+
+// FORCE CORRECT ADDRESS HERE IF HEADER IS WRONG
+#undef HIL_SLAVE_ADDR
+#define HIL_SLAVE_ADDR     0x55 
 
 #endif
 
@@ -30,11 +37,9 @@ static void scan_i2c_bus(void) {
     ESP_LOGI(TAG, "--- Starting I2C Bus Scan ---");
     int found_count = 0;
     
-    // Standard I2C 7-bit address range (0x08 to 0x77)
-    // We skip reserved addresses (0x00-0x07 and 0x78-0x7F)
+    // Scan standard 7-bit addresses
     for (int addr = 0x08; addr < 0x78; addr++) {
         uint8_t rx_data;
-        // Try to read 1 byte. If it returns > 0, a device ACKed.
         int ret = i2c_read_blocking(HIL_I2C_PORT, addr, &rx_data, 1, false);
         
         if (ret >= 0) {
@@ -45,64 +50,56 @@ static void scan_i2c_bus(void) {
     
     if (found_count == 0) {
         ESP_LOGE(TAG, "Scan complete: NO DEVICES FOUND!");
-        ESP_LOGE(TAG, "Troubleshooting: 1. Check Pull-up Resistors (SDA/SCL to 3V3)");
-        ESP_LOGE(TAG, "Troubleshooting: 2. Check wiring (SDA->SDA, SCL->SCL)");
-        ESP_LOGE(TAG, "Troubleshooting: 3. Verify HIL Node has power and is running");
     } else {
         ESP_LOGI(TAG, "Scan complete: Found %d device(s).", found_count);
     }
 }
 
 static bool hil_i2c_init(void) {
-    // 1. Enable Output Buffer (Level Shifter)
+    // 1. Enable Level Shifter (Critical)
     gpio_init(HIL_I2C_OE_PIN);
     gpio_set_dir(HIL_I2C_OE_PIN, GPIO_OUT);
     gpio_put(HIL_I2C_OE_PIN, 1);
     
-    // 2. Init I2C Hardware using settings from hil_protocol.h
-    uint32_t real_baud = i2c_init(HIL_I2C_PORT, HIL_I2C_BAUDRATE); 
+    // 2. Init I2C Hardware (400kHz)
+    uint32_t real_baud = i2c_init(HIL_I2C_PORT, 400000); 
 
     gpio_set_function(HIL_PIN_SDA, GPIO_FUNC_I2C);
     gpio_set_function(HIL_PIN_SCL, GPIO_FUNC_I2C);
     gpio_pull_up(HIL_PIN_SDA);
     gpio_pull_up(HIL_PIN_SCL);
     
-    // Allow electrical settling time
     sleep_ms(100); 
     
-    ESP_LOGI(TAG, "I2C Init: %u Hz (Target: %d)", real_baud, HIL_I2C_BAUDRATE);
+    ESP_LOGI(TAG, "I2C Init: %lu Hz (Target: 400000)", real_baud);
 
-    // 3. Run Bus Scan immediately to verify connectivity
+    // 3. Scan Bus (Should see 0x55)
     scan_i2c_bus();
     
-    // 4. Specific Ping Test for HIL Node
-    uint8_t reg_ptr = HIL_REG_FAST; 
-    int ret = -1;
-    for (int i = 0; i < 5; i++) {
-        // Just write the register address to see if it ACKs
-        ret = i2c_write_blocking(HIL_I2C_PORT, HIL_SLAVE_ADDR, &reg_ptr, 1, false);
-        if (ret >= 0) return true; // Success!
-        vTaskDelay(pdMS_TO_TICKS(50));
-    }
+    // 4. Targeted Ping to 0x55
+    uint8_t reg_ptr = HIL_REG_WHOAMI; 
+    int ret = i2c_write_blocking(HIL_I2C_PORT, HIL_SLAVE_ADDR, &reg_ptr, 1, false);
     
-    ESP_LOGE(TAG, "Specific Ping to HIL Node (0x%02X) Failed: %d", HIL_SLAVE_ADDR, ret);
-    return false;
+    if (ret < 0) {
+        ESP_LOGE(TAG, "Ping to HIL Node (0x%02X) Failed: %d", HIL_SLAVE_ADDR, ret);
+        return false;
+    }
+    return true;
 }
 
 static bool read_sensor(uint8_t reg, void* dest, size_t size) {
-    // Write register address, NO STOP (true)
+    // 1. Write Register Address (No Stop)
     int ret = i2c_write_blocking(HIL_I2C_PORT, HIL_SLAVE_ADDR, &reg, 1, true);
     if (ret < 0) return false;
     
-    // Read data
+    // 2. Read Payload
     ret = i2c_read_blocking(HIL_I2C_PORT, HIL_SLAVE_ADDR, (uint8_t*)dest, size, false);
     return (ret > 0);
 }
 
 static void vHILSensorTask(void *pvParameters) {
     (void)pvParameters;
-    // Wait for system to stabilize
-    vTaskDelay(pdMS_TO_TICKS(2000));
+    vTaskDelay(pdMS_TO_TICKS(2000)); // Wait for boot
     
     if (!hil_i2c_init()) {
         ESP_LOGE(TAG, "HIL Hardware Init Failed. Suspending Task.");
@@ -110,16 +107,25 @@ static void vHILSensorTask(void *pvParameters) {
         return;
     }
     
-    ESP_LOGI(TAG, "HIL Link Established. Starting Scheduler.");
+    ESP_LOGI(TAG, "HIL Link Established (Addr: 0x%02X). Starting Scheduler.", HIL_SLAVE_ADDR);
 
+    // Timing Logic (Microseconds)
     uint64_t next_imu_us  = time_us_64();
-    uint64_t next_baro_us = time_us_64();
-    uint64_t next_gps_us  = time_us_64();
+    uint64_t next_baro_us = time_us_64() + 2000;
+    uint64_t next_gps_us  = time_us_64() + 4000;
+    uint64_t next_mag_us  = time_us_64() + 6000;
+    uint64_t next_temp_us = time_us_64() + 8000;
 
-    // Structs are defined in hil_protocol.h
+    // Data Structures
     packet_imu_t  imu = {0};
     packet_baro_t baro = {0};
     packet_gps_t  gps = {0};
+    packet_mag_t  mag = {0};
+    packet_temp_t temp = {0};
+
+    // Stats
+    uint32_t valid_imu_count = 0;
+    uint32_t last_log_ms = 0;
 
     while (true) {
         uint64_t now = time_us_64();
@@ -129,20 +135,23 @@ static void vHILSensorTask(void *pvParameters) {
         // ------------------------------------------
         if (now >= next_imu_us) {
             next_imu_us += 1000;
-            if (read_sensor(HIL_REG_FAST, &imu, sizeof(imu))) {
-                // Update Global Rocket State
-                // Currently only X-axis is populated in HIL
-                rocket_data_update_accel(imu.accel_x, 0, 0); 
+            if (read_sensor(HIL_REG_IMU, &imu, sizeof(imu))) {
+                // Pass raw LSBs to rocket_data. Getters handle SI units.
+                rocket_data_update_accel(imu.accel[0], imu.accel[1], imu.accel[2]);
+                rocket_data_update_gyro(imu.gyro[0], imu.gyro[1], imu.gyro[2]);
+                valid_imu_count++;
             }
         }
 
         // ------------------------------------------
-        // TASK 2: Baro (100 Hz)
+        // TASK 2: Baro (50 Hz) - HIL_REG_BARO1
         // ------------------------------------------
         if (now >= next_baro_us) {
-            next_baro_us += 10000;
-            if (read_sensor(HIL_REG_MEDIUM, &baro, sizeof(baro))) {
-                rocket_data_update_baro(baro.pressure, 0);
+            next_baro_us += 20000; // 20ms
+            if (read_sensor(HIL_REG_BARO1, &baro, sizeof(baro))) {
+                // Baro pressure is sent as raw units from HIL.
+                // Convert to SI (Pa) using the sensitivity factor.
+                rocket_data_update_baro(baro.pressure_pa * SENSOR_BMP581_SENSITIVITY, baro.temp_c);
             }
         }
 
@@ -150,17 +159,66 @@ static void vHILSensorTask(void *pvParameters) {
         // TASK 3: GPS (10 Hz)
         // ------------------------------------------
         if (now >= next_gps_us) {
-            next_gps_us += 100000;
-            if (read_sensor(HIL_REG_SLOW, &gps, sizeof(gps))) {
-                // Logging for verification
-                ESP_LOGI(TAG, "[OBC] T:%u ms | ACC_X:%d | PRES:%d | LAT:%d",
-                       imu.time_ms, imu.accel_x, baro.pressure, gps.lat);
+            next_gps_us += 100000; // 100ms
+            if (read_sensor(HIL_REG_GPS, &gps, sizeof(gps))) {
+                // Struct uses 'int32_t' for vel_n/e/d
+                rocket_data_update_gps(
+                    gps.lat, gps.lon, gps.alt,
+                    gps.vel_n, gps.vel_e, gps.vel_d,
+                    0, 0 // iTOW/Week not in packet
+                );
             }
+        }
+
+        // ------------------------------------------
+        // TASK 4: Magnetometer (100 Hz)
+        // ------------------------------------------
+        if (now >= next_mag_us) {
+            next_mag_us += 10000; // 10ms
+            if (read_sensor(HIL_REG_MAG, &mag, sizeof(mag))) {
+                // Struct uses array mag[3]
+                rocket_data_update_mag(mag.mag[0], mag.mag[1], mag.mag[2]);
+            }
+        }
+
+        // ------------------------------------------
+        // TASK 5: Temperature (1 Hz)
+        // ------------------------------------------
+        if (now >= next_temp_us) {
+            next_temp_us += 1000000; // 1s
+            if (read_sensor(HIL_REG_TEMP, &temp, sizeof(temp))) {
+                // HIL sends raw LSB (C * 128), which is what rocket_data expects
+                rocket_data_update_temp_stack(temp.temp_c); 
+            }
+        }
+
+        // ------------------------------------------
+        // LOGGING (1 Hz) - Scaled via RocketData Getters
+        // ------------------------------------------
+        if (to_ms_since_boot(get_absolute_time()) - last_log_ms > 1000) {
+            ESP_LOGI(TAG, "--- HIL DEBUG (RocketData Getters) ---");
+            ESP_LOGI(TAG, "IMU  | Accel: [%.2f, %.2f, %.2f] m/s^2 | Gyro: [%.3f, %.3f, %.3f] rad/s",
+                     rocket_data_get_accel_x_si(), rocket_data_get_accel_y_si(), rocket_data_get_accel_z_si(),
+                     rocket_data_get_gyro_x_si(), rocket_data_get_gyro_y_si(), rocket_data_get_gyro_z_si());
+            
+            ESP_LOGI(TAG, "BARO | Pres: %.0f Pa | Temp: %.2f C", 
+                     rocket_data_get_baro_press_si(), rocket_data_get_baro_temp_si());
+
+            ESP_LOGI(TAG, "GPS  | Pos: [%.6f, %.6f] | Alt: %.2f m | Vel: [%.1f, %.1f, %.1f] m/s",
+                     rocket_data_get_gps_lat_si(), rocket_data_get_gps_lon_si(), rocket_data_get_gps_alt_si(),
+                     rocket_data_get_gps_vel_n_si(), rocket_data_get_gps_vel_e_si(), rocket_data_get_gps_vel_d_si());
+
+            ESP_LOGI(TAG, "MAG  | [%.2f, %.2f, %.2f] uT | STACK: %.2f C",
+                     rocket_data_get_mag_x_si(), rocket_data_get_mag_y_si(), rocket_data_get_mag_z_si(),
+                     rocket_data_get_temp_stack_si());
+
+            valid_imu_count = 0;
+            last_log_ms = to_ms_since_boot(get_absolute_time());
         }
     }
 }
 #else
-// Mock task for non-Pico builds
+// Mock for non-Pico
 static void vHILSensorTask(void *pvParameters) {
     (void)pvParameters;
     while(1) vTaskDelay(1000);
@@ -168,6 +226,5 @@ static void vHILSensorTask(void *pvParameters) {
 #endif
 
 void hil_sensor_task_init(void) {
-    // Increased stack size to 4096 to be safe with logging/I2C
     xTaskCreate(vHILSensorTask, "HIL_Sensor", 4096, NULL, PRIORITY_HIL_SENSORS, NULL);
 }

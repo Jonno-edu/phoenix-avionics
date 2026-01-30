@@ -27,8 +27,8 @@ static void vIdentificationPollingTask(void *pvParameters) {
             uint8_t target_addr = device_addresses[i];
 
             // Send Status/Identification Request to Device
-            ESP_LOGI(TAG, "[OBC -> 0x%02X] Polling Identification...", target_addr);
-            ESP_LOGD(TAG, "Raw bytes: [00 %02X %02X %02X]", target_addr, ADDR_OBC, (ID_TLM_IDENTIFICATION << 3) | MSG_TYPE_TLM_REQ);
+            // ESP_LOGI(TAG, "[OBC -> 0x%02X] Polling Identification...", target_addr);
+            // ESP_LOGD(TAG, "Raw bytes: [00 %02X %02X %02X]", target_addr, ADDR_OBC, (ID_TLM_IDENTIFICATION << 3) | MSG_TYPE_TLM_REQ);
             
             rs485_send_packet(target_addr, MSG_TYPE_TLM_REQ, ID_TLM_IDENTIFICATION, NULL, 0);
             
