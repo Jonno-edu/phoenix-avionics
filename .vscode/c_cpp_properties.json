@@ -4,7 +4,7 @@
             "name": "Pico",
             "configurationProvider": "ms-vscode.cmake-tools",
             "compilerPath": "/usr/bin/arm-none-eabi-gcc",
-            "intelliSenseMode": "linux-gcc-arm",
+            "intelliSenseMode": "${default}",
             "includePath": [
                 "${workspaceFolder}/**",
                 "${workspaceFolder}/lib/FreeRTOS-Kernel/include",

@@ -2,124 +2,215 @@
 #include "rs485_protocol.h"
 #include "core/obc_data.h"
 #include "core/rocket_data.h"
+#include "core/eps_data.h"
 #include "core/logging.h"
 #include <stdint.h>
 #include <string.h>
 
 static const char *TAG = "TCTLM";
 
+// ============================================================================
+// EVENT HANDLER
+// ============================================================================
+
 void TCTLM_processEvent(RS485_packet_t *pkt) {
     ESP_LOGI(TAG, "Event received from %02X", pkt->src_addr);
 }
+
+// ============================================================================
+// TELECOMMAND HANDLER (commands received by OBC)
+// ============================================================================
 
 void TCTLM_processTelecommand(RS485_packet_t *pkt) {
     uint8_t id = pkt->msg_desc.id;
     // ESP_LOGI(TAG, "Telecommand %d received from %02X", id, pkt->src_addr);
 
-    // Echo back an ACK
+    // Send ACK for the received command
     rs485_send_packet(pkt->src_addr, MSG_TYPE_TC_ACK, id, NULL, 0);
 
     switch (id) {
-        case ID_CMD_RESET:
-            ESP_LOGE(TAG, "RESET COMMAND RECEIVED! Rebooting...");
-            // In a real app, you'd trigger a reboot here.
-            break;
-        case ID_CMD_SET_SIM_STATE:
-            if (pkt->length >= 1) {
-                bool enable = (pkt->data[0] == 1);
-                system_config_set_sim_mode(enable);
-                ESP_LOGI(TAG, "CMD: Set Sim Mode = %d", enable);
+        case TC_ID_RESET: 
+            if (pkt->length >= 1 && pkt->data[0] == 0x85) {
+                ESP_LOGE(TAG, "RESET COMMAND RECEIVED! Rebooting...");
+                // TODO: Trigger actual reset
+            } else {
+                ESP_LOGW(TAG, "Reset command with invalid confirmation byte");
             }
             break;
-        case ID_CMD_SET_LOG_LEVEL:
-            if (pkt->length >= 1) {
-                system_config_set_log_level(pkt->data[0]);
-                ESP_LOGI(TAG, "CMD: Set Log Level = %d", pkt->data[0]);
-            }
-            break;
-        case ID_CMD_SET_TELEM_RATE:
-            if (pkt->length >= 1) {
-                system_config_set_telem_rate(pkt->data[0]);
-                ESP_LOGI(TAG, "CMD: Set Telem Rate = %d Hz", pkt->data[0]);
-            }
-            break;
+
+        // Shouldn't get a telecommand from any other device to the OBC?      
+
         default:
             ESP_LOGW(TAG, "Unknown TC ID: %d", id);
             break;
     }
 }
 
+// ============================================================================
+// TELECOMMAND ACK HANDLER (ACKs for command OBC sent)
+// ============================================================================
+
 void TCTLM_processTelecommandAck(RS485_packet_t *pkt) {
     // ESP_LOGI(TAG, "TC ACK received from %02X for ID %d", pkt->src_addr, pkt->msg_desc.id);
+
+    uint8_t id = pkt->msg_desc.id;
+    
+    switch (id) {
+        case TC_ID_EPS_POWER:
+            ESP_LOGI(TAG, "EPS Power command acknowledged by 0x%02X", pkt->src_addr);
+            break;
+
+        case TC_ID_RESET:
+            ESP_LOGI(TAG, "Reset command acknowledged by 0x%02X", pkt->src_addr);
+            break;
+
+        default:
+            ESP_LOGD(TAG, "TC ACK received: ID=%d from 0x%02X", id, pkt->src_addr);
+            break;
+    }
 }
+
+// ============================================================================
+// TELEMETRY REQUEST HANDLER (when someone requests data from OBC)
+// ============================================================================
 
 void TCTLM_processTelemetryRequest(RS485_packet_t *pkt) {
     uint8_t id = pkt->msg_desc.id;
     // ESP_LOGI(TAG, "Telemetry Request %d from %02X", id, pkt->src_addr);
 
     switch (id) {
-        case ID_TLM_IDENTIFICATION: {
+        case TLM_ID_IDENTIFICATION: {
             SystemData_t sys_data;
             uint8_t buffer[sizeof(SystemData_t)];
             getSystemIdentInfo(&sys_data);
             system_data_pack(&sys_data, buffer);
             rs485_send_packet(pkt->src_addr, MSG_TYPE_TLM_RESP, id, buffer, sizeof(SystemData_t));
+            ESP_LOGD(TAG, "Sent edentification to 0x%02X", pkt->src_addr);
             break;
         }
+
         default:
-            // ESP_LOGW(TAG, "Unknown TLM Req ID: %d", id);
+            // ESP_LOGW(TAG, "Unknown TLM Req ID: %d from 0x%02X", id, pkt->src_addr);
             break;
     }
 }
+
+// ============================================================================
+// TELEMETRY RESPONSE HANDLER (responses to OBC's requests)
+// ============================================================================
 
 void TCTLM_processTelemetryResponse(RS485_packet_t *pkt) {
     uint8_t id = pkt->msg_desc.id;
-    // ESP_LOGI(TAG, "Telemetry Response %d from %02X", id, pkt->src_addr);
+    ESP_LOGD(TAG, "TLM Response: ID=%d, Src=%02X, Len=%d", id, pkt->src_addr, pkt->length);
     
-    // Log full raw packet: [Len Dest Src Desc] [Payload...]
-    char raw_buf[256] = {0};
-    int offset = 0;
-    
-    // Header
-    offset += snprintf(raw_buf + offset, sizeof(raw_buf) - offset, "%02X %02X %02X %02X ",
-                       pkt->length, pkt->dest_addr, pkt->src_addr, pkt->msg_desc.raw);
-                       
-    // Payload
-    for(int i=0; i<pkt->length && offset < (sizeof(raw_buf) - 4); i++) {
-        offset += snprintf(raw_buf + offset, sizeof(raw_buf) - offset, "%02X ", pkt->data[i]);
-    }
-    // ESP_LOGI(TAG, "RX Raw: [%s]", raw_buf);
+    switch (id) {
+        case TLM_ID_IDENTIFICATION:
+            if (pkt->length >= sizeof(TlmIdentificationPayload_t)) {
+                TlmIdentificationPayload_t tlm;
+                memcpy(&tlm, pkt->data, sizeof(TlmIdentificationPayload_t));
+                
+                ESP_LOGI(TAG, "Node 0x%02X: Type=%d, Ver=%d): FW=%d.%d, Uptime=%us", 
+                         pkt->src_addr, tlm.node_type, tlm.interface_version,
+                         tlm.firmware_major, tlm.firmware_minor, 
+                         tlm.uptime_seconds);
 
-    if (id == ID_TLM_IDENTIFICATION) {
-        if (pkt->src_addr == 0x03) {
-            ESP_LOGI(TAG, "!!! RECEIVED IDENTIFICATION FROM TARGET 0x03 !!!");
-        }
-        // Accept 8 bytes (legacy/EPS) or more (upto full struct size)
-        if (pkt->length >= 8 && pkt->length <= sizeof(TlmIdentificationPayload_t)) {
-            TlmIdentificationPayload_t tlm = {0};
-            // Safely copy available data
-            memcpy(&tlm, pkt->data, pkt->length);
-            
-            // ESP_LOGI(TAG, "Node %02X (Type %d, Ver %d): fw %d.%d, uptime %us.%03u", 
-            //          pkt->src_addr, tlm.node_type, tlm.interface_version,
-            //          tlm.firmware_major, tlm.firmware_minor, 
-            //          tlm.uptime_seconds, tlm.uptime_milliseconds);
-            
-            if (pkt->length >= 9) {
-                ESP_LOGI(TAG, "Flags 0x%02X", tlm.status_flags);
-                if (tlm.status_flags & 0x01) { // STATUS_FLAG_CMD_PENDING
+                if (tlm.status_flags & 0x01)
                     ESP_LOGI(TAG, "Node %02X indicates CMD_PENDING", pkt->src_addr);
-                }
+            } else {
+                ESP_LOGW(TAG, "Identification response too short: %d bytes", pkt->length);
             }
-        } else {
-             // ESP_LOGW(TAG, "ID_TLM_IDENTIFICATION: Unexpected length %d", pkt->length);
+            break;
+        
+        case TLM_ID_EPS_POWER:
+            if (pkt->src_addr != ADDR_EPS) {
+                ESP_LOGW(TAG, "EPS Power response from unexpected source: 0x%02X", pkt->src_addr);
+                break;
+            }
+
+            if (pkt->length >= sizeof(EpsPowerStatus_t)) {
+                EpsPowerStatus_t power_status;
+                memcpy(&power_status, pkt->data, sizeof(EpsPowerStatus_t));
+
+                eps_data_store_power_status(&power_status);
+            } else {
+                ESP_LOGW(TAG, "EPS Power response too short: %d bytes (expected %d)", pkt->length, sizeof(EpsPowerStatus_t));
+            }
+            break;
+
+        case TLM_ID_EPS_MEASURE: 
+            if (pkt->src_addr != ADDR_EPS) {
+                ESP_LOGW(TAG, "EPS Measurements response from unexpected source: 0x%02X", pkt->src_addr);
+                break;
+            }
+
+            if (pkt->length >= sizeof(EpsMeasurements_t)) {
+                EpsMeasurements_t measurements;
+                memcpy(&measurements, pkt->data, sizeof(EpsMeasurements_t));
+
+                eps_data_store_measurements(&measurements);
+            } else {
+                ESP_LOGW(TAG, "EPS Measurements response too short: %d bytes (expected %d)", pkt->length, sizeof(EpsMeasurements_t));
+            }
+            break;
+
+        default:
+            ESP_LOGD(TAG, "Unknown TLM Response ID: %d from 0x%02X", id, pkt->src_addr);
+            break;
+
         }
-    }
+
+    // // Log full raw packet: [Len Dest Src Desc] [Payload...]
+    // char raw_buf[256] = {0};
+    // int offset = 0;
+    
+    // // Header
+    // offset += snprintf(raw_buf + offset, sizeof(raw_buf) - offset, "%02X %02X %02X %02X ",
+    //                    pkt->length, pkt->dest_addr, pkt->src_addr, pkt->msg_desc.raw);
+                       
+    // // Payload
+    // for(int i=0; i<pkt->length && offset < (sizeof(raw_buf) - 4); i++) {
+    //     offset += snprintf(raw_buf + offset, sizeof(raw_buf) - offset, "%02X ", pkt->data[i]);
+    // }
+    // // ESP_LOGI(TAG, "RX Raw: [%s]", raw_buf);
+
+    // if (id == ID_TLM_IDENTIFICATION) {
+    //     if (pkt->src_addr == 0x03) {
+    //         ESP_LOGI(TAG, "!!! RECEIVED IDENTIFICATION FROM TARGET 0x03 !!!");
+    //     }
+    //     // Accept 8 bytes (legacy/EPS) or more (upto full struct size)
+    //     if (pkt->length >= 8 && pkt->length <= sizeof(TlmIdentificationPayload_t)) {
+    //         TlmIdentificationPayload_t tlm = {0};
+    //         // Safely copy available data
+    //         memcpy(&tlm, pkt->data, pkt->length);
+            
+    //         // ESP_LOGI(TAG, "Node %02X (Type %d, Ver %d): fw %d.%d, uptime %us.%03u", 
+    //         //          pkt->src_addr, tlm.node_type, tlm.interface_version,
+    //         //          tlm.firmware_major, tlm.firmware_minor, 
+    //         //          tlm.uptime_seconds, tlm.uptime_milliseconds);
+            
+    //         if (pkt->length >= 9) {
+    //             ESP_LOGI(TAG, "Flags 0x%02X", tlm.status_flags);
+    //             if (tlm.status_flags & 0x01) { // STATUS_FLAG_CMD_PENDING
+    //                 ESP_LOGI(TAG, "Node %02X indicates CMD_PENDING", pkt->src_addr);
+    //             }
+    //         }
+    //     } else {
+    //          // ESP_LOGW(TAG, "ID_TLM_IDENTIFICATION: Unexpected length %d", pkt->length);
+    //     }
+    // }
 }
+
+// ============================================================================
+// BULK TRANSFER HANDLER
+// ============================================================================
 
 void TCTLM_processBulkTransfer(RS485_packet_t *pkt) {
     ESP_LOGI(TAG, "Bulk transfer from %02X", pkt->src_addr);
 }
+
+// ============================================================================
+// UNKNOWN MESSAGE HANDLER 
+// ============================================================================
 
 void TCTLM_processUnknownMessage(RS485_packet_t *pkt) {
     ESP_LOGW(TAG, "Unknown message type %d from %02X", pkt->msg_desc.type, pkt->src_addr);

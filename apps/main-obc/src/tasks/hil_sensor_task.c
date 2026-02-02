@@ -22,6 +22,8 @@
 #define HIL_PIN_SCL        7
 #define HIL_I2C_OE_PIN     46 
 
+#define ENABLE_HIL_SENSORS      0
+
 // FORCE CORRECT ADDRESS HERE IF HEADER IS WRONG
 #undef HIL_SLAVE_ADDR
 #define HIL_SLAVE_ADDR     0x55 
@@ -225,6 +227,16 @@ static void vHILSensorTask(void *pvParameters) {
 }
 #endif
 
+#if ENABLE_HIL_SENSORS
+
 void hil_sensor_task_init(void) {
     xTaskCreate(vHILSensorTask, "HIL_Sensor", 4096, NULL, PRIORITY_HIL_SENSORS, NULL);
 }
+
+#else
+
+void hil_sensor_task_init(void) {
+    ESP_LOGW(TAG, "HIL Sensor Task Disabled at Compile Time.");
+}
+
+#endif

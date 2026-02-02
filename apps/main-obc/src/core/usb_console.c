@@ -1,5 +1,6 @@
 // usb_console.c
 #include "core/usb_console.h"
+#include "core/debug_cli.h"
 #include <stdio.h>
 #include "FreeRTOS.h"
 #include "task.h"
@@ -33,7 +34,11 @@ static void on_usb_rx(void *param) {
     
     int ch;
     while ((ch = getchar_timeout_us(0)) != PICO_ERROR_TIMEOUT) {
-        console_buffer_push((uint8_t)ch);
+        if (debug_cli_is_enabled()) {
+            debug_cli_process_char((uint8_t)ch);
+        } else {
+            console_buffer_push((uint8_t)ch);
+        }
     }
 }
 #endif
@@ -163,7 +168,11 @@ void vConsoleRxTask(void *pvParameters) {
             // Push all received bytes into circular buffer
             // This simulates the UART interrupt pushing data
             for (ssize_t i = 0; i < n; i++) {
-                console_buffer_push(buffer[i]);
+                if (debug_cli_is_enabled()) {
+                    debug_cli_process_char(buffer[i]);
+                } else {
+                    console_buffer_push(buffer[i]);
+                }
             }
             
             // Optional: debug output

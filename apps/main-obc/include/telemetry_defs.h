@@ -10,28 +10,34 @@
 #define PACKED_STRUCT
 #endif
 
-// Addressing
+// ============================================================================
+// DEVICE ADDRESSES
+// ============================================================================
 #define ADDR_OBC             0x01
 #define ADDR_EPS             0x02
 #define ADDR_TRACKING_RADIO  0x03 
 #define ADDR_GSE             0xF0
 
-// --- Telecommand IDs ---
-#define ID_CMD_RESET           0b00001 // 1
-#define ID_CMD_SLEEP           0b00010 // 2
-#define ID_CMD_TRACKING_BEACON 0b00011 // 3
-#define ID_CMD_WAKE            0b00100 // 4
-#define ID_CMD_SET_TELEM_RATE  0b00101 // 5
-#define ID_CMD_SET_LOG_LEVEL   0b00110 // 6
 
-#define ID_CMD_SET_SIM_STATE   0b01000 // 8
-#define ID_CMD_GET_PENDING_MSG 0b10000 // 16
+// ============================================================================
+// TELECOMMAND IDs
+// ============================================================================
+#define TC_ID_RESET             0
+#define TC_ID_EPS_POWER         1
+#define TC_ID_AVIONICS_MODE     2
+#define TC_ID_UPDATE_TRIGGER    3
 
-// MSG_TYPE_TLM_RESP IDs
-#define ID_TLM_IDENTIFICATION   1
-#define ID_TLM_EPS_POWER_STATUS 5
-#define ID_TLM_EPS_MEASUREMENTS 6
+// ============================================================================
+// TELEMETRY IDs
+// ============================================================================
+#define TLM_ID_IDENTIFICATION   0
+#define TLM_ID_EPS_POWER        1
+#define TLM_ID_EPS_MEASURE      2
 
+//Definitions copied from example in comms library
+// #define ID_TLM_IDENTIFICATION   1
+// #define ID_TLM_EPS_POWER_STATUS 5
+// #define ID_TLM_EPS_MEASUREMENTS 6
 #define ID_TLM_SENSOR_DATA      2
 #define ID_TLM_TRACKING_BEACON  3
 #define ID_TLM_STATUS           4

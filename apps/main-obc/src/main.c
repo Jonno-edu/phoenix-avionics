@@ -5,10 +5,12 @@
 #include <FreeRTOS.h>
 #include <task.h>
 #include "core/usb_console.h"
+#include "core/debug_cli.h"
 #include "rs485_protocol.h"
 #include "hal/rs485_hal.h"
 #include "core/obc_data.h"
 #include "core/rocket_data.h"
+#include "core/eps_data.h"
 #include "bsp/bsp_init.h"
 #include "tasks/task_manager.h"
 #include "hal/platform_hal.h"
@@ -23,8 +25,13 @@ int main() {
     bsp_hardware_init();
     
     console_init();
+
+    sleep_ms(2000); // Wait for console to stabilize
+
+    debug_cli_init();
     system_data_init();
     rocket_data_init();
+    eps_data_init();
     // Pre-load with test values so we can see data immediately
     // rocket_data_fill_test_values();
     system_config_init();

@@ -9,5 +9,17 @@
         "symbolSearchPath": ""
     },
     "cmake.launchBehavior": "reuseTerminal",
-    "cmake.buildTask": true
+    "cmake.buildTask": true, 
+    
+    "files.watcherExclude": {
+        "**/node_modules/**": true,
+        "**/.git/**": true,
+        "**/vendor/**": true,
+        "**/dist/**": true,
+        "**/build/**": true
+     },
+    "search.exclude": {
+        "**/node_modules": true,
+        "**/vendor": true
+    }
 }

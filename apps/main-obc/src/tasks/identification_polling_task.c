@@ -2,6 +2,7 @@
 #include "task_manager.h"
 #include "rs485_protocol.h"
 #include "telemetry_defs.h"
+#include "core/eps_data.h"
 #include "core/obc_data.h"
 #include <FreeRTOS.h>
 #include <task.h>
@@ -23,19 +24,25 @@ static void vIdentificationPollingTask(void *pvParameters) {
     const size_t num_devices = sizeof(device_addresses) / sizeof(device_addresses[0]);
     
     while (true) {
-        for (size_t i = 0; i < num_devices; i++) {
-            uint8_t target_addr = device_addresses[i];
+        // for (size_t i = 0; i < num_devices; i++) {
+        //     uint8_t target_addr = device_addresses[i];
 
-            // Send Status/Identification Request to Device
-            // ESP_LOGI(TAG, "[OBC -> 0x%02X] Polling Identification...", target_addr);
-            // ESP_LOGD(TAG, "Raw bytes: [00 %02X %02X %02X]", target_addr, ADDR_OBC, (ID_TLM_IDENTIFICATION << 3) | MSG_TYPE_TLM_REQ);
+        //     // Send Status/Identification Request to Device
+        //     // ESP_LOGI(TAG, "[OBC -> 0x%02X] Polling Identification...", target_addr);
+        //     // ESP_LOGD(TAG, "Raw bytes: [00 %02X %02X %02X]", target_addr, ADDR_OBC, (ID_TLM_IDENTIFICATION << 3) | MSG_TYPE_TLM_REQ);
             
-            rs485_send_packet(target_addr, MSG_TYPE_TLM_REQ, ID_TLM_IDENTIFICATION, NULL, 0);
+        //     rs485_send_packet(target_addr, MSG_TYPE_TLM_REQ, TLM_ID_IDENTIFICATION, NULL, 0);
             
-            // Add delay between polling each device to avoid bus collisions
-            // This gives the slave time to process and reply before we talk again
-            vTaskDelay(pdMS_TO_TICKS(50));
-        }
+        //     // Add delay between polling each device to avoid bus collisions
+        //     // This gives the slave time to process and reply before we talk again
+        //     vTaskDelay(pdMS_TO_TICKS(50));
+        // }
+
+        eps_request_power_status();
+        vTaskDelay(pdMS_TO_TICKS(1000));
+
+        eps_request_measurements();
+        vTaskDelay(pdMS_TO_TICKS(1000));
         
         // Use dynamic telemetry rate
         uint8_t rate = system_config_get_telem_rate();
