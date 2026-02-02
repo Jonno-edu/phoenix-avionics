@@ -56,7 +56,7 @@ static inline const char* log_get_task_name(void) {
 
 // Raw hex dump helper
 static inline void ESP_LOG_BUFFER_HEX(const char *tag, const void *buffer, uint16_t buff_len) {
-    if (system_config_get_log_level() < 3) return;
+    if (system_config_get_log_level() < 2) return;
     if (buff_len == 0) return;
     const uint8_t *ptr = (const uint8_t *)buffer;
     for (uint16_t i = 0; i < buff_len; i++) {

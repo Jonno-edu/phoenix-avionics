@@ -51,8 +51,8 @@ static void vSensorsTask(void *pvParameters) {
         double temperature = 0.0;
         if (TEMP_TMP117_readTempC(&temperature)) {
              ESP_LOGD(TAG, "Temperature: %.2f deg C", temperature);
-            // Update rocket data (Temp is stored as C * 128)
-            rocket_data_update_temp_stack((int16_t)(temperature * 128.0));
+            // Update rocket data (SI Units: C)
+            rocket_data_update_temp_stack((float)temperature);
         } else {
             ESP_LOGW(TAG, "Failed to read temperature from TMP117.");
         }
@@ -64,7 +64,7 @@ static void vSensorsTask(void *pvParameters) {
         vTaskDelay(pdMS_TO_TICKS(10));
 #else
         // Simulate sensor data
-        rocket_data_update_temp_stack((int16_t)(25.5 * 128.0));
+        rocket_data_update_temp_stack(25.5f);
 #endif
         // Poll sensors at 10Hz? Or 1Hz? The temp task was 1Hz. 
         // 10Hz is probably better for a general "sensors" task if we add IMU later, but for now temp is slow.
@@ -88,3 +88,41 @@ void sensors_task_init(void) {
         NULL
     );
 }
+
+
+
+/*
+
+HIGH PERFORMANCE SENSOR TASK
+
+// sensor_task.c
+
+void SensorTask(void *pvParameters) {
+    // ... setup code ...
+    uint32_t loop_counter = 0;
+
+    for (;;) {
+        // 1. Wait for 1kHz Timer
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
+        // 2. Read IMU (SPI - Blocking - Fast!)
+        // Takes ~12us. Safe to do in high priority task.
+        bsp_spi_read_imu(&ax, &ay, &az, &gx, &gy, &gz);
+        rocket_data_update_accel(ax, ay, az);
+        rocket_data_update_gyro(gx, gy, gz);
+
+        // 3. Read Barometer (I2C - Blocking)
+        // Run this only every 20th loop (50Hz)
+        if (loop_counter % 20 == 0) {
+            // Takes ~300us. Still safe, just slightly longer.
+            bsp_i2c_read_baro(&press, &temp);
+            rocket_data_update_baro(press, temp);
+        }
+
+        loop_counter++;
+    }
+}
+
+
+
+*/

@@ -22,7 +22,7 @@
 #define HIL_PIN_SCL        7
 #define HIL_I2C_OE_PIN     46 
 
-#define ENABLE_HIL_SENSORS      0
+#define ENABLE_HIL_SENSORS      1
 
 // FORCE CORRECT ADDRESS HERE IF HEADER IS WRONG
 #undef HIL_SLAVE_ADDR
@@ -139,8 +139,16 @@ static void vHILSensorTask(void *pvParameters) {
             next_imu_us += 1000;
             if (read_sensor(HIL_REG_IMU, &imu, sizeof(imu))) {
                 // Pass raw LSBs to rocket_data. Getters handle SI units.
-                rocket_data_update_accel(imu.accel[0], imu.accel[1], imu.accel[2]);
-                rocket_data_update_gyro(imu.gyro[0], imu.gyro[1], imu.gyro[2]);
+                rocket_data_update_accel(
+                    imu.accel[0] * SENSOR_IMU_ACCEL_SENSITIVITY, 
+                    imu.accel[1] * SENSOR_IMU_ACCEL_SENSITIVITY, 
+                    imu.accel[2] * SENSOR_IMU_ACCEL_SENSITIVITY
+                );
+                rocket_data_update_gyro(
+                    imu.gyro[0] * SENSOR_IMU_GYRO_SENSITIVITY, 
+                    imu.gyro[1] * SENSOR_IMU_GYRO_SENSITIVITY, 
+                    imu.gyro[2] * SENSOR_IMU_GYRO_SENSITIVITY
+                );
                 valid_imu_count++;
             }
         }
@@ -153,7 +161,10 @@ static void vHILSensorTask(void *pvParameters) {
             if (read_sensor(HIL_REG_BARO1, &baro, sizeof(baro))) {
                 // Baro pressure is sent as raw units from HIL.
                 // Convert to SI (Pa) using the sensitivity factor.
-                rocket_data_update_baro(baro.pressure_pa * SENSOR_BMP581_SENSITIVITY, baro.temp_c);
+                rocket_data_update_baro(
+                    baro.pressure_pa * SENSOR_BMP581_SENSITIVITY, 
+                    baro.temp_c * SENSOR_BMP581_TEMP_SENSITIVITY
+                );
             }
         }
 
@@ -165,8 +176,12 @@ static void vHILSensorTask(void *pvParameters) {
             if (read_sensor(HIL_REG_GPS, &gps, sizeof(gps))) {
                 // Struct uses 'int32_t' for vel_n/e/d
                 rocket_data_update_gps(
-                    gps.lat, gps.lon, gps.alt,
-                    gps.vel_n, gps.vel_e, gps.vel_d,
+                    gps.lat * (double)SENSOR_GPS_LAT_LON_SENSITIVITY,
+                    gps.lon * (double)SENSOR_GPS_LAT_LON_SENSITIVITY,
+                    gps.alt * SENSOR_GPS_ALTITUDE_SENSITIVITY,
+                    gps.vel_n * SENSOR_GPS_VELOCITY_SENSITIVITY,
+                    gps.vel_e * SENSOR_GPS_VELOCITY_SENSITIVITY,
+                    gps.vel_d * SENSOR_GPS_VELOCITY_SENSITIVITY,
                     0, 0 // iTOW/Week not in packet
                 );
             }
@@ -179,7 +194,11 @@ static void vHILSensorTask(void *pvParameters) {
             next_mag_us += 10000; // 10ms
             if (read_sensor(HIL_REG_MAG, &mag, sizeof(mag))) {
                 // Struct uses array mag[3]
-                rocket_data_update_mag(mag.mag[0], mag.mag[1], mag.mag[2]);
+                rocket_data_update_mag(
+                    mag.mag[0] * SENSOR_MAG_SENSITIVITY, 
+                    mag.mag[1] * SENSOR_MAG_SENSITIVITY, 
+                    mag.mag[2] * SENSOR_MAG_SENSITIVITY
+                );
             }
         }
 
@@ -190,7 +209,7 @@ static void vHILSensorTask(void *pvParameters) {
             next_temp_us += 1000000; // 1s
             if (read_sensor(HIL_REG_TEMP, &temp, sizeof(temp))) {
                 // HIL sends raw LSB (C * 128), which is what rocket_data expects
-                rocket_data_update_temp_stack(temp.temp_c); 
+                rocket_data_update_temp_stack(temp.temp_c * SENSOR_TEMP_SENSITIVITY); 
             }
         }
 

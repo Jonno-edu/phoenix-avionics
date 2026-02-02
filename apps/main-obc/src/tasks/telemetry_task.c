@@ -12,7 +12,7 @@ static const char *TAG = "TELEMETRY";
 
 static void vTelemetryTask(void *pvParameters) {
     (void)pvParameters;
-    TlmTrackingBeaconPayload_t beacon;
+    TrackingBeacon_t tx_beacon;
     
     // Initialize wake time for precise periodic execution
     TickType_t xLastWakeTime = xTaskGetTickCount();
@@ -22,28 +22,27 @@ static void vTelemetryTask(void *pvParameters) {
         // Wait for the next cycle
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
 
-        // 1. Get latest atomic snapshot of the tracking data
-        getRocketTrackingInfo(&beacon);
+        // 1. Get snapshot of the latest tracking data (Already formatted for telemetry)
+        getRocketTrackingInfo(&tx_beacon);
         
-        // 3. Broadcast packet via RS485
-        //Addressed to BROADCAST (0xFF) so both GSE and Tracking Radio receive it.
-
-        ESP_LOGI(TAG, "Broadcasting Tracking Beacon (%zu bytes)", sizeof(TlmTrackingBeaconPayload_t));
-        ESP_LOG_BUFFER_HEX(TAG, &beacon, sizeof(TlmTrackingBeaconPayload_t));
+        // 2. Broadcast packet via RS485
+        // Addressed to 0x03
+        ESP_LOGI(TAG, "Sending Tracking Beacon (%zu bytes) to 0x03", sizeof(TrackingBeacon_t));
+        ESP_LOG_BUFFER_HEX(TAG, &tx_beacon, sizeof(TrackingBeacon_t));
 
         // Detailed field logging (Debug level)
         ESP_LOGD(TAG, "  Runtime: %u.%03u s | State: %u", 
-                beacon.runtime_seconds, beacon.runtime_milliseconds, beacon.avionics_state);
-        ESP_LOGD(TAG, "  Est Pos: Lat=%.7f, Lon=%.7f, Alt=%d mm", 
-                beacon.est_lat/1e7, beacon.est_lon/1e7, beacon.est_alt);
-        ESP_LOGD(TAG, "  Stack Temp: %.2f C", beacon.temp_stack / 128.0f);
+                tx_beacon.runtime_sec, tx_beacon.runtime_ms, tx_beacon.avionics_state);
+        ESP_LOGD(TAG, "  Est Pos: Lat=%.7f, Lon=%.7f, Alt=%d m", 
+                tx_beacon.est_lat/1e7, tx_beacon.est_lon/1e7, tx_beacon.est_alt);
+        ESP_LOGD(TAG, "  Stack Temp: %.2f C", tx_beacon.temp_stack / 128.0f);
 
         rs485_send_packet(
-            RS485_ADDR_BROADCAST,
+            0x03,
             MSG_TYPE_TLM_RESP,
             ID_TLM_TRACKING_BEACON,
-            (uint8_t*)&beacon,
-            sizeof(TlmTrackingBeaconPayload_t)
+            (uint8_t*)&tx_beacon,
+            sizeof(TrackingBeacon_t)
         );
 
         // Send status request to Tracking Radio

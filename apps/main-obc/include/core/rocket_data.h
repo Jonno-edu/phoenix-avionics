@@ -2,43 +2,7 @@
 #define ROCKET_DATA_H
 
 #include "telemetry_defs.h" // From esl-comms library
-
-// ID: ID_TLM_TRACKING_BEACON
-typedef struct {
-    uint16_t runtime_seconds;
-    uint16_t runtime_milliseconds;
-    uint8_t  avionics_state;
-    uint8_t  apogee_counter;
-    uint16_t battery_current;
-    int32_t  est_lat;
-    int32_t  est_lon;
-    int32_t  est_alt;
-    int16_t  est_vel_n;
-    int16_t  est_vel_e;
-    int16_t  est_vel_d;
-    uint32_t baro_pressure;
-    int32_t  baro_temp;
-    int16_t  temp_stack;
-    int16_t  accel_x;
-    int16_t  accel_y;
-    int16_t  accel_z;
-    int16_t  gyro_x;
-    int16_t  gyro_y;
-    int16_t  gyro_z;
-    int16_t  mag_x;
-    int16_t  mag_y;
-    int16_t  mag_z;
-    int32_t  gps_lat;
-    int32_t  gps_lon;
-    int32_t  gps_alt;
-    int32_t  gps_vel_n;
-    int32_t  gps_vel_e;
-    int32_t  gps_vel_d;
-    uint32_t gps_itow;
-    uint16_t gps_week;
-    uint8_t  time_valid_flags;
-    uint8_t  apogee_votes;
-} PACKED_STRUCT TlmTrackingBeaconPayload_t;
+#include "telemetry.h"      // For TrackingBeacon_t
 
 /**
  * @brief Initialize the rocket data store (clear all fields)
@@ -57,57 +21,58 @@ void rocket_data_fill_test_values(void);
 /**
  * @brief Update GPS data
  * @param lat Latitude (deg * 1e7)
- * @param lon Longitude (deg * 1e7)
- * @param alt Altitude MSL (mm)
- * @param vel_n North velocity (m/s * 10)
- * @param vel_e East velocity (m/s * 10)
- * @param vel_d Down velocity (m/s * 10)
+ * @param lat_deg Latitude (Degrees)
+ * @param lon_deg Longitude (Degrees)
+ * @param alt_m Altitude (m)
+ * @param vel_n_ms North velocity (m/s)
+ * @param vel_e_ms East velocity (m/s)
+ * @param vel_d_ms Down velocity (m/s)
  * @param itow GPS time-of-week (ms)
  * @param week GPS week number
  */
-void rocket_data_update_gps(int32_t lat, int32_t lon, int32_t alt, 
-                            int32_t vel_n, int32_t vel_e, int32_t vel_d,
+void rocket_data_update_gps(double lat_deg, double lon_deg, float alt_m, 
+                            float vel_n_ms, float vel_e_ms, float vel_d_ms,
                             uint32_t itow, uint16_t week);
 
 /**
- * @brief Update IMU accelerometer data (raw LSB)
+ * @brief Update IMU accelerometer data (SI: m/s^2)
  */
-void rocket_data_update_accel(int16_t x, int16_t y, int16_t z);
+void rocket_data_update_accel(float ax_ms2, float ay_ms2, float az_ms2);
 
 /**
- * @brief Update IMU gyroscope data (raw LSB)
+ * @brief Update IMU gyroscope data (SI: rad/s)
  */
-void rocket_data_update_gyro(int16_t x, int16_t y, int16_t z);
+void rocket_data_update_gyro(float gx_rads, float gy_rads, float gz_rads);
 
 /**
- * @brief Update magnetometer data (raw LSB)
+ * @brief Update magnetometer data (SI: uT)
  */
-void rocket_data_update_mag(int16_t x, int16_t y, int16_t z);
+void rocket_data_update_mag(float mx_ut, float my_ut, float mz_ut);
 
 /**
- * @brief Update estimated state (from Kalman filter, etc.)
- * @param lat Estimated latitude (deg * 1e7)
- * @param lon Estimated longitude (deg * 1e7)
- * @param alt Estimated altitude (mm)
- * @param vel_n Estimated North velocity (m/s * 10)
- * @param vel_e Estimated East velocity (m/s * 10)
- * @param vel_d Estimated Down velocity (m/s * 10)
+ * @brief Update estimated state (Data from Kalman Filter / NAV)
+ * @param lat_deg Estimated latitude (Degrees)
+ * @param lon_deg Estimated longitude (Degrees)
+ * @param alt_m Estimated altitude (m)
+ * @param vn_ms Estimated North velocity (m/s)
+ * @param ve_ms Estimated East velocity (m/s)
+ * @param vd_ms Estimated Down velocity (m/s)
  */
-void rocket_data_update_est_state(int32_t lat, int32_t lon, int32_t alt,
-                                  int16_t vel_n, int16_t vel_e, int16_t vel_d);
+void rocket_data_update_est_state(double lat_deg, double lon_deg, float alt_m,
+                                  float vn_ms, float ve_ms, float vd_ms);
 
 /**
  * @brief Update barometer data
  * @param pressure_pa Pressure (Pa)
- * @param temp_c_x100 Temperature (°C * 100)
+ * @param temp_c Temperature (C)
  */
-void rocket_data_update_baro(uint32_t pressure_pa, int32_t temp_c_x100);
+void rocket_data_update_baro(float pressure_pa, float temp_c);
 
 /**
  * @brief Update stack temperature sensor
- * @param temp_c_x128 Temperature (°C * 128)
+ * @param temp_c Temperature (C)
  */
-void rocket_data_update_temp_stack(int16_t temp_c_x128);
+void rocket_data_update_temp_stack(float temp_c);
 
 /**
  * @brief Update system runtime
@@ -118,7 +83,7 @@ void rocket_data_update_runtime(uint16_t seconds, uint16_t milliseconds);
  * @brief Update battery current
  * @param current_ma Current in milliamps
  */
-void rocket_data_update_battery(uint16_t current_ma);
+void rocket_data_update_battery(float current_ma);
 
 /**
  * @brief Update avionics state
@@ -146,7 +111,7 @@ void rocket_data_update_apogee_votes(uint8_t votes);
  * @brief Get a thread-safe copy of the complete tracking beacon
  * @param out_beacon Pointer to destination struct
  */
-void getRocketTrackingInfo(TlmTrackingBeaconPayload_t *out_beacon);
+void getRocketTrackingInfo(TrackingBeacon_t *out_beacon);
 
 // --- SI UNIT GETTERS ---
 
@@ -169,6 +134,14 @@ float  rocket_data_get_gps_alt_si(void);
 float  rocket_data_get_gps_vel_n_si(void);
 float  rocket_data_get_gps_vel_e_si(void);
 float  rocket_data_get_gps_vel_d_si(void);
+
+// Estimation (deg, m, m/s)
+double rocket_data_get_est_lat_si(void);
+double rocket_data_get_est_lon_si(void);
+float  rocket_data_get_est_alt_si(void);
+float  rocket_data_get_est_vel_n_si(void);
+float  rocket_data_get_est_vel_e_si(void);
+float  rocket_data_get_est_vel_d_si(void);
 
 // Magnetometer (uT)
 float rocket_data_get_mag_x_si(void);

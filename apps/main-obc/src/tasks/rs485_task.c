@@ -17,6 +17,10 @@ static const char *TAG = "RS485";
 
 // Callback to bridge protocol lib to HAL
 static void rs485_tx_bridge(const uint8_t *data, uint16_t length) {
+    // Log internal raw bytes for debugging
+    ESP_LOGD(TAG, "TX Raw (%u bytes):", length);
+    ESP_LOG_BUFFER_HEX(TAG, data, length);
+
 #if PICO_BUILD
     rs485_hal_send(data, length);
 #else
