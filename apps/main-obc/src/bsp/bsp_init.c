@@ -15,7 +15,7 @@ static const char *TAG = "BSP";
 
 void bsp_hardware_init(void) {
 #if PICO_BUILD
-    stdio_init_all();
+    // stdio_init_all();
     
     // Give USB a moment to stabilize
     sleep_ms(1000);

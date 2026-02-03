@@ -37,9 +37,10 @@ static SemaphoreHandle_t eps_mutex;
 
 void eps_data_init(void) {
     eps_mutex = xSemaphoreCreateMutex();
-
+    printf("eps_mutex\n");
     //Clear all stored data
     memset(&eps_store, 0, sizeof(EpsDataStore_t));
+    printf("eps_store\n");
     eps_store.power_status_valid = false;
     eps_store.measurements_valid = false;
 
