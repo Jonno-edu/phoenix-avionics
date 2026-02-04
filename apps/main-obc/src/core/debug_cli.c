@@ -4,6 +4,7 @@
 #include "core/obc_data.h"
 #include "rs485_protocol.h"
 #include "telemetry_defs.h"
+#include "core/rs485_monitor.h"
 #include <stdio.h>
 #include <stdbool.h>
 
@@ -217,22 +218,41 @@ bool debug_cli_process_char(uint8_t ch) {
             break;  
 
         // Log Level
+        // case '0':
+        //     printf("[CLI] Setting log level: None\n");
+        //     system_config_set_log_level(0);
+        //     break;
+        // case '1':
+        //     printf("[CLI] Setting log level: Error\n");
+        //     system_config_set_log_level(1);
+        //     break;
+        // case '2':
+        //     printf("[CLI] Setting log level: Info\n");
+        //     system_config_set_log_level(2);
+        //     break;
+        // case '3':
+        //     printf("[CLI] Setting log level: Debug\n");
+        //     system_config_set_log_level(3);
+        //     break;
+
+        //RS485 Monitor Control
         case '0':
-            printf("[CLI] Setting log level: None\n");
-            system_config_set_log_level(0);
+            printf("[CLI] Setting RS485 Monitor Mode: OFF\n");
+            rs485_monitor_set_mode(RS485_MON_OFF);
             break;
         case '1':
-            printf("[CLI] Setting log level: Error\n");
-            system_config_set_log_level(1);
+            printf("[CLI] Setting RS485 Monitor Mode: RAW\n");
+            rs485_monitor_set_mode(RS485_MON_RAW);
             break;
         case '2':
-            printf("[CLI] Setting log level: Info\n");
-            system_config_set_log_level(2);
+            printf("[CLI] Setting RS485 Monitor Mode: DECODED\n");
+            rs485_monitor_set_mode(RS485_MON_DECODED);
             break;
         case '3':
-            printf("[CLI] Setting log level: Debug\n");
-            system_config_set_log_level(3);
+            printf("[CLI] Setting RS485 Monitor Mode: VERBOSE\n");
+            rs485_monitor_set_mode(RS485_MON_VERBOSE);
             break;
+
 
         // CLI Control
         case 'h':

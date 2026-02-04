@@ -4,16 +4,50 @@
 #include "core/rocket_data.h"
 #include "core/eps_data.h"
 #include "core/logging.h"
+#include "core/rs485_monitor.h"
 #include <stdint.h>
 #include <string.h>
 
 static const char *TAG = "TCTLM";
 
 // ============================================================================
+// RS485 LOG HELPER FUNCTION
+// ============================================================================
+static void log_rx_packet_to_monitor(RS485_packet_t *pkt) {
+    if (!rs485_monitor_is_enabled()) return;
+    
+    // Reconstruct the raw packet for display
+    // Format: [ESC SOM] SIZE DEST SRC DESC [PAYLOAD] CRC16 [ESC EOM]
+    uint8_t display_buf[270];  // Max payload + framing
+    uint16_t idx = 0;
+    
+    display_buf[idx++] = 0x1F;  // ESC
+    display_buf[idx++] = 0x7F;  // SOM
+    display_buf[idx++] = pkt->length;
+    display_buf[idx++] = pkt->dest_addr;
+    display_buf[idx++] = pkt->src_addr;
+    display_buf[idx++] = pkt->msg_desc.raw;
+    
+    // Copy payload
+    for (uint8_t i = 0; i < pkt->length && i < 256; i++) {
+        display_buf[idx++] = pkt->data[i];
+    }
+    
+    // CRC (use actual CRC from packet)
+    display_buf[idx++] = (pkt->crc >> 8) & 0xFF;
+    display_buf[idx++] = pkt->crc & 0xFF;
+    display_buf[idx++] = 0x1F;  // ESC
+    display_buf[idx++] = 0xFF;  // EOM
+    
+    rs485_monitor_log_rx(display_buf, idx);
+}
+
+// ============================================================================
 // EVENT HANDLER
 // ============================================================================
 
 void TCTLM_processEvent(RS485_packet_t *pkt) {
+    log_rx_packet_to_monitor(pkt);
     ESP_LOGI(TAG, "Event received from %02X", pkt->src_addr);
 }
 
@@ -22,6 +56,7 @@ void TCTLM_processEvent(RS485_packet_t *pkt) {
 // ============================================================================
 
 void TCTLM_processTelecommand(RS485_packet_t *pkt) {
+    log_rx_packet_to_monitor(pkt);
     uint8_t id = pkt->msg_desc.id;
     // ESP_LOGI(TAG, "Telecommand %d received from %02X", id, pkt->src_addr);
 
@@ -51,6 +86,7 @@ void TCTLM_processTelecommand(RS485_packet_t *pkt) {
 // ============================================================================
 
 void TCTLM_processTelecommandAck(RS485_packet_t *pkt) {
+    log_rx_packet_to_monitor(pkt);
     // ESP_LOGI(TAG, "TC ACK received from %02X for ID %d", pkt->src_addr, pkt->msg_desc.id);
 
     uint8_t id = pkt->msg_desc.id;
@@ -75,6 +111,7 @@ void TCTLM_processTelecommandAck(RS485_packet_t *pkt) {
 // ============================================================================
 
 void TCTLM_processTelemetryRequest(RS485_packet_t *pkt) {
+    log_rx_packet_to_monitor(pkt);
     uint8_t id = pkt->msg_desc.id;
     // ESP_LOGI(TAG, "Telemetry Request %d from %02X", id, pkt->src_addr);
 
@@ -100,6 +137,7 @@ void TCTLM_processTelemetryRequest(RS485_packet_t *pkt) {
 // ============================================================================
 
 void TCTLM_processTelemetryResponse(RS485_packet_t *pkt) {
+    log_rx_packet_to_monitor(pkt);
     uint8_t id = pkt->msg_desc.id;
     ESP_LOGD(TAG, "TLM Response: ID=%d, Src=%02X, Len=%d", id, pkt->src_addr, pkt->length);
     
@@ -206,6 +244,7 @@ void TCTLM_processTelemetryResponse(RS485_packet_t *pkt) {
 // ============================================================================
 
 void TCTLM_processBulkTransfer(RS485_packet_t *pkt) {
+    log_rx_packet_to_monitor(pkt);
     ESP_LOGI(TAG, "Bulk transfer from %02X", pkt->src_addr);
 }
 
@@ -214,5 +253,7 @@ void TCTLM_processBulkTransfer(RS485_packet_t *pkt) {
 // ============================================================================
 
 void TCTLM_processUnknownMessage(RS485_packet_t *pkt) {
+    log_rx_packet_to_monitor(pkt);
     ESP_LOGW(TAG, "Unknown message type %d from %02X", pkt->msg_desc.type, pkt->src_addr);
 }
+

@@ -4,6 +4,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "core/logging.h"
+#include "core/rs485_monitor.h"
 
 static const char *TAG = "RS485_HAL";
 
@@ -55,6 +56,7 @@ static const char *TAG = "RS485_HAL";
     }
 
     void rs485_hal_send(const uint8_t *data, uint16_t len) {
+        rs485_monitor_log_tx(data, len);  // Log the transmitted packet
         // Step 1: Enable transmitter (set DE/RE HIGH)
         gpio_put(RS485_DE_RE_PIN, 1);
         

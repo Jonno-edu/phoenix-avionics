@@ -24,8 +24,8 @@
 // ============================================================================
 #define TC_ID_RESET             0
 #define TC_ID_EPS_POWER         1
-#define TC_ID_AVIONICS_MODE     2
-#define TC_ID_UPDATE_TRIGGER    3
+// #define TC_ID_AVIONICS_MODE     2
+// #define TC_ID_UPDATE_TRIGGER    3
 
 // ============================================================================
 // TELEMETRY IDs
