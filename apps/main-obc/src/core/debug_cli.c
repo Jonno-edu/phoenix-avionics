@@ -196,6 +196,7 @@ bool debug_cli_process_char(uint8_t ch) {
             printf("[CLI] Turning all power lines OFF\n");
             eps_set_all_lines(POWER_OFF);
             break;
+        
 
         // Identification Requests
         case 'i':

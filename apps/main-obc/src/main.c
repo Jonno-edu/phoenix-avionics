@@ -22,16 +22,20 @@
 #endif
 
 int main() {
-    sleep_ms(500);
+    // stdio_init_all();s
+    sleep_ms(2000); // Wait for console to stabilize
 
     bsp_hardware_init();
+    
     console_init();
+
+    // sleep_ms(2000); // Wait for console to stabilize
 
     // debug_cli_init();
     system_data_init();
     rocket_data_init();
     // eps_data_init();
-    rocket_data_fill_test_values();
+    //rocket_data_fill_test_values();
     system_config_init();
 
 #if PICO_BUILD

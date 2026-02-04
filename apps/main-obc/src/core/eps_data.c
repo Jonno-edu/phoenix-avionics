@@ -214,7 +214,7 @@ void eps_send_power_command(const EpsPowerSetCmd_t *cmd) {
 
 void eps_set_all_lines(PowerSelect_t state) {
     EpsPowerSetCmd_t cmd = {
-        .line_3v3_1  = state,
+        .line_3v3_1  = 1,
         .line_3v3_2  = state,
         .line_3v3_3  = state,
         .line_5v_1   = state,

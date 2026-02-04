@@ -22,12 +22,18 @@
 #endif
 
 // ANSI Color Codes
-#define LOG_COLOR_RESET   "\033[0m"
-#define LOG_COLOR_RED     "\033[31m"
-#define LOG_COLOR_YELLOW  "\033[33m"
-#define LOG_COLOR_GREEN   "\033[32m"
-#define LOG_COLOR_CYAN    "\033[36m"
-#define LOG_COLOR_BLUE    "\033[34m"
+// #define LOG_COLOR_RESET   "\033[0m"
+// #define LOG_COLOR_RED     "\033[31m"
+// #define LOG_COLOR_YELLOW  "\033[33m"
+// #define LOG_COLOR_GREEN   "\033[32m"
+// #define LOG_COLOR_CYAN    "\033[36m"
+// #define LOG_COLOR_BLUE    "\033[34m"
+#define LOG_COLOR_RESET   ""
+#define LOG_COLOR_RED     ""
+#define LOG_COLOR_YELLOW  ""
+#define LOG_COLOR_GREEN   ""
+#define LOG_COLOR_CYAN    ""
+#define LOG_COLOR_BLUE    ""
 
 static inline const char* log_get_task_name(void) {
     if (xTaskGetSchedulerState() == taskSCHEDULER_NOT_STARTED) {
