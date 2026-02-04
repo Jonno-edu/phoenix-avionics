@@ -87,7 +87,7 @@ void getSystemIdentInfo(SystemData_t *data) {
     
     // Status flags are populated by the caller (OBC logic) if needed, 
     // but initialized to 0 here by default.
-    data->status_flags = 0;
+    // data->status_flags = 0;
 }
 
 void system_data_pack(const SystemData_t *data, uint8_t *buffer) {

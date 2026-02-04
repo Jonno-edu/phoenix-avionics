@@ -18,7 +18,7 @@ void tasks_create_all(void) {
     rs485_task_init();
     telemetry_task_init();
     eps_data_init();
-    hil_sensor_task_init();
+    // hil_sensor_task_init();
     debug_cli_init();
     // sensors_task_init();
     // heartbeat_task_init();

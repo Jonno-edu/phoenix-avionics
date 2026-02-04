@@ -29,18 +29,18 @@ static void vTelemetryTask(void *pvParameters) {
         // ====================================================================
         // 1. BROADCAST ROCKET STATE (To Tracking Radio / Ground)
         // ====================================================================
-        getRocketTrackingInfo(&tx_beacon);
+        // getRocketTrackingInfo(&tx_beacon);
         
-        ESP_LOGI(TAG, "Sending Tracking Beacon (%zu bytes)", sizeof(TrackingBeacon_t));
+        // ESP_LOGI(TAG, "Sending Tracking Beacon (%zu bytes)", sizeof(TrackingBeacon_t));
         // ESP_LOG_BUFFER_HEX(TAG, &tx_beacon, sizeof(TrackingBeacon_t));
 
-        rs485_send_packet(
-            ADDR_TRACKING_RADIO, // 0x03
-            MSG_TYPE_TLM_RESP,
-            ID_TLM_TRACKING_BEACON,
-            (uint8_t*)&tx_beacon,
-            sizeof(TrackingBeacon_t)
-        );
+        // rs485_send_packet(
+        //     ADDR_TRACKING_RADIO, // 0x03
+        //     MSG_TYPE_TLM_RESP,
+        //     ID_TLM_TRACKING_BEACON,
+        //     (uint8_t*)&tx_beacon,
+        //     sizeof(TrackingBeacon_t)
+        // );
 
         // ====================================================================
         // 2. POLL SUBSYSTEMS (Staggered to prevent collisions)
@@ -48,7 +48,7 @@ static void vTelemetryTask(void *pvParameters) {
 
         // A. Tracking Radio Status
         vTaskDelay(pdMS_TO_TICKS(50));
-        rs485_send_packet(ADDR_TRACKING_RADIO, MSG_TYPE_TLM_REQ, ID_TLM_STATUS, NULL, 0);
+        rs485_send_packet(ADDR_TRACKING_RADIO, MSG_TYPE_TLM_REQ, TLM_ID_IDENTIFICATION, NULL, 0);
 
         // B. EPS Power Status
         vTaskDelay(pdMS_TO_TICKS(100)); // Allow time for Radio reply

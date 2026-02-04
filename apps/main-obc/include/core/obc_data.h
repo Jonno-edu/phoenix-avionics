@@ -15,8 +15,7 @@ typedef struct {
     uint8_t firmware_major;
     uint8_t firmware_minor;
     uint16_t uptime_seconds;
-    uint16_t uptime_milliseconds;
-    uint8_t status_flags;           // Bit 0: CMD_PENDING
+    uint16_t uptime_milliseconds;         // Bit 0: CMD_PENDING
 } PACKED_STRUCT TlmIdentificationPayload_t;
 
 // System identification data structure

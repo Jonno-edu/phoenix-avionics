@@ -85,7 +85,7 @@ void TCTLM_processTelemetryRequest(RS485_packet_t *pkt) {
             getSystemIdentInfo(&sys_data);
             system_data_pack(&sys_data, buffer);
             rs485_send_packet(pkt->src_addr, MSG_TYPE_TLM_RESP, id, buffer, sizeof(SystemData_t));
-            ESP_LOGD(TAG, "Sent edentification to 0x%02X", pkt->src_addr);
+            ESP_LOGI(TAG, "Sent identification to 0x%02X", pkt->src_addr);
             break;
         }
 
@@ -104,7 +104,8 @@ void TCTLM_processTelemetryResponse(RS485_packet_t *pkt) {
     ESP_LOGD(TAG, "TLM Response: ID=%d, Src=%02X, Len=%d", id, pkt->src_addr, pkt->length);
     
     switch (id) {
-        case TLM_ID_IDENTIFICATION:
+        case 0:
+            printf("Received TLM_ID_IDENTIFICATION from 0x%02X\n", pkt->src_addr);
             if (pkt->length >= sizeof(TlmIdentificationPayload_t)) {
                 TlmIdentificationPayload_t tlm;
                 memcpy(&tlm, pkt->data, sizeof(TlmIdentificationPayload_t));
@@ -114,10 +115,10 @@ void TCTLM_processTelemetryResponse(RS485_packet_t *pkt) {
                          tlm.firmware_major, tlm.firmware_minor, 
                          tlm.uptime_seconds);
 
-                if (tlm.status_flags & 0x01)
-                    ESP_LOGI(TAG, "Node %02X indicates CMD_PENDING", pkt->src_addr);
+                // if (tlm.status_flags & 0x01)
+                //     ESP_LOGI(TAG, "Node %02X indicates CMD_PENDING", pkt->src_addr);
             } else {
-                ESP_LOGW(TAG, "Identification response too short: %d bytes", pkt->length);
+                ESP_LOGW(TAG, "Identification response too short: %d bytes, ", pkt->length);
             }
             break;
         
