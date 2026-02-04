@@ -1,6 +1,5 @@
 #include "task_manager.h"
 #include "heartbeat_task.h"
-#include "identification_polling_task.h"
 #include "rs485_task.h"
 #include "telemetry_task.h"
 #include "sensors_task.h"
@@ -15,22 +14,10 @@
 #endif
 
 void tasks_create_all(void) {
-#if !PICO_BUILD
-    // SIL: Create serial RX polling task (high priority to simulate interrupt)
-    xTaskCreate(
-        vConsoleRxTask,
-        "ConsoleRx",
-        1024,
-        NULL,
-        PRIORITY_CONSOLE_RX,
-        NULL
-    );
-#endif
 
     rs485_task_init();
     telemetry_task_init();
     eps_data_init();
-    identification_polling_task_init();
     hil_sensor_task_init();
     debug_cli_init();
     // sensors_task_init();

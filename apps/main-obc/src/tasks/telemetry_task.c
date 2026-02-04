@@ -1,6 +1,10 @@
+// telemetry_task.c
+
 #include "telemetry_task.h"
 #include "core/rocket_data.h"
 #include "core/logging.h"
+#include "core/eps_data.h"
+#include "telemetry_defs.h"
 #include "rs485_protocol.h"
 #include <FreeRTOS.h>
 #include <task.h>
@@ -22,32 +26,37 @@ static void vTelemetryTask(void *pvParameters) {
         // Wait for the next cycle
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
 
-        // 1. Get snapshot of the latest tracking data (Already formatted for telemetry)
+        // ====================================================================
+        // 1. BROADCAST ROCKET STATE (To Tracking Radio / Ground)
+        // ====================================================================
         getRocketTrackingInfo(&tx_beacon);
         
-        // 2. Broadcast packet via RS485
-        // Addressed to 0x03
-        ESP_LOGI(TAG, "Sending Tracking Beacon (%zu bytes) to 0x03", sizeof(TrackingBeacon_t));
-        ESP_LOG_BUFFER_HEX(TAG, &tx_beacon, sizeof(TrackingBeacon_t));
-
-        // Detailed field logging (Debug level)
-        ESP_LOGD(TAG, "  Runtime: %u.%03u s | State: %u", 
-                tx_beacon.runtime_sec, tx_beacon.runtime_ms, tx_beacon.avionics_state);
-        ESP_LOGD(TAG, "  Est Pos: Lat=%.7f, Lon=%.7f, Alt=%d m", 
-                tx_beacon.est_lat/1e7, tx_beacon.est_lon/1e7, tx_beacon.est_alt);
-        ESP_LOGD(TAG, "  Stack Temp: %.2f C", tx_beacon.temp_stack / 128.0f);
+        ESP_LOGI(TAG, "Sending Tracking Beacon (%zu bytes)", sizeof(TrackingBeacon_t));
+        // ESP_LOG_BUFFER_HEX(TAG, &tx_beacon, sizeof(TrackingBeacon_t));
 
         rs485_send_packet(
-            0x03,
+            ADDR_TRACKING_RADIO, // 0x03
             MSG_TYPE_TLM_RESP,
             ID_TLM_TRACKING_BEACON,
             (uint8_t*)&tx_beacon,
             sizeof(TrackingBeacon_t)
         );
 
-        // Send status request to Tracking Radio
+        // ====================================================================
+        // 2. POLL SUBSYSTEMS (Staggered to prevent collisions)
+        // ====================================================================
+
+        // A. Tracking Radio Status
+        vTaskDelay(pdMS_TO_TICKS(50));
         rs485_send_packet(ADDR_TRACKING_RADIO, MSG_TYPE_TLM_REQ, ID_TLM_STATUS, NULL, 0);
 
+        // B. EPS Power Status
+        vTaskDelay(pdMS_TO_TICKS(100)); // Allow time for Radio reply
+        eps_request_power_status();
+
+        // C. EPS Measurements
+        vTaskDelay(pdMS_TO_TICKS(100)); // Allow time for EPS reply
+        eps_request_measurements();
     }
 }
 

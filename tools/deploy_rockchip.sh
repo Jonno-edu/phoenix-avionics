@@ -35,6 +35,7 @@ rsync -avz --progress \
     "$LOCAL_PY_DIR/rockchip_streamer.py" \
     "$LOCAL_PY_DIR/sensor_config.py" \
     "$LOCAL_PY_DIR/phoenix_sensor_stream.csv" \
+    "$LOCAL_PY_DIR/obc_monitor.py" \
     "$LOCAL_PY_DIR/run_hil.sh" \
     "$LOCAL_PY_DIR//hil_node.uf2" \
     $ROCKCHIP_USER@$ROCKCHIP_IP:$REMOTE_DIR/
@@ -42,7 +43,7 @@ rsync -avz --progress \
 if [ $? -eq 0 ]; then
     echo "--------------------------------------"
     echo "SUCCESS: Deployment Complete."
-    echo "Run this on Rockchip: python3 $REMOTE_DIR/rockchip_streamer.py"
+    # echo "Run this on Rockchip: python3 $REMOTE_DIR/rockchip_streamer.py"
 else
     echo "--------------------------------------"
     echo "ERROR: Deployment failed. Check IP and SSH keys."

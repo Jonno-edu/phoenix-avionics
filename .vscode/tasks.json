@@ -121,9 +121,9 @@
             "detail": "Flashes both HIL Node and OBC"
         },
         {
-            "label": "Deploy HIL Config",
+            "label": "rsync to rockchip",
             "type": "shell",
-            "group": "test",
+            "group": "build",
             "command": "./tools/deploy_rockchip.sh",
             "problemMatcher": [],
             "detail": "Generates sensors.json configs and syncs python scripts to Rockchip"
@@ -143,9 +143,9 @@
             "detail": "Runs the HIL streamer wrapper script."
         },
         {
-            "label": "Deploy & Stream",
+            "label": "start HIL on rockchip",
             "dependsOn": [
-                "Deploy HIL Config",
+                "rsync to rockchip",
                 "Start HIL Stream"
             ],
             "dependsOrder": "sequence",
