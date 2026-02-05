@@ -5,7 +5,8 @@
 #include "sensors_task.h"
 #include "hil_sensor_task.h"
 #include "core/debug_cli.h"
-#include "core/eps_data.h"
+#include "core/eps_node.h"
+#include "core/tracking_radio_node.h"
 #include <FreeRTOS.h>
 #include <task.h>
 
@@ -17,7 +18,8 @@ void tasks_create_all(void) {
 
     rs485_task_init();
     telemetry_task_init();
-    eps_data_init();
+    eps_node_init();
+    tracking_radio_node_init();
     // hil_sensor_task_init();
     debug_cli_init();
     // sensors_task_init();

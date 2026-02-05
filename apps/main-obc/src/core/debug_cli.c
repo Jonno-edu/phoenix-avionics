@@ -1,6 +1,6 @@
 #include "core/debug_cli.h"
 #include "core/logging.h"
-#include "core/eps_data.h"
+#include "core/eps_node.h"
 #include "core/obc_data.h"
 #include "rs485_protocol.h"
 #include "telemetry_defs.h"
@@ -78,13 +78,13 @@ void debug_cli_help_menu(void) {
 static void print_eps_power_status(void) {
     EpsPowerStatus_t status;
     
-    if (!eps_data_get_power_status(&status)) {
+    if (!eps_node_get_power_status(&status)) {
         printf("[CLI] No EPS power status available (request with '1' first)\n");
         return;
     }
     
-    uint32_t age = eps_data_get_power_status_age_ms();
-    bool valid = eps_data_is_power_status_valid();
+    uint32_t age = eps_node_get_power_status_age_ms();
+    bool valid = eps_node_is_power_status_valid();
     
     printf("\n--- EPS Power Status (age: %lu ms, %s) ---\n", 
            (unsigned long)age, valid ? "VALID" : "STALE");
@@ -123,13 +123,13 @@ static void print_eps_power_status(void) {
 static void print_eps_measurements(void) {
     EpsMeasurements_t meas;
     
-    if (!eps_data_get_measurements(&meas)) {
+    if (!eps_node_get_measurements(&meas)) {
         printf("[CLI] No EPS measurements available (request with '2' first)\n");
         return;
     }
     
-    uint32_t age = eps_data_get_measurements_age_ms();
-    bool valid = eps_data_is_measurements_valid();
+    uint32_t age = eps_node_get_measurements_age_ms();
+    bool valid = eps_node_is_measurements_valid();
     
     printf("\n--- EPS Measurements (age: %lu ms, %s) ---\n",
            (unsigned long)age, valid ? "VALID" : "STALE");

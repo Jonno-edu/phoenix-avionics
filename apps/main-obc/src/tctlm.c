@@ -2,7 +2,8 @@
 #include "rs485_protocol.h"
 #include "core/obc_data.h"
 #include "core/rocket_data.h"
-#include "core/eps_data.h"
+#include "core/eps_node.h"
+#include "core/tracking_radio_node.h"
 #include "core/logging.h"
 #include "core/rs485_monitor.h"
 #include <stdint.h>
@@ -100,6 +101,12 @@ void TCTLM_processTelecommandAck(RS485_packet_t *pkt) {
             ESP_LOGI(TAG, "Reset command acknowledged by 0x%02X", pkt->src_addr);
             break;
 
+        case TC_ID_TRACKING_BEACON_ACK:
+        case TC_ID_TRACKING_BEACON:
+            // Handle both the specific ACK ID (0x62) and the standard echo ID (0x42)
+            tracking_radio_confirm_beacon_ack();
+            break;
+
         default:
             ESP_LOGD(TAG, "TC ACK received: ID=%d from 0x%02X", id, pkt->src_addr);
             break;
@@ -153,8 +160,9 @@ void TCTLM_processTelemetryResponse(RS485_packet_t *pkt) {
                          tlm.firmware_major, tlm.firmware_minor, 
                          tlm.uptime_seconds);
 
-                // if (tlm.status_flags & 0x01)
-                //     ESP_LOGI(TAG, "Node %02X indicates CMD_PENDING", pkt->src_addr);
+                if (pkt->src_addr == ADDR_TRACKING_RADIO) {
+                    tracking_radio_node_store_status((TrackingRadioStatus_t*)&tlm);
+                }
             } else {
                 ESP_LOGW(TAG, "Identification response too short: %d bytes, ", pkt->length);
             }
@@ -170,7 +178,7 @@ void TCTLM_processTelemetryResponse(RS485_packet_t *pkt) {
                 EpsPowerStatus_t power_status;
                 memcpy(&power_status, pkt->data, sizeof(EpsPowerStatus_t));
 
-                eps_data_store_power_status(&power_status);
+                eps_node_store_power_status(&power_status);
             } else {
                 ESP_LOGW(TAG, "EPS Power response too short: %d bytes (expected %d)", pkt->length, sizeof(EpsPowerStatus_t));
             }
@@ -186,7 +194,7 @@ void TCTLM_processTelemetryResponse(RS485_packet_t *pkt) {
                 EpsMeasurements_t measurements;
                 memcpy(&measurements, pkt->data, sizeof(EpsMeasurements_t));
 
-                eps_data_store_measurements(&measurements);
+                eps_node_store_measurements(&measurements);
             } else {
                 ESP_LOGW(TAG, "EPS Measurements response too short: %d bytes (expected %d)", pkt->length, sizeof(EpsMeasurements_t));
             }

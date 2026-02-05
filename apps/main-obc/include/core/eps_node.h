@@ -1,5 +1,5 @@
-#ifndef EPS_DATA_H
-#define EPS_DATA_H
+#ifndef EPS_NODE_H
+#define EPS_NODE_H
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -15,6 +15,16 @@ typedef enum {
     POWER_AUTO  = 2, 
     POWER_SIM   = 3
 } PowerSelect_t;
+
+typedef enum {
+    EPS_LINE_3V3_1,
+    EPS_LINE_3V3_2,
+    EPS_LINE_3V3_3,
+    EPS_LINE_5V_1,
+    EPS_LINE_5V_2,
+    EPS_LINE_5V_3,
+    EPS_LINE_12V
+} EpsLineIndex_t;
 
 // ============================================================================
 // EPS POWER STATUS TELEMETRY PAYLOAD
@@ -62,8 +72,46 @@ typedef EpsPowerStatus_t EpsPowerSetCmd_t;
 /**
  * @brief Initialize EPS data storage. Call once in main()
  */
-void eps_data_init(void);
+void eps_node_init(void);
 
+
+// ============================================================================
+// FUNCTION PROTOTYPES - REQUESTS
+// ============================================================================
+
+/**
+ * @brief Request the current power status of lines from the EPS
+ */
+void eps_request_power_status(void);
+
+/**
+ * @brief Request the current measurements (voltage/current) from the EPS
+ */
+void eps_request_measurements(void);
+
+// ============================================================================
+// FUNCTION PROTOTYPES - COMMANDS
+// ============================================================================
+
+/**
+ * @brief Set the state of a specific EPS line
+ * @param line The line to control
+ * @param state The state to set (ON/OFF/AUTO)
+ */
+void eps_set_line(EpsLineIndex_t line, PowerSelect_t state);
+
+/**
+ * @brief Set the state of all EPS lines
+ * @param state The state to set (ON/OFF/AUTO)
+ */
+void eps_set_all_lines(PowerSelect_t state);
+
+/**
+ * @brief Get the current cached state of a line
+ * @param line The line to check
+ * @return The current state
+ */
+PowerSelect_t eps_get_line_state(EpsLineIndex_t line);
 
 // ============================================================================
 // FUNCTION PROTOTYPES - STORE DATA
@@ -73,13 +121,13 @@ void eps_data_init(void);
  * @brief Store received EPS power status
  * @param status powinter to received power status data
  */
-void eps_data_store_power_status(const EpsPowerStatus_t *status);
+void eps_node_store_power_status(const EpsPowerStatus_t *status);
 
 /**
  * @brief Store received EPS measurements
  * @param measurements pointer to received measurements data
  */
-void eps_data_store_measurements(const EpsMeasurements_t *measurements);
+void eps_node_store_measurements(const EpsMeasurements_t *measurements);
 
 
 // ============================================================================
@@ -91,38 +139,38 @@ void eps_data_store_measurements(const EpsMeasurements_t *measurements);
  * @param out_status pointer to destination struct
  * @return true if valid data available, false otherwise
  */
-bool eps_data_get_power_status(EpsPowerStatus_t *out_status);
+bool eps_node_get_power_status(EpsPowerStatus_t *out_status);
 
 /**
  * @brief Get stored EPS measurements
  * @param out_measurements pointer to destination struct
  * @return true if valid data available, false otherwise
  */
-bool eps_data_get_measurements(EpsMeasurements_t *out_measurements);
+bool eps_node_get_measurements(EpsMeasurements_t *out_measurements);
 
 /**
  * @brief Check if power status data is valid and recent
  * @return true if data is valid and not stale
  */
-bool eps_data_is_power_status_valid(void);
+bool eps_node_is_power_status_valid(void);
 
 /**
  * @brief Check if measurements data is valid and recent
  * @return true if data is valid and not stale
  */
-bool eps_data_is_measurements_valid(void);
+bool eps_node_is_measurements_valid(void);
 
 /**
  * @brief Get age of power status data in millisceconds. 
  * @return Age in ms, or uint32_MAX if never received
  */
-uint32_t eps_data_get_power_status_age_ms(void);
+uint32_t eps_node_get_power_status_age_ms(void);
 
 /**
  * @brief Get age of mesurements data in millisceconds. 
  * @return Age in ms, or uint32_MAX if never received
  */
-uint32_t eps_data_get_measurements_age_ms(void);
+uint32_t eps_node_get_measurements_age_ms(void);
 
 // ============================================================================
 // FUNCTION PROTOTYPES - SEND REQUESTS/COMMANDS TO EPS
@@ -135,45 +183,24 @@ void eps_request_power_status(void);
 
 /**
  * @brief Request EPS measurements
- */
-void eps_request_measurements(void);
-
-/**
- * @brief Send power line configuration command to EPS
- * @param cmd Pointer to command payload with desired line states
- */
-void eps_send_power_command(const EpsPowerSetCmd_t *cmd);
-
+ / eps_request_power_status and eps_request_measurements already declared
 // ============================================================================
-// FUNCTION PROTOTYPES - CONVENIENCE HELPERS
+// CONVENIENCE HELPERS
 // ============================================================================
-
-/**
- * @brief Power line index enumeration for convenience functions. 
- */
-typedef enum {
-    EPS_LINE_3V3_1  = 0,
-    EPS_LINE_3V3_2  = 1,
-    EPS_LINE_3V3_3  = 2,
-    EPS_LINE_5V_1   = 3,
-    EPS_LINE_5V_2   = 4,
-    EPS_LINE_5V_3   = 5,
-    EPS_LINE_12V    = 6,
-    EPS_LINE_COUNT  = 7
-} EpsLineIndex_t;
+// Note: EpsLineIndex_t enum is already defined at top of file
 
 /**
  * @brief Set all power lines to a specific state.
  * @param state The state to set all line to
  */
-void eps_set_all_lines(PowerSelect_t state);
+// void eps_set_all_lines(PowerSelect_t state); // Already defined above
 
 /**
  * @brief Set a specific power line to a state.
  * @param line line inddex (use EpsLineIndex_t enum)
  * @param state The state to set
  */
-void eps_set_line(EpsLineIndex_t line, PowerSelect_t state);
+// void eps_set_line(EpsLineIndex_t line, PowerSelect_t state); // Already defined above
 
 /**
  * @brief Turn on a specific power line (sets to POWER_ON)
@@ -192,7 +219,7 @@ void eps_turn_off_line(EpsLineIndex_t line);
  * @param line Line index (use EpsLineIndex_t line)
  * @return The power state, or POWER_OFF if invalid/unavailable
  */
-PowerSelect_t eps_get_line_state(EpsLineIndex_t line);
+// PowerSelect_t eps_get_line_state(EpsLineIndex_t line); // Already defined above
 
 /**
  * @brief Get battery voltage in millivolts.
@@ -206,4 +233,4 @@ uint16_t eps_get_battery_voltage_mv(void);
  */
 uint16_t eps_get_battery_current_ma(void);
 
-#endif // EPS_DATA_H
+#endif // EPS_NODE_H

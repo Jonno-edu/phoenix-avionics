@@ -28,11 +28,19 @@
             "detail": "Selects variant (OBC/HIL), sets the correct PICO_PLATFORM, and runs CMake configure."
         },
         {
+            "label": "Build Active Variant",
+            "type": "shell",
+            "group": "build",
+            "command": "BUILD_DIR=\"${command:cmake.buildDirectory}\"; echo \"Building in: $BUILD_DIR\"; cmake --build \"$BUILD_DIR\" -j $(nproc)",
+            "problemMatcher": [],
+            "detail": "Builds the currently selected CMake Variant"
+        },
+        {
             "label": "Flash Configuration",
             "type": "shell",
             "group": "build",
             "linux": {
-                "command": "BUILD_DIR=\"${command:cmake.buildDirectory}\"; echo \"Using Build Dir: $BUILD_DIR\"; VARIANT=$(grep \"BUILD_TARGET:STRING\" \"$BUILD_DIR/CMakeCache.txt\" | cut -d= -f2); echo \"Target Variant: $VARIANT\"; if [ \"$VARIANT\" = \"OBC\" ]; then UF2=\"phoenix-avionics.uf2\"; BUS=\"8\"; DEV=\"/dev/ttyOBC\"; elif [ \"$VARIANT\" = \"HIL\" ]; then UF2=\"hil_node.uf2\"; BUS=\"7\"; DEV=\"/dev/ttyACM3\"; else echo \"Current variant is '$VARIANT'. Please select 'Main OBC' or 'HIL Node' from the CMake Variant selector (bottom bar) instead of 'ALL/Debug'.\"; exit 1; fi; echo \"Flashing $UF2 to Bus $BUS...\"; cmake --build \"$BUILD_DIR\" -j $(nproc) && find \"$BUILD_DIR\" -name \"$UF2\" -exec scp {} rock@100.115.224.114:~/firmware.uf2 \\; && ssh -t rock@100.115.224.114 \"sudo fuser -k $DEV 2>/dev/null; echo 'Rebooting to Bootloader...'; sudo picotool reboot --bus $BUS -f -u; echo 'Waiting for USB...'; sleep 3; echo 'Flashing...'; sudo picotool load --bus $BUS -x ~/firmware.uf2\""
+                "command": "BUILD_DIR=\"${command:cmake.buildDirectory}\"; echo \"Using Build Dir: $BUILD_DIR\"; VARIANT=$(grep \"BUILD_TARGET:STRING\" \"$BUILD_DIR/CMakeCache.txt\" | cut -d= -f2); echo \"Target Variant: $VARIANT\"; if [ \"$VARIANT\" = \"OBC\" ]; then UF2=\"phoenix-avionics.uf2\"; BUS=\"1\"; DEV=\"/dev/ttyOBC\"; elif [ \"$VARIANT\" = \"HIL\" ]; then UF2=\"hil_node.uf2\"; BUS=\"7\"; DEV=\"/dev/ttyACM3\"; else echo \"Current variant is '$VARIANT'. Please select 'Main OBC' or 'HIL Node' from the CMake Variant selector (bottom bar) instead of 'ALL/Debug'.\"; exit 1; fi; echo \"Flashing $UF2 to Bus $BUS...\"; cmake --build \"$BUILD_DIR\" -j $(nproc) && find \"$BUILD_DIR\" -name \"$UF2\" -exec scp {} rock@100.115.224.114:~/firmware.uf2 \\; && ssh -t rock@100.115.224.114 \"sudo fuser -k $DEV 2>/dev/null; echo 'Rebooting to Bootloader...'; sudo picotool reboot --bus $BUS -f -u; echo 'Waiting for USB...'; sleep 3; echo 'Flashing...'; sudo picotool load --bus $BUS -x ~/firmware.uf2\""
             },
             "problemMatcher": [],
             "detail": "Builds and flashes the currently selected CMake Variant"
@@ -81,7 +89,7 @@
             "label": "Flash OBC",
             "type": "shell",
             "group": "build",
-            "command": "BUILD_DIR=\"/workspace/build/obc\"; UF2=\"phoenix-avionics.uf2\"; BUS=\"8\"; DEV=\"/dev/ttyOBC\"; echo \"Flashing OBC...\"; cmake --build \"$BUILD_DIR\" && find \"$BUILD_DIR\" -name \"$UF2\" -exec scp {} rock@100.115.224.114:~/firmware.uf2 \\; && ssh -t rock@100.115.224.114 \"sudo fuser -k $DEV 2>/dev/null; echo 'Rebooting to Bootloader...'; sudo picotool reboot --bus $BUS -f -u; echo 'Waiting for USB...'; sleep 3; echo 'Flashing...'; sudo picotool load --bus $BUS -x ~/firmware.uf2\"",
+            "command": "BUILD_DIR=\"/workspace/build/obc\"; UF2=\"phoenix-avionics.uf2\"; BUS=\"1\"; DEV=\"/dev/ttyOBC\"; echo \"Flashing OBC...\"; cmake --build \"$BUILD_DIR\" && find \"$BUILD_DIR\" -name \"$UF2\" -exec scp {} rock@100.115.224.114:~/firmware.uf2 \\; && ssh -t rock@100.115.224.114 \"sudo fuser -k $DEV 2>/dev/null; echo 'Rebooting to Bootloader...'; sudo picotool reboot --bus $BUS -f -u; echo 'Waiting for USB...'; sleep 3; echo 'Flashing...'; sudo picotool load --bus $BUS -x ~/firmware.uf2\"",
             "problemMatcher": [],
             "detail": "Explicitly builds and flashes the Main OBC"
         },

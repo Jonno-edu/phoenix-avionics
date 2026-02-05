@@ -1,4 +1,4 @@
-#include "core/eps_data.h"
+#include "core/eps_node.h"
 #include "core/logging.h"
 #include "rs485_protocol.h"
 #include <string.h>
@@ -8,7 +8,7 @@
 
 #define GET_TIME_MS() to_ms_since_boot(get_absolute_time())
 
-static const char *TAG = "EPS_DATA";
+static const char *TAG = "EPS_NODE";
 
 // ============================================================================
 // STORAGE STRUCTURE
@@ -29,13 +29,13 @@ static EpsDataStore_t eps_store;
 
 static SemaphoreHandle_t eps_mutex;
 
-#define EPS_DATA_TIMEOUT_MS     5000
+#define EPS_NODE_TIMEOUT_MS     5000
 
 // ============================================================================
 // INITIALIZATION
 // ============================================================================
 
-void eps_data_init(void) {
+void eps_node_init(void) {
     eps_mutex = xSemaphoreCreateMutex();
     printf("eps_mutex\n");
     //Clear all stored data
@@ -47,11 +47,13 @@ void eps_data_init(void) {
     ESP_LOGI(TAG, "EPS data storage initialized");
 }   
 
+
+
 // ============================================================================
 // STORE FUNCTIONS
 // ============================================================================
 
-void eps_data_store_power_status(const EpsPowerStatus_t *status) {
+void eps_node_store_power_status(const EpsPowerStatus_t *status) {
     if (status == NULL) {
         ESP_LOGW(TAG, "NULL pointer passed to store_power_status");
         return;
@@ -72,7 +74,7 @@ void eps_data_store_power_status(const EpsPowerStatus_t *status) {
     }
 }
 
-void eps_data_store_measurements(const EpsMeasurements_t *measurements) {
+void eps_node_store_measurements(const EpsMeasurements_t *measurements) {
     if (measurements == NULL) {
         ESP_LOGW(TAG, "NULL pointer passed to store_measurements");
         return;
@@ -96,7 +98,7 @@ void eps_data_store_measurements(const EpsMeasurements_t *measurements) {
 // ============================================================================
 // RETRIEVE FUNCTIONS
 // ============================================================================
-bool eps_data_get_power_status(EpsPowerStatus_t *out_status) {
+bool eps_node_get_power_status(EpsPowerStatus_t *out_status) {
     if (out_status == NULL) return false;
 
     bool success = false;
@@ -111,7 +113,7 @@ bool eps_data_get_power_status(EpsPowerStatus_t *out_status) {
     return success;
 }
 
-bool eps_data_get_measurements(EpsMeasurements_t *out_measurements) {
+bool eps_node_get_measurements(EpsMeasurements_t *out_measurements) {
     if (out_measurements == NULL) return false;
 
     bool success = false;
@@ -126,12 +128,12 @@ bool eps_data_get_measurements(EpsMeasurements_t *out_measurements) {
     return success;
 }
 
-bool eps_data_is_power_status_valid(void) {
+bool eps_node_is_power_status_valid(void) {
     bool valid = false;
     if (xSemaphoreTake(eps_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
         if (eps_store.power_status_valid) {
             uint32_t age = GET_TIME_MS() - eps_store.power_status_age_ms;
-            if (age < EPS_DATA_TIMEOUT_MS) {
+            if (age < EPS_NODE_TIMEOUT_MS) {
                 valid = true;
             }
         }
@@ -141,12 +143,12 @@ bool eps_data_is_power_status_valid(void) {
     return valid;
 }
 
-bool eps_data_is_measurements_valid(void) {
+bool eps_node_is_measurements_valid(void) {
     bool valid = false;
     if (xSemaphoreTake(eps_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
         if (eps_store.measurements_valid) {
             uint32_t age = GET_TIME_MS() - eps_store.measurements_age_ms;
-            if (age < EPS_DATA_TIMEOUT_MS) {
+            if (age < EPS_NODE_TIMEOUT_MS) {
                 valid = true;
             }
         }
@@ -156,7 +158,7 @@ bool eps_data_is_measurements_valid(void) {
     return valid;
 }
 
-uint32_t eps_data_get_power_status_age_ms(void) {
+uint32_t eps_node_get_power_status_age_ms(void) {
     uint32_t age = UINT32_MAX;
     if (xSemaphoreTake(eps_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
         if (eps_store.power_status_valid) {
@@ -168,7 +170,7 @@ uint32_t eps_data_get_power_status_age_ms(void) {
     return age;
 }
 
-uint32_t eps_data_get_measurements_age_ms(void) {
+uint32_t eps_node_get_measurements_age_ms(void) {
     uint32_t age = UINT32_MAX;
     if (xSemaphoreTake(eps_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
         if (eps_store.measurements_valid) {
@@ -229,7 +231,7 @@ void eps_set_all_lines(PowerSelect_t state) {
 void eps_set_line(EpsLineIndex_t line, PowerSelect_t state) {
     EpsPowerSetCmd_t cmd = {0};
 
-    if (eps_data_get_power_status(&cmd)) {
+    if (eps_node_get_power_status(&cmd)) {
 
     } else {
         ESP_LOGW(TAG, "No current power status, setting single line with others OFF");
@@ -276,7 +278,7 @@ void eps_turn_off_line(EpsLineIndex_t line) {
 
 PowerSelect_t eps_get_line_state(EpsLineIndex_t line) {
     EpsPowerStatus_t status;
-    if (!eps_data_get_power_status(&status)) {
+    if (!eps_node_get_power_status(&status)) {
         return POWER_OFF;
     }
 
@@ -303,7 +305,7 @@ PowerSelect_t eps_get_line_state(EpsLineIndex_t line) {
 
 uint16_t eps_get_battery_voltage_mv(void) {
     EpsMeasurements_t measurements;
-    if (eps_data_get_measurements(&measurements)) {
+    if (eps_node_get_measurements(&measurements)) {
         return measurements.battery_voltage_mv;
     }
 
@@ -312,7 +314,7 @@ uint16_t eps_get_battery_voltage_mv(void) {
 
 uint16_t eps_get_battery_current_ma(void) {
     EpsMeasurements_t measurements;
-    if (eps_data_get_measurements(&measurements)) {
+    if (eps_node_get_measurements(&measurements)) {
         return measurements.battery_current_ma;
     }
 

@@ -3,7 +3,8 @@
 #include "telemetry_task.h"
 #include "core/rocket_data.h"
 #include "core/logging.h"
-#include "core/eps_data.h"
+#include "core/eps_node.h"
+#include "core/tracking_radio_node.h"
 #include "telemetry_defs.h"
 #include "rs485_protocol.h"
 #include <FreeRTOS.h>
@@ -29,18 +30,13 @@ static void vTelemetryTask(void *pvParameters) {
         // ====================================================================
         // 1. BROADCAST ROCKET STATE (To Tracking Radio / Ground)
         // ====================================================================
-        // getRocketTrackingInfo(&tx_beacon);
+        getRocketTrackingInfo(&tx_beacon);
         
-        // ESP_LOGI(TAG, "Sending Tracking Beacon (%zu bytes)", sizeof(TrackingBeacon_t));
-        // ESP_LOG_BUFFER_HEX(TAG, &tx_beacon, sizeof(TrackingBeacon_t));
-
-        // rs485_send_packet(
-        //     ADDR_TRACKING_RADIO, // 0x03
-        //     MSG_TYPE_TLM_RESP,
-        //     ID_TLM_TRACKING_BEACON,
-        //     (uint8_t*)&tx_beacon,
-        //     sizeof(TrackingBeacon_t)
-        // );
+        // Send via Tracking Radio Node (handles valid packet wrapping)
+        bool result = tracking_radio_send_beacon(&tx_beacon);
+        if (!result) {
+            ESP_LOGW(TAG, "Tracking beacon transmission failed");
+        }
 
         // ====================================================================
         // 2. POLL SUBSYSTEMS (Staggered to prevent collisions)
@@ -48,7 +44,7 @@ static void vTelemetryTask(void *pvParameters) {
 
         // A. Tracking Radio Status
         vTaskDelay(pdMS_TO_TICKS(50));
-        rs485_send_packet(ADDR_TRACKING_RADIO, MSG_TYPE_TLM_REQ, TLM_ID_IDENTIFICATION, NULL, 0);
+        tracking_radio_request_health();
 
         // B. EPS Power Status
         vTaskDelay(pdMS_TO_TICKS(100)); // Allow time for Radio reply

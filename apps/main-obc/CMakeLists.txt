@@ -131,7 +131,8 @@ set(COMMON_SOURCES
     src/tctlm.c
     src/core/obc_data.c
     src/core/rocket_data.c
-    src/core/eps_data.c
+    src/core/eps_node.c
+    src/core/tracking_radio_node.c
     src/core/debug_cli.c
     src/core/rs485_monitor.c
     ${CMAKE_SOURCE_DIR}/lib/esl-math/src/dcm.c
