@@ -12,7 +12,7 @@
 
 static const char *TAG = "TELEMETRY";
 
-// 1Hz Telemetry Rate
+// 1Hz Telemetry Ratex
 #define TELEMETRY_RATE_MS 1000
 
 static void vTelemetryTask(void *pvParameters) {

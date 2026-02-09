@@ -82,6 +82,31 @@ bool tracking_radio_send_beacon(const TrackingBeacon_t *beacon_data) {
     return false;
 }
 
+// ============================================================================
+// RECEIVED TELEMETRY
+// ============================================================================
+
+
+void tracking_radio_handle_response(RS485_packet_t *pkt) {
+    if (pkt == NULL) return;
+    uint8_t message_ID = pkt->msg_desc.id;
+
+    switch (message_ID) {
+        case TC_ID_TRACKING_BEACON_ACK:
+            tracking_radio_confirm_beacon_ack();
+            break;
+            
+        case TC_ID_RESET:
+            ESP_LOGI(TAG, "Reset command acknowledged by 0x%02X", pkt->src_addr);
+            break;
+
+        default:
+            ESP_LOGD(TAG, "Tracking Radio TC ACK received: ID=%d", message_ID);
+            break;
+    }
+
+}
+
 void tracking_radio_confirm_beacon_ack(void) {
     if (ack_semaphore != NULL) {
         xSemaphoreGive(ack_semaphore);

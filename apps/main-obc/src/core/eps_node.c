@@ -325,3 +325,27 @@ uint16_t eps_get_battery_current_ma(void) {
 
 
     
+
+// ============================================================================
+// RESPONSE HANDLER
+// ============================================================================
+
+void eps_handle_response(RS485_packet_t *pkt) {
+    if (pkt == NULL) return;
+    
+    uint8_t id = pkt->msg_desc.id;
+    
+    switch (id) {
+        case TC_ID_EPS_POWER:
+            ESP_LOGI(TAG, "EPS Power command acknowledged by 0x%02X", pkt->src_addr);
+            break;
+
+        case TC_ID_RESET:
+            ESP_LOGI(TAG, "Reset command acknowledged by 0x%02X", pkt->src_addr);
+            break;
+
+        default:
+            ESP_LOGD(TAG, "EPS TC ACK received: ID=%d from 0x%02X", id, pkt->src_addr);
+            break;
+    }
+}

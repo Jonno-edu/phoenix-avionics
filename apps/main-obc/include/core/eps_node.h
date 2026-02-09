@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "telemetry_defs.h"
+#include "rs485_protocol.h"
 
 // ============================================================================
 // POWER LINE STATE ENUMERATION (2 bits each)
@@ -232,5 +233,11 @@ uint16_t eps_get_battery_voltage_mv(void);
  * @return Current in mA, or 0 if data not available
  */
 uint16_t eps_get_battery_current_ma(void);
+
+/**
+ * @brief Handle a response/ACK from the EPS
+ * @param pkt The packet received
+ */
+void eps_handle_response(RS485_packet_t *pkt);
 
 #endif // EPS_NODE_H

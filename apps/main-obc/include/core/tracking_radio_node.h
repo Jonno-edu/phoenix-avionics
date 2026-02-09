@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include "telemetry_defs.h"
 #include "telemetry.h"
+#include "rs485_protocol.h"
 
 // ============================================================================
 // TRACKING RADIO STATUS STRUCT
@@ -49,6 +50,12 @@ bool tracking_radio_send_beacon(const TrackingBeacon_t *beacon_data);
  *        Should be called from the TCTLM task
  */
 void tracking_radio_confirm_beacon_ack(void);
+
+/**
+ * @brief Handle a response/ACK from the Tracking Radio
+ * @param pkt The packet received
+ */
+void tracking_radio_handle_response(RS485_packet_t *pkt);
 
 // ============================================================================
 // FUNCTION PROTOTYPES - STORE DATA

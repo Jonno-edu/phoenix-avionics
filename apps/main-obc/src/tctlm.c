@@ -90,25 +90,19 @@ void TCTLM_processTelecommandAck(RS485_packet_t *pkt) {
     log_rx_packet_to_monitor(pkt);
     // ESP_LOGI(TAG, "TC ACK received from %02X for ID %d", pkt->src_addr, pkt->msg_desc.id);
 
-    uint8_t id = pkt->msg_desc.id;
-    
-    switch (id) {
-        case TC_ID_EPS_POWER:
-            ESP_LOGI(TAG, "EPS Power command acknowledged by 0x%02X", pkt->src_addr);
-            break;
+    uint8_t src_address = pkt->src_addr;
 
-        case TC_ID_RESET:
-            ESP_LOGI(TAG, "Reset command acknowledged by 0x%02X", pkt->src_addr);
+    switch (src_address) {
+        case ADDR_EPS:
+            eps_handle_response(pkt);
             break;
-
-        case TC_ID_TRACKING_BEACON_ACK:
-        case TC_ID_TRACKING_BEACON:
-            // Handle both the specific ACK ID (0x62) and the standard echo ID (0x42)
-            tracking_radio_confirm_beacon_ack();
+        
+        case ADDR_TRACKING_RADIO:
+            tracking_radio_handle_response(pkt);
             break;
 
         default:
-            ESP_LOGD(TAG, "TC ACK received: ID=%d from 0x%02X", id, pkt->src_addr);
+            ESP_LOGD(TAG, "TC ACK received: ID=%d from 0x%02X", pkt->msg_desc.id, pkt->src_addr);
             break;
     }
 }
