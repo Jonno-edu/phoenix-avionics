@@ -330,7 +330,7 @@ uint16_t eps_get_battery_current_ma(void) {
 // RESPONSE HANDLER
 // ============================================================================
 
-void eps_handle_response(RS485_packet_t *pkt) {
+void eps_handle_telecommand_ack(RS485_packet_t *pkt) {
     if (pkt == NULL) return;
     
     uint8_t id = pkt->msg_desc.id;
@@ -346,6 +346,45 @@ void eps_handle_response(RS485_packet_t *pkt) {
 
         default:
             ESP_LOGD(TAG, "EPS TC ACK received: ID=%d from 0x%02X", id, pkt->src_addr);
+            break;
+    }
+}
+
+void eps_handle_telemetry_response(RS485_packet_t *pkt) {
+    if (pkt == NULL) return;
+
+    uint8_t id = pkt->msg_desc.id;
+
+    switch (id) {
+        case TLM_ID_IDENTIFICATION:
+            /* Note: Identification is common, so we might want to store specific EPS info if needed 
+               For now just logging or standard struct. EPS uses legacy or common struct. */
+               // The original code didn't do much specific for EPS IDENT except logging.
+            ESP_LOGI(TAG, "EPS Identification received from 0x%02X", pkt->src_addr);
+            break;
+
+        case TLM_ID_EPS_POWER:
+            if (pkt->length >= sizeof(EpsPowerStatus_t)) {
+                EpsPowerStatus_t power_status;
+                memcpy(&power_status, pkt->data, sizeof(EpsPowerStatus_t));
+                eps_node_store_power_status(&power_status);
+            } else {
+                ESP_LOGW(TAG, "EPS Power response too short: %d bytes (expected %d)", pkt->length, sizeof(EpsPowerStatus_t));
+            }
+            break;
+
+        case TLM_ID_EPS_MEASURE: 
+            if (pkt->length >= sizeof(EpsMeasurements_t)) {
+                EpsMeasurements_t measurements;
+                memcpy(&measurements, pkt->data, sizeof(EpsMeasurements_t));
+                eps_node_store_measurements(&measurements);
+            } else {
+                ESP_LOGW(TAG, "EPS Measurements response too short: %d bytes (expected %d)", pkt->length, sizeof(EpsMeasurements_t));
+            }
+            break;
+
+        default:
+            ESP_LOGD(TAG, "Unknown EPS TLM Response ID: %d", id);
             break;
     }
 }

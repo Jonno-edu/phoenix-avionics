@@ -94,11 +94,11 @@ void TCTLM_processTelecommandAck(RS485_packet_t *pkt) {
 
     switch (src_address) {
         case ADDR_EPS:
-            eps_handle_response(pkt);
+            eps_handle_telecommand_ack(pkt);
             break;
         
         case ADDR_TRACKING_RADIO:
-            tracking_radio_handle_response(pkt);
+            tracking_radio_handle_telecommand_ack(pkt);
             break;
 
         default:
@@ -117,15 +117,9 @@ void TCTLM_processTelemetryRequest(RS485_packet_t *pkt) {
     // ESP_LOGI(TAG, "Telemetry Request %d from %02X", id, pkt->src_addr);
 
     switch (id) {
-        case TLM_ID_IDENTIFICATION: {
-            SystemData_t sys_data;
-            uint8_t buffer[sizeof(SystemData_t)];
-            getSystemIdentInfo(&sys_data);
-            system_data_pack(&sys_data, buffer);
-            rs485_send_packet(pkt->src_addr, MSG_TYPE_TLM_RESP, id, buffer, sizeof(SystemData_t));
-            ESP_LOGI(TAG, "Sent identification to 0x%02X", pkt->src_addr);
+        case TLM_ID_IDENTIFICATION:
+            obc_handle_telemetry_request(pkt);
             break;
-        }
 
         default:
             // ESP_LOGW(TAG, "Unknown TLM Req ID: %d from 0x%02X", id, pkt->src_addr);
@@ -139,106 +133,21 @@ void TCTLM_processTelemetryRequest(RS485_packet_t *pkt) {
 
 void TCTLM_processTelemetryResponse(RS485_packet_t *pkt) {
     log_rx_packet_to_monitor(pkt);
-    uint8_t id = pkt->msg_desc.id;
-    ESP_LOGD(TAG, "TLM Response: ID=%d, Src=%02X, Len=%d", id, pkt->src_addr, pkt->length);
+    // ESP_LOGD(TAG, "TLM Response: ID=%d, Src=%02X, Len=%d", pkt->msg_desc.id, pkt->src_addr, pkt->length);
     
-    switch (id) {
-        case 0:
-            printf("Received TLM_ID_IDENTIFICATION from 0x%02X\n", pkt->src_addr);
-            if (pkt->length >= sizeof(TlmIdentificationPayload_t)) {
-                TlmIdentificationPayload_t tlm;
-                memcpy(&tlm, pkt->data, sizeof(TlmIdentificationPayload_t));
-                
-                ESP_LOGI(TAG, "Node 0x%02X: Type=%d, Ver=%d): FW=%d.%d, Uptime=%us", 
-                         pkt->src_addr, tlm.node_type, tlm.interface_version,
-                         tlm.firmware_major, tlm.firmware_minor, 
-                         tlm.uptime_seconds);
-
-                if (pkt->src_addr == ADDR_TRACKING_RADIO) {
-                    tracking_radio_node_store_status((TrackingRadioStatus_t*)&tlm);
-                }
-            } else {
-                ESP_LOGW(TAG, "Identification response too short: %d bytes, ", pkt->length);
-            }
-            break;
-        
-        case TLM_ID_EPS_POWER:
-            if (pkt->src_addr != ADDR_EPS) {
-                ESP_LOGW(TAG, "EPS Power response from unexpected source: 0x%02X", pkt->src_addr);
-                break;
-            }
-
-            if (pkt->length >= sizeof(EpsPowerStatus_t)) {
-                EpsPowerStatus_t power_status;
-                memcpy(&power_status, pkt->data, sizeof(EpsPowerStatus_t));
-
-                eps_node_store_power_status(&power_status);
-            } else {
-                ESP_LOGW(TAG, "EPS Power response too short: %d bytes (expected %d)", pkt->length, sizeof(EpsPowerStatus_t));
-            }
+    switch (pkt->src_addr) {
+        case ADDR_EPS:
+            eps_handle_telemetry_response(pkt);
             break;
 
-        case TLM_ID_EPS_MEASURE: 
-            if (pkt->src_addr != ADDR_EPS) {
-                ESP_LOGW(TAG, "EPS Measurements response from unexpected source: 0x%02X", pkt->src_addr);
-                break;
-            }
-
-            if (pkt->length >= sizeof(EpsMeasurements_t)) {
-                EpsMeasurements_t measurements;
-                memcpy(&measurements, pkt->data, sizeof(EpsMeasurements_t));
-
-                eps_node_store_measurements(&measurements);
-            } else {
-                ESP_LOGW(TAG, "EPS Measurements response too short: %d bytes (expected %d)", pkt->length, sizeof(EpsMeasurements_t));
-            }
+        case ADDR_TRACKING_RADIO:
+            tracking_radio_handle_telemetry_response(pkt);
             break;
 
         default:
-            ESP_LOGD(TAG, "Unknown TLM Response ID: %d from 0x%02X", id, pkt->src_addr);
+            ESP_LOGD(TAG, "Unknown Source for TLM Response: %02X (ID=%d)", pkt->src_addr, pkt->msg_desc.id);
             break;
-
-        }
-
-    // // Log full raw packet: [Len Dest Src Desc] [Payload...]
-    // char raw_buf[256] = {0};
-    // int offset = 0;
-    
-    // // Header
-    // offset += snprintf(raw_buf + offset, sizeof(raw_buf) - offset, "%02X %02X %02X %02X ",
-    //                    pkt->length, pkt->dest_addr, pkt->src_addr, pkt->msg_desc.raw);
-                       
-    // // Payload
-    // for(int i=0; i<pkt->length && offset < (sizeof(raw_buf) - 4); i++) {
-    //     offset += snprintf(raw_buf + offset, sizeof(raw_buf) - offset, "%02X ", pkt->data[i]);
-    // }
-    // // ESP_LOGI(TAG, "RX Raw: [%s]", raw_buf);
-
-    // if (id == ID_TLM_IDENTIFICATION) {
-    //     if (pkt->src_addr == 0x03) {
-    //         ESP_LOGI(TAG, "!!! RECEIVED IDENTIFICATION FROM TARGET 0x03 !!!");
-    //     }
-    //     // Accept 8 bytes (legacy/EPS) or more (upto full struct size)
-    //     if (pkt->length >= 8 && pkt->length <= sizeof(TlmIdentificationPayload_t)) {
-    //         TlmIdentificationPayload_t tlm = {0};
-    //         // Safely copy available data
-    //         memcpy(&tlm, pkt->data, pkt->length);
-            
-    //         // ESP_LOGI(TAG, "Node %02X (Type %d, Ver %d): fw %d.%d, uptime %us.%03u", 
-    //         //          pkt->src_addr, tlm.node_type, tlm.interface_version,
-    //         //          tlm.firmware_major, tlm.firmware_minor, 
-    //         //          tlm.uptime_seconds, tlm.uptime_milliseconds);
-            
-    //         if (pkt->length >= 9) {
-    //             ESP_LOGI(TAG, "Flags 0x%02X", tlm.status_flags);
-    //             if (tlm.status_flags & 0x01) { // STATUS_FLAG_CMD_PENDING
-    //                 ESP_LOGI(TAG, "Node %02X indicates CMD_PENDING", pkt->src_addr);
-    //             }
-    //         }
-    //     } else {
-    //          // ESP_LOGW(TAG, "ID_TLM_IDENTIFICATION: Unexpected length %d", pkt->length);
-    //     }
-    // }
+    }
 }
 
 // ============================================================================

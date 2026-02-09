@@ -5,8 +5,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "telemetry_defs.h"
-
-#define TLM_ID_IDENTIFICATION 128
+#include "rs485_protocol.h"
 
 // ID: ID_TLM_IDENTIFICATION
 typedef struct {
@@ -42,3 +41,9 @@ bool system_config_get_sim_mode(void);
 uint8_t system_config_get_telem_rate(void);
 
 #endif // OBC_DATA_H
+
+/**
+ * @brief Handle a Telemetry Request (for OBC data)
+ * @param pkt The request packet
+ */
+void obc_handle_telemetry_request(RS485_packet_t *pkt);

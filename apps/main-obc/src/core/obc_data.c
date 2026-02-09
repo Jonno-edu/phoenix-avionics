@@ -1,6 +1,10 @@
 // obc_data.c
 #include "core/obc_data.h"
 #include <string.h>
+#include "core/logging.h"
+#include "rs485_protocol.h"
+
+static const char *TAG = "OBC_DATA";
 
 #if PICO_BUILD
     #include <pico/stdlib.h>
@@ -122,3 +126,29 @@ void system_config_set_telem_rate(uint8_t rate_hz) {
 uint8_t system_config_get_log_level(void) { return sys_config.log_level; }
 bool system_config_get_sim_mode(void) { return sys_config.sim_mode_enabled; }
 uint8_t system_config_get_telem_rate(void) { return sys_config.telem_rate_hz; }
+
+// ============================================================================
+// TELEMETRY REQUEST HANDLER
+// ============================================================================
+
+void obc_handle_telemetry_request(RS485_packet_t *pkt) {
+    if (pkt == NULL) return;
+    
+    uint8_t id = pkt->msg_desc.id;
+    
+    switch (id) {
+        case TLM_ID_IDENTIFICATION: {
+            SystemData_t sys_data;
+            uint8_t buffer[sizeof(SystemData_t)];
+            getSystemIdentInfo(&sys_data);
+            system_data_pack(&sys_data, buffer);
+            rs485_send_packet(pkt->src_addr, MSG_TYPE_TLM_RESP, id, buffer, sizeof(SystemData_t));
+            ESP_LOGI(TAG, "Sent identification to 0x%02X", pkt->src_addr);
+            break;
+        }
+
+        default:
+            // ESP_LOGW(TAG, "Unknown OBC TLM Req ID: %d", id);
+            break;
+    }
+}

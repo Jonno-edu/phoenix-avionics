@@ -87,7 +87,7 @@ bool tracking_radio_send_beacon(const TrackingBeacon_t *beacon_data) {
 // ============================================================================
 
 
-void tracking_radio_handle_response(RS485_packet_t *pkt) {
+void tracking_radio_handle_telecommand_ack(RS485_packet_t *pkt) {
     if (pkt == NULL) return;
     uint8_t message_ID = pkt->msg_desc.id;
 
@@ -105,6 +105,33 @@ void tracking_radio_handle_response(RS485_packet_t *pkt) {
             break;
     }
 
+}
+
+void tracking_radio_handle_telemetry_response(RS485_packet_t *pkt) {
+    if (pkt == NULL) return;
+    uint8_t message_ID = pkt->msg_desc.id;
+
+    switch (message_ID) {
+        case TLM_ID_IDENTIFICATION:
+             if (pkt->length >= sizeof(TlmIdentificationPayload_t)) {
+                TlmIdentificationPayload_t tlm;
+                memcpy(&tlm, pkt->data, sizeof(TlmIdentificationPayload_t));
+                
+                ESP_LOGI(TAG, "Tracking Radio Info: Ver=%d): FW=%d.%d, Uptime=%us", 
+                         tlm.interface_version,
+                         tlm.firmware_major, tlm.firmware_minor, 
+                         tlm.uptime_seconds);
+
+                tracking_radio_node_store_status((TrackingRadioStatus_t*)&tlm);
+            } else {
+                ESP_LOGW(TAG, "Tracking Radio Identification response too short");
+            }
+            break;
+
+        default:
+            ESP_LOGD(TAG, "Tracking Radio TLM Response received: ID=%d", message_ID);
+            break;
+    }
 }
 
 void tracking_radio_confirm_beacon_ack(void) {

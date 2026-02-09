@@ -52,10 +52,16 @@ bool tracking_radio_send_beacon(const TrackingBeacon_t *beacon_data);
 void tracking_radio_confirm_beacon_ack(void);
 
 /**
- * @brief Handle a response/ACK from the Tracking Radio
+ * @brief Handle a TC ACK from the Tracking Radio
  * @param pkt The packet received
  */
-void tracking_radio_handle_response(RS485_packet_t *pkt);
+void tracking_radio_handle_telecommand_ack(RS485_packet_t *pkt);
+
+/**
+ * @brief Handle a Telemetry Response from the Tracking Radio
+ * @param pkt The packet received
+ */
+void tracking_radio_handle_telemetry_response(RS485_packet_t *pkt);
 
 // ============================================================================
 // FUNCTION PROTOTYPES - STORE DATA

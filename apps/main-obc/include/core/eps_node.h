@@ -235,9 +235,15 @@ uint16_t eps_get_battery_voltage_mv(void);
 uint16_t eps_get_battery_current_ma(void);
 
 /**
- * @brief Handle a response/ACK from the EPS
+ * @brief Handle a TC ACK from the EPS
  * @param pkt The packet received
  */
-void eps_handle_response(RS485_packet_t *pkt);
+void eps_handle_telecommand_ack(RS485_packet_t *pkt);
+
+/**
+ * @brief Handle a Telemetry Response from the EPS
+ * @param pkt The packet received
+ */
+void eps_handle_telemetry_response(RS485_packet_t *pkt);
 
 #endif // EPS_NODE_H
