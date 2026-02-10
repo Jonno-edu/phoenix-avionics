@@ -57,12 +57,18 @@ static void vTelemetryTask(void *pvParameters) {
 }
 
 void telemetry_task_init(void) {
+    TaskHandle_t xHandle = NULL;
+
     xTaskCreate(
         vTelemetryTask,
         "Telemetry",
         2048,                        // Stack size (Beacon is ~82 bytes, plenty of room)
         NULL,
         tskIDLE_PRIORITY + 2,        // Priority: Moderate (Above IDLE, below hardware IO)
-        NULL
+        &xHandle
     );
+
+    // Pilot & Co-Pilot Model:
+    // Core 1 (Co-Pilot): Handles Comms, Logging and Telemetry
+    vTaskCoreAffinitySet(xHandle, (1 << 1));
 }

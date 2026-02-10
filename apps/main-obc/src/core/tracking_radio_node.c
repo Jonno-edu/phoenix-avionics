@@ -62,25 +62,36 @@ bool tracking_radio_send_beacon(const TrackingBeacon_t *beacon_data) {
         return false;
     }
 
-    // Clear any stale ACKs
+    // --- LATENCY DEBUG LOGGING ---
+    // Log the actual values inside the packet right before they hit the wire.
+    // Compare 'PktTime' below with the system log timestamp on the left of your terminal 
+    // to see exactly how old this data is when it leaves the microcontroller.
+    ESP_LOGI(TAG, "TX BEACON | PktTime: %u.%03u | GPS: [%.6f, %.6f] Alt: %.1fm | AccZ: %.2f m/s^2", 
+             beacon_data->runtime_sec, 
+             beacon_data->runtime_ms,
+             beacon_data->gps_lat * SCALE_POS_LATLON,
+             beacon_data->gps_lon * SCALE_POS_LATLON,
+             beacon_data->gps_alt * SCALE_ALTITUDE,
+             beacon_data->accel_z * SCALE_ACCEL);
+
+    // 1. Clear any stale ACKs from previous transactions
     xSemaphoreTake(ack_semaphore, 0);
 
-    for (int i = 0; i < BEACON_RETRIES; i++) {
-        ESP_LOGI(TAG, "Sending Tracking Beacon (Attempt %d/%d)", i + 1, BEACON_RETRIES);
-        
-        rs485_send_packet(ADDR_TRACKING_RADIO, MSG_TYPE_TELECOMMAND, TC_ID_TRACKING_BEACON, (uint8_t*)beacon_data, sizeof(TrackingBeacon_t));
+    // 2. Send the packet ONCE (No Retry Loop)
+    rs485_send_packet(ADDR_TRACKING_RADIO, MSG_TYPE_TELECOMMAND, TC_ID_TRACKING_BEACON, (uint8_t*)beacon_data, sizeof(TrackingBeacon_t));
 
-        if (xSemaphoreTake(ack_semaphore, pdMS_TO_TICKS(BEACON_ACK_TIMEOUT_MS)) == pdTRUE) {
-            ESP_LOGD(TAG, "Beacon ACK received");
-            return true;
-        } else {
-            ESP_LOGW(TAG, "Beacon ACK timeout (Attempt %d/%d)", i + 1, BEACON_RETRIES);
-        }
-    }
+    // 3. Wait for ACK (Single timeout check)
+    //    We wait briefly to know if it succeeded, but we do NOT re-send if it fails.
+    if (xSemaphoreTake(ack_semaphore, pdMS_TO_TICKS(BEACON_ACK_TIMEOUT_MS)) == pdTRUE) {
+        ESP_LOGD(TAG, "Beacon ACK received");
+        return true;
+    } 
     
-    ESP_LOGE(TAG, "Failed to send beacon after %d attempts", BEACON_RETRIES);
+    // Log warning but return false immediately so the system can move on to the next fresh packet
+    ESP_LOGW(TAG, "Beacon ACK timeout (Single Attempt - Skipped Retry)");
     return false;
 }
+
 
 // ============================================================================
 // RECEIVED TELEMETRY
@@ -145,6 +156,8 @@ void tracking_radio_confirm_beacon_ack(void) {
 // ============================================================================
 
 void tracking_radio_node_store_status(const TrackingRadioStatus_t *status) {
+    ESP_LOGD(TAG, "tracking_radio_node_store_status called");
+
     if (status == NULL) {
         ESP_LOGW(TAG, "NULL pointer passed to store_status");
         return;

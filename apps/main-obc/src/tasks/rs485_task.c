@@ -69,12 +69,18 @@ static void vRS485Task(void *pvParameters) {
 }
 
 void rs485_task_init(void) {
+    TaskHandle_t xHandle = NULL;
+
     xTaskCreate(
         vRS485Task,
         "RS485",
         1024,
         NULL,
         PRIORITY_RS485_PROCESSING,
-        NULL
+        &xHandle
     );
+
+    // Pilot & Co-Pilot Model:
+    // Core 1 (Co-Pilot): Handles I/O, Comms and Logging
+    vTaskCoreAffinitySet(xHandle, (1 << 1));
 }

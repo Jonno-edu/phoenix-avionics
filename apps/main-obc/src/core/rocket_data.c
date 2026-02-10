@@ -5,20 +5,43 @@
 #include <string.h>
 #include <math.h>          // Required for lroundf()
 
-// Helper macro for thread safety
-// TODO: Replace with FreeRTOS mutex when you add RTOS
-#define LOCK_DATA()   
-#define UNLOCK_DATA() 
+// RP2040/RP2350 SDK Includes for Spinlocks
+#if PICO_BUILD
+#include "pico/stdlib.h"
+#include "hardware/sync.h"
+#endif
 
 // The Master Copy of the Data
 static TrackingBeacon_t _rocket_data;
 
+#if PICO_BUILD
+// Hardware Spinlock Handle
+static spin_lock_t *s_rocket_data_lock = NULL;
+
+// Macros for thread safety
+#define LOCK_DATA()   uint32_t flags = spin_lock_blocking(s_rocket_data_lock)
+#define UNLOCK_DATA() spin_unlock(s_rocket_data_lock, flags)
+
+#else
+// Host/Mock Build: No-op or simple mutex if needed
+#define LOCK_DATA()
+#define UNLOCK_DATA()
+#endif
+
 void rocket_data_init(void) {
     memset(&_rocket_data, 0, sizeof(_rocket_data));
+
+#if PICO_BUILD
+    // Claim a free hardware spinlock index
+    // Note: This relies on the spinlock API being initialized by runtime
+    int lock_num = spin_lock_claim_unused(true); 
+    s_rocket_data_lock = spin_lock_init(lock_num);
+#endif
 }
 
 // ============================================================================
 // SETTERS (Input: SI Units -> Output: Telemetry Encoded Integers)
+// Safe to call from any core, any task.
 // ============================================================================
 
 void rocket_data_update_gps(double lat_deg, double lon_deg, float alt_m, 
@@ -115,9 +138,9 @@ void rocket_data_update_runtime(uint16_t seconds, uint16_t milliseconds) {
     UNLOCK_DATA();
 }
 
-void rocket_data_update_time_flags(uint8_t flags) {
+void rocket_data_update_time_flags(uint8_t flags_in) {
     LOCK_DATA();
-    _rocket_data.time_valid_flags = flags;
+    _rocket_data.time_valid_flags = flags_in;
     UNLOCK_DATA();
 }
 
@@ -158,27 +181,108 @@ float rocket_data_get_mag_y_si(void) { return _rocket_data.mag_y * SCALE_MAG; }
 float rocket_data_get_mag_z_si(void) { return _rocket_data.mag_z * SCALE_MAG; }
 
 // Baro 
-float rocket_data_get_baro_press_si(void) { return (float)_rocket_data.baro_press * SCALE_BARO_PRESS; }
-float rocket_data_get_baro_temp_si(void) { return (float)_rocket_data.baro_temp * SCALE_BARO_TEMP; }
+float rocket_data_get_baro_press_si(void) { 
+    LOCK_DATA(); 
+    float val = (float)_rocket_data.baro_press * SCALE_BARO_PRESS; 
+    UNLOCK_DATA();
+    return val;
+}
+float rocket_data_get_baro_temp_si(void) { 
+    LOCK_DATA(); 
+    float val = (float)_rocket_data.baro_temp * SCALE_BARO_TEMP; 
+    UNLOCK_DATA();
+    return val;
+}
 
 // GPS
-double rocket_data_get_gps_lat_si(void) { return _rocket_data.gps_lat * (double)SCALE_POS_LATLON; }
-double rocket_data_get_gps_lon_si(void) { return _rocket_data.gps_lon * (double)SCALE_POS_LATLON; }
-float  rocket_data_get_gps_alt_si(void) { return _rocket_data.gps_alt * SCALE_ALTITUDE; } 
-float  rocket_data_get_gps_vel_n_si(void) { return _rocket_data.gps_vel_n * SCALE_VELOCITY; }
-float  rocket_data_get_gps_vel_e_si(void) { return _rocket_data.gps_vel_e * SCALE_VELOCITY; }
-float  rocket_data_get_gps_vel_d_si(void) { return _rocket_data.gps_vel_d * SCALE_VELOCITY; }
+double rocket_data_get_gps_lat_si(void) { 
+    LOCK_DATA(); 
+    double val = _rocket_data.gps_lat * (double)SCALE_POS_LATLON; 
+    UNLOCK_DATA();
+    return val;
+}
+double rocket_data_get_gps_lon_si(void) { 
+    LOCK_DATA(); 
+    double val = _rocket_data.gps_lon * (double)SCALE_POS_LATLON; 
+    UNLOCK_DATA();
+    return val;
+}
+float  rocket_data_get_gps_alt_si(void) { 
+    LOCK_DATA(); 
+    float val = _rocket_data.gps_alt * SCALE_ALTITUDE; 
+    UNLOCK_DATA();
+    return val;
+} 
+float  rocket_data_get_gps_vel_n_si(void) { 
+    LOCK_DATA(); 
+    float val = _rocket_data.gps_vel_n * SCALE_VELOCITY; 
+    UNLOCK_DATA();
+    return val;
+}
+float  rocket_data_get_gps_vel_e_si(void) { 
+    LOCK_DATA(); 
+    float val = _rocket_data.gps_vel_e * SCALE_VELOCITY; 
+    UNLOCK_DATA();
+    return val;
+}
+float  rocket_data_get_gps_vel_d_si(void) { 
+    LOCK_DATA(); 
+    float val = _rocket_data.gps_vel_d * SCALE_VELOCITY; 
+    UNLOCK_DATA();
+    return val;
+}
 
 // Estimation
-double rocket_data_get_est_lat_si(void) { return _rocket_data.est_lat * (double)SCALE_POS_LATLON; }
-double rocket_data_get_est_lon_si(void) { return _rocket_data.est_lon * (double)SCALE_POS_LATLON; }
-float  rocket_data_get_est_alt_si(void) { return _rocket_data.est_alt * SCALE_ALTITUDE; } 
-float  rocket_data_get_est_vel_n_si(void) { return _rocket_data.est_vel_n * SCALE_VELOCITY; }
-float  rocket_data_get_est_vel_e_si(void) { return _rocket_data.est_vel_e * SCALE_VELOCITY; }
-float  rocket_data_get_est_vel_d_si(void) { return _rocket_data.est_vel_d * SCALE_VELOCITY; }
+double rocket_data_get_est_lat_si(void) { 
+    LOCK_DATA(); 
+    double val = _rocket_data.est_lat * (double)SCALE_POS_LATLON; 
+    UNLOCK_DATA();
+    return val;
+}
+double rocket_data_get_est_lon_si(void) { 
+    LOCK_DATA(); 
+    double val = _rocket_data.est_lon * (double)SCALE_POS_LATLON; 
+    UNLOCK_DATA();
+    return val;
+}
+float  rocket_data_get_est_alt_si(void) { 
+    LOCK_DATA(); 
+    float val = _rocket_data.est_alt * SCALE_ALTITUDE; 
+    UNLOCK_DATA();
+    return val;
+} 
+float  rocket_data_get_est_vel_n_si(void) { 
+    LOCK_DATA(); 
+    float val = _rocket_data.est_vel_n * SCALE_VELOCITY; 
+    UNLOCK_DATA();
+    return val;
+}
+float  rocket_data_get_est_vel_e_si(void) { 
+    LOCK_DATA(); 
+    float val = _rocket_data.est_vel_e * SCALE_VELOCITY; 
+    UNLOCK_DATA();
+    return val;
+}
+float  rocket_data_get_est_vel_d_si(void) { 
+    LOCK_DATA(); 
+    float val = _rocket_data.est_vel_d * SCALE_VELOCITY; 
+    UNLOCK_DATA();
+    return val;
+}
 
 // Internal
-float rocket_data_get_temp_stack_si(void) { return _rocket_data.temp_stack * SCALE_TEMP_STACK; }
+float rocket_data_get_temp_stack_si(void) { 
+    LOCK_DATA(); 
+    float val = _rocket_data.temp_stack * SCALE_TEMP_STACK; 
+    UNLOCK_DATA();
+    return val;
+}
+
+int32_t rocket_data_get_gps_lat(void) { LOCK_DATA(); int32_t val = _rocket_data.gps_lat; UNLOCK_DATA(); return val; }
+int32_t rocket_data_get_gps_lon(void) { LOCK_DATA(); int32_t val = _rocket_data.gps_lon; UNLOCK_DATA(); return val; }
+int32_t rocket_data_get_gps_alt(void) { LOCK_DATA(); int32_t val = _rocket_data.gps_alt; UNLOCK_DATA(); return val; }
+
+uint8_t rocket_data_get_avionics_state(void) { LOCK_DATA(); uint8_t val = _rocket_data.avionics_state; UNLOCK_DATA(); return val; }
 
 // ============================================================================
 // TEST UTILS

@@ -77,6 +77,8 @@ static void vSensorsTask(void *pvParameters) {
 }
 
 void sensors_task_init(void) {
+    TaskHandle_t xHandle = NULL;
+
     // Assuming PRIORITY_TEMP_MONITOR or similar appropriate priority. 
     // We can reuse the priority macro or define a new one. 
     // I'll check task_manager.h for priorities.
@@ -87,8 +89,12 @@ void sensors_task_init(void) {
         2048, // Increased stack size slightly for potential future sensors
         NULL,
         PRIORITY_SENSORS, 
-        NULL
+        &xHandle
     );
+
+    // Pilot & Co-Pilot Model:
+    // Core 0 (Pilot): Handles Logic, State Estimation, and Flight Control
+    vTaskCoreAffinitySet(xHandle, (1 << 0));
 }
 
 

@@ -101,6 +101,13 @@ static bool read_sensor(uint8_t reg, void* dest, size_t size) {
 
 static void vHILSensorTask(void *pvParameters) {
     (void)pvParameters;
+
+    // DEBUG: Confirm Core Affinity
+    // get_core_num() is a Pico SDK function found in pico/stdlib.h or similar
+    // Since this file includes hardware/i2c.h which usually pulls in base headers,
+    // we should validly call it.
+    printf("[HIL] Starting HIL Sensor Task on Core %u\n", get_core_num());
+
     vTaskDelay(pdMS_TO_TICKS(2000)); // Wait for boot
     
     if (!hil_i2c_init()) {
@@ -216,7 +223,11 @@ static void vHILSensorTask(void *pvParameters) {
         // ------------------------------------------
         // LOGGING (1 Hz) - Scaled via RocketData Getters
         // ------------------------------------------
-        if (to_ms_since_boot(get_absolute_time()) - last_log_ms > 1000) {
+        // Update Runtime every loop (100 Hz approx)
+        uint32_t current_time_ms = to_ms_since_boot(get_absolute_time());
+        rocket_data_update_runtime((uint16_t)(current_time_ms / 1000), (uint16_t)(current_time_ms % 1000));
+
+        if (current_time_ms - last_log_ms > 1000) {
             ESP_LOGI(TAG, "--- HIL DEBUG (RocketData Getters) ---");
             ESP_LOGI(TAG, "IMU  | Accel: [%.2f, %.2f, %.2f] m/s^2 | Gyro: [%.3f, %.3f, %.3f] rad/s",
                      rocket_data_get_accel_x_si(), rocket_data_get_accel_y_si(), rocket_data_get_accel_z_si(),
@@ -249,7 +260,12 @@ static void vHILSensorTask(void *pvParameters) {
 #if ENABLE_HIL_SENSORS
 
 void hil_sensor_task_init(void) {
-    xTaskCreate(vHILSensorTask, "HIL_Sensor", 4096, NULL, PRIORITY_HIL_SENSORS, NULL);
+    TaskHandle_t xHandle = NULL;
+    xTaskCreate(vHILSensorTask, "HIL_Sensor", 4096, NULL, PRIORITY_HIL_SENSORS, &xHandle);
+    
+    // Pilot & Co-Pilot Model:
+    // Core 0 (Pilot): Handles Logic, State Estimation, and Flight Control
+    vTaskCoreAffinitySet(xHandle, (1 << 0));
 }
 
 #else

@@ -121,6 +121,9 @@ set(COMMON_SOURCES
     src/bsp/bsp_init.c
     src/hal/platform_hal.c
     src/tasks/task_manager.c
+    src/tasks/queue_manager.c
+    src/tasks/pilot_tasks.c
+    src/tasks/command_handler_task.c
     src/tasks/heartbeat_task.c
     src/tasks/rs485_task.c
     src/tasks/telemetry_task.c
