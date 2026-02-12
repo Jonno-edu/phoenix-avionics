@@ -8,16 +8,6 @@
 #include "rs485_protocol.h"
 #include "../../src/tasks/queue_manager.h" // For InterfaceID_t
 
-// ID: ID_TLM_IDENTIFICATION
-typedef struct {
-    uint8_t node_type;              // 1=OBC, 2=EPS
-    uint8_t interface_version;
-    uint8_t firmware_major;
-    uint8_t firmware_minor;
-    uint16_t uptime_seconds;
-    uint16_t uptime_milliseconds;         
-} PACKED_STRUCT TlmIdentificationPayload_t;
-
 // System identification data structure
 typedef TlmIdentificationPayload_t SystemData_t;
 

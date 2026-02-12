@@ -28,27 +28,27 @@ static void vStartupCheck(void *pvParameters) {
 }
 
 // Temporary Test Injection Task
-static void vTestInjectionTask(void *pvParameters) {
-    uint8_t level = 1; // Start with Error (1)
-    const TickType_t xDelay = pdMS_TO_TICKS(5000);
+// static void vTestInjectionTask(void *pvParameters) {
+//     uint8_t level = 1; // Start with Error (1)
+//     const TickType_t xDelay = pdMS_TO_TICKS(5000);
 
-    // Give system time to boot
-    vTaskDelay(pdMS_TO_TICKS(3000));
-    printf("--- TEST INJECTOR STARTED ---\n");
+//     // Give system time to boot
+//     vTaskDelay(pdMS_TO_TICKS(3000));
+//     printf("--- TEST INJECTOR STARTED ---\n");
 
-    for (;;) {
-        vTaskDelay(xDelay);
+//     for (;;) {
+//         vTaskDelay(xDelay);
         
-        // Toggle Level: 1 (Error) <-> 3 (Info)
-        level = (level == 1) ? 3 : 1;
-        uint8_t payload[1] = { level };
+//         // Toggle Level: 1 (Error) <-> 3 (Info)
+//         level = (level == 1) ? 3 : 1;
+//         uint8_t payload[1] = { level };
 
-        printf(">>> INJECTING: Log Level = %d\n", level);
+//         printf(">>> INJECTING: Log Level = %d\n", level);
         
-        // Inject command via Loopback Interface
-        cmd_inject_packet(IF_LOOPBACK, MSG_TYPE_TELECOMMAND, TC_OBC_LOG_LEVEL, payload, 1);
-    }
-}
+//         // Inject command via Loopback Interface
+//         cmd_inject_packet(IF_LOOPBACK, MSG_TYPE_TELECOMMAND, TC_OBC_LOG_LEVEL, payload, 1);
+//     }
+// }
 
 void tasks_create_all(void) {
     queue_manager_init();
@@ -72,7 +72,7 @@ void tasks_create_all(void) {
     tracking_radio_node_init();
     
     // Create Test Injector
-    xTaskCreate(vTestInjectionTask, "TestInject", 1024, NULL, tskIDLE_PRIORITY + 1, NULL);
+    // xTaskCreate(vTestInjectionTask, "TestInject", 1024, NULL, tskIDLE_PRIORITY + 1, NULL);
 
     xTaskCreate(vStartupCheck, "StartupCheck", 512, NULL, tskIDLE_PRIORITY, NULL);
 }

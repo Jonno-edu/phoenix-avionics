@@ -55,10 +55,54 @@
 #define TC_OBC_TELEM_RATE       0x05
 #define TC_OBC_LOG_LEVEL        0x06
 #define TC_OBC_SIM_MODE         0x08
+
+// Log Levels for TC_OBC_LOG_LEVEL
+#define LOG_LEVEL_NONE          0
+#define LOG_LEVEL_ERROR         1
+#define LOG_LEVEL_INFO          2
+#define LOG_LEVEL_DEBUG         3
+
 #define TC_OBC_AVIONICS_MODE    0x09
+#define TC_OBC_ENABLE_TUNNEL    0x0A // "Please forward all RS485 traffic to USB"
+#define TC_OBC_FLIGHT_STATE     0x0B
+
 
 // TLM: Telemetry Responses (OBC -> Ground)
 #define TLM_OBC_SENSOR_DATA     0x02 // OBC Internal Sensors 
+#define TLM_OBC_HIGH_SPEED_STREAM  0x0B // Packed IMU/Baro struct
+
+
+// ============================================================================
+// TELEMETRY STRUCTURES
+// ============================================================================
+
+// ID: TLM_COMMON_IDENT
+typedef struct {
+    uint8_t node_type;              // 1=OBC, 2=EPS, ...
+    uint8_t interface_version;
+    uint8_t firmware_major;
+    uint8_t firmware_minor;
+    uint16_t uptime_seconds;
+    uint16_t uptime_milliseconds;         
+} PACKED_STRUCT TlmIdentificationPayload_t;
+
+// ID: TLM_OBC_SENSOR_DATA
+typedef struct {
+    uint32_t time;
+    int16_t accel_x;
+    int16_t accel_y;
+    int16_t accel_z;
+} PACKED_STRUCT TlmSensorData_t;
+
+// ID: ??? (System Status)
+typedef struct {
+    uint32_t time;
+    uint8_t mode;
+    uint16_t vbat_mv;
+    uint8_t cpu_load;
+} PACKED_STRUCT TlmSystemStatus_t;
+
+
 
 
 #endif // TELEMETRY_DEFS_H

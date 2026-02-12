@@ -163,7 +163,7 @@ void obc_handle_telemetry_request(InterfaceID_t src_id, RS485_packet_t *pkt) {
             
             tctlm_send_reply(src_id, &reply);
             
-            ESP_LOGI(TAG, "Sent identification to 0x%02X", pkt->src_addr);
+            ESP_LOGD(TAG, "Sent identification to 0x%02X", pkt->src_addr);
             break;
         }
 

@@ -43,12 +43,10 @@ static void rs485_tx_bridge(const uint8_t *data, uint16_t length) {
 
 // Callback to bridge protocol lib to USB Console (Egress USB)
 static void usb_tx_bridge(const uint8_t *data, uint16_t length) {
-    // Only send raw binary if we are in STREAM mode.
-    // In human-readable modes (VERBOSE, DECODED), we do not want raw binary 
-    // packets corrupting the log output.
-    if (rs485_monitor_get_mode() == RS485_MON_STREAM) {
-        console_send(data, length);
-    }
+    // ALWAYS send packets directed to USB.
+    // Even if monitor is in Verbose mode, we need the binary response 
+    // to reach the host script (GSE).
+    console_send(data, length);
 }
 
 // Global instances

@@ -124,7 +124,7 @@ void TCTLM_processTelecommandAck(CommsInterfaceId_t src_id, RS485_packet_t *pkt)
 void TCTLM_processTelemetryRequest(CommsInterfaceId_t src_id, RS485_packet_t *pkt) {
     log_rx_packet_to_monitor(pkt);
     uint8_t id = pkt->msg_desc.id;
-    // ESP_LOGI(TAG, "Telemetry Request %d from %02X", id, pkt->src_addr);
+    ESP_LOGI(TAG, "Telemetry Request %d from %02X", id, pkt->src_addr);
 
     switch (id) {
         case TLM_COMMON_IDENT:
@@ -132,7 +132,7 @@ void TCTLM_processTelemetryRequest(CommsInterfaceId_t src_id, RS485_packet_t *pk
             break;
 
         default:
-            // ESP_LOGW(TAG, "Unknown TLM Req ID: %d from 0x%02X", id, pkt->src_addr);
+            ESP_LOGW(TAG, "Unknown TLM Req ID: %d from 0x%02X", id, pkt->src_addr);
             break;
     }
 }

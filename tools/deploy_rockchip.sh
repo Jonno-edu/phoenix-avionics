@@ -18,13 +18,14 @@ echo "1. Generating Sensor Configurations..."
 
 # Use SCRIPT_DIR to find the python script correctly
 python3 "$SCRIPT_DIR/gen_sensors.py"
+python3 "$SCRIPT_DIR/gen_telemetry.py"
 
 if [ $? -ne 0 ]; then
-    echo "Error: Sensor generation failed."
+    echo "Error: Generator scripts failed."
     exit 1
 fi
-echo "   - sensor_config.h (Updated)"
-echo "   - sensor_config.py (Updated)"
+echo "   - sensor_config.h/py (Updated)"
+echo "   - telemetry_defs.py (Updated)"
 
 # 2. DEPLOY TO ROCKCHIP
 echo "--------------------------------------"
@@ -36,8 +37,11 @@ rsync -avz --progress \
     "$LOCAL_PY_DIR/sensor_config.py" \
     "$LOCAL_PY_DIR/phoenix_sensor_stream.csv" \
     "$LOCAL_PY_DIR/obc_monitor.py" \
+    "$LOCAL_PY_DIR/cmd_get_ident.py" \
+    "$LOCAL_PY_DIR/cmd_set_log.py" \
     "$LOCAL_PY_DIR/run_hil.sh" \
-    "$LOCAL_PY_DIR//hil_node.uf2" \
+    "$LOCAL_PY_DIR/hil_node.uf2" \
+    "$LOCAL_PY_DIR/common" \
     $ROCKCHIP_USER@$ROCKCHIP_IP:$REMOTE_DIR/
 
 if [ $? -eq 0 ]; then

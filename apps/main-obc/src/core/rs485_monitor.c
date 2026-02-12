@@ -1,5 +1,6 @@
 #include "core/rs485_monitor.h"
 #include "telemetry_defs.h"
+#include "core/obc_data.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -296,7 +297,7 @@ static void print_verbose_packet(const uint8_t *data, uint16_t len, bool is_tx) 
 // MAIN LOGGING FUNCTIONS
 // ============================================================================
 void rs485_monitor_log_tx(const uint8_t *data, uint16_t len) {
-    if (monitor_mode == RS485_MON_OFF) return;
+    if (monitor_mode == RS485_MON_OFF || system_config_get_log_level() == 0) return;
     if (data == NULL || len == 0) return;
     
     switch (monitor_mode) {
@@ -324,7 +325,7 @@ void rs485_monitor_log_tx(const uint8_t *data, uint16_t len) {
 }
 
 void rs485_monitor_log_rx(const uint8_t *data, uint16_t len) {
-    if (monitor_mode == RS485_MON_OFF) return;
+    if (monitor_mode == RS485_MON_OFF || system_config_get_log_level() == 0) return;
     if (data == NULL || len == 0) return;
     
     switch (monitor_mode) {
