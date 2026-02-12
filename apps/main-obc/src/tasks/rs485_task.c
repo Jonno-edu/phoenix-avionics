@@ -15,18 +15,24 @@
 #include <hardware/watchdog.h>
 #endif
 
-static const char *TAG = "RS485";
+#include "queue_manager.h"
 
-// Callback to bridge protocol lib to HAL
+static const char *TAG = "TRANSPORT";
+
+// Callback to bridge protocol lib to HAL (Egress Bus)
 static void rs485_tx_bridge(const uint8_t *data, uint16_t length) {
-    // Log internal raw bytes for debugging
-    ESP_LOGD(TAG, "TX Raw (%u bytes):", length);
-    ESP_LOG_BUFFER_HEX(TAG, data, length);
+    // Log internal raw bytes for debugging (Verbose)
+    // ESP_LOGD(TAG, "TX BUS (%u):", length);
+    // ESP_LOG_BUFFER_HEX(TAG, data, length);
 
 #if PICO_BUILD
     rs485_hal_send(data, length);
 #else
-    // SIL: Echo to console for now
+    // SIL: Echo to console? No, SIL typically uses console FOR the bus.
+    // Ideally SIL should have a separate socket or pty.
+    // For now, we assume standard console IS the interface.
+    // But wait, if we have USB pipe AND RS485 pipe in SIL, they conflict on stdout.
+    // Let's assume SIL only tests the 'Default' output.
     for (uint16_t i = 0; i < length; i++) {
         putchar(data[i]);
     }
@@ -34,39 +40,100 @@ static void rs485_tx_bridge(const uint8_t *data, uint16_t length) {
 #endif
 }
 
+// Callback to bridge protocol lib to USB Console (Egress USB)
+static void usb_tx_bridge(const uint8_t *data, uint16_t length) {
+    // ESP_LOGD(TAG, "TX USB (%u):", length);
+    console_send(data, length);
+}
+
+// Global instances
+static rs485_instance_t main_bus_ctx;  // Pipe B
+static rs485_instance_t usb_ctx;       // Pipe A
+
+rs485_instance_t *rs485_get_default_instance(void) {
+    return &main_bus_ctx;
+}
+
 static void vRS485Task(void *pvParameters) {
     (void)pvParameters;
     
-    // Initialize the library
-    rs485_init(rs485_tx_bridge, ADDR_OBC);
+    // Initialize Pipe B (Bus)
+    rs485_init(&main_bus_ctx, rs485_tx_bridge, ADDR_OBC);
+    
+    // Initialize Pipe A (USB)
+    rs485_init(&usb_ctx, usb_tx_bridge, ADDR_OBC);
 
     RS485_packet_t packet;
+    CommandEvent_t event;
+
+    ESP_LOGI(TAG, "Transport Task Started (Twin Pipes)");
     
     while (true) {
-        // Feed buffered bytes into the protocol parser
+        // ====================================================================
+        // 1. INGRESS: Poll Hardware & Feed Parsers
+        // ====================================================================
+        
+        // Pipe B (RS485 Hardware)
 #if PICO_BUILD
-        // 1. Process bytes from real RS485 Hardware (Bus A)
         while (rs485_hal_bytes_available()) {
-            rs485_process_byte(rs485_hal_read_byte());
-        }
-
-        // 2. Process bytes from USB Console (Debug/Test)
-        while (console_bytes_available()) {
-            rs485_process_byte(console_read_byte());
-        }
-#else
-        // SIL: Read from Virtual Serial Port (Console)
-        while (console_bytes_available()) {
-            rs485_process_byte(console_read_byte());
+            rs485_process_byte(&main_bus_ctx, rs485_hal_read_byte());
+            
+            if (rs485_get_packet(&main_bus_ctx, &packet)) {
+                // Wrap and Queue
+                event.source_interface = IF_RS485;
+                event.packet = packet;
+                if (xQueueSend(q_command_inbox, &event, 0) != pdTRUE) {
+                    ESP_LOGW(TAG, "Inbox Full - Dropped RS485 Packet");
+                }
+            }
         }
 #endif
 
-        // Use the library's dispatch logic
-        rs485_rx_update(&packet);
+        // Pipe A (USB Console)
+        while (console_bytes_available()) {
+            rs485_process_byte(&usb_ctx, console_read_byte());
+            
+            if (rs485_get_packet(&usb_ctx, &packet)) {
+                // Wrap and Queue
+                event.source_interface = IF_USB;
+                event.packet = packet;
+                if (xQueueSend(q_command_inbox, &event, 0) != pdTRUE) {
+                    ESP_LOGW(TAG, "Inbox Full - Dropped USB Packet");
+                }
+            }
+        }
+
+        // ====================================================================
+        // 2. EGRESS: Poll Outboxes & Serialize to Wire
+        // ====================================================================
+        
+        // Pipe B (RS485 Bus)
+        if (q_rs485_out != NULL && xQueueReceive(q_rs485_out, &packet, 0) == pdTRUE) {
+            // Serialize and Send (The Context knows the Callback)
+            // Use the data inside the packet to reconstruct the frame
+            rs485_send_packet(&main_bus_ctx, 
+                              packet.dest_addr, 
+                              packet.msg_desc.type, 
+                              packet.msg_desc.id, 
+                              packet.data, 
+                              packet.length);
+        }
+
+        // Pipe A (USB Stream)
+        // We can process multiple per cycle for higher throughput if needed
+        while (q_usb_out != NULL && xQueueReceive(q_usb_out, &packet, 0) == pdTRUE) {
+             rs485_send_packet(&usb_ctx, 
+                              packet.dest_addr, 
+                              packet.msg_desc.type, 
+                              packet.msg_desc.id, 
+                              packet.data, 
+                              packet.length);
+        }
 
         vTaskDelay(pdMS_TO_TICKS(5)); // Yield
     }
 }
+
 
 void rs485_task_init(void) {
     TaskHandle_t xHandle = NULL;

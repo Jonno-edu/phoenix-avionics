@@ -3,6 +3,7 @@
 #include "core/eps_node.h"
 #include "core/obc_data.h"
 #include "rs485_protocol.h"
+#include "../tasks/rs485_task.h"
 #include "telemetry_defs.h"
 #include "core/rs485_monitor.h"
 #include <stdio.h>
@@ -202,11 +203,11 @@ bool debug_cli_process_char(uint8_t ch) {
         // Identification Requests
         case 'i':
             printf("[CLI] Requesting EPS Identification\n");
-            rs485_send_packet(ADDR_EPS, MSG_TYPE_TLM_REQ, TLM_ID_IDENTIFICATION, NULL, 0);
+            rs485_send_packet(rs485_get_default_instance(), ADDR_EPS, MSG_TYPE_TLM_REQ, TLM_ID_IDENTIFICATION, NULL, 0);
             break;
         case 'I':
             printf("[CLI] Requesting Tracking Radio Identification\n");
-            rs485_send_packet(ADDR_TRACKING_RADIO, MSG_TYPE_TLM_REQ, TLM_ID_IDENTIFICATION, NULL, 0);
+            rs485_send_packet(rs485_get_default_instance(), ADDR_TRACKING_RADIO, MSG_TYPE_TLM_REQ, TLM_ID_IDENTIFICATION, NULL, 0);
             break;
 
         // System Commands

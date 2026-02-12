@@ -6,10 +6,33 @@
 #include "core/tracking_radio_node.h"
 #include "core/logging.h"
 #include "core/rs485_monitor.h"
+#include "tasks/queue_manager.h" // For queues and InterfaceID_t
 #include <stdint.h>
 #include <string.h>
 
 static const char *TAG = "TCTLM";
+
+// ============================================================================
+// ROUTING HELPER
+// ============================================================================
+void tctlm_send_reply(InterfaceID_t dest, RS485_packet_t *pkt) {
+    if (pkt == NULL) return;
+
+    if (dest == IF_USB) {
+        if (q_usb_out != NULL) {
+            if (xQueueSend(q_usb_out, pkt, 0) != pdTRUE) {
+                // Drop packet if full (High speed stream)
+            }
+        }
+    } 
+    else if (dest == IF_RS485) {
+        if (q_rs485_out != NULL) {
+            if (xQueueSend(q_rs485_out, pkt, 0) != pdTRUE) {
+                ESP_LOGW(TAG, "RS485 TX Queue Full - Dropped Packet");
+            }
+        }
+    }
+}
 
 // ============================================================================
 // RS485 LOG HELPER FUNCTION
@@ -47,7 +70,7 @@ static void log_rx_packet_to_monitor(RS485_packet_t *pkt) {
 // EVENT HANDLER
 // ============================================================================
 
-void TCTLM_processEvent(RS485_packet_t *pkt) {
+void TCTLM_processEvent(InterfaceID_t src_id, RS485_packet_t *pkt) {
     log_rx_packet_to_monitor(pkt);
     ESP_LOGI(TAG, "Event received from %02X", pkt->src_addr);
 }
@@ -56,13 +79,27 @@ void TCTLM_processEvent(RS485_packet_t *pkt) {
 // TELECOMMAND HANDLER (commands received by OBC)
 // ============================================================================
 
-void TCTLM_processTelecommand(RS485_packet_t *pkt) {
+void TCTLM_processTelecommand(InterfaceID_t src_id, RS485_packet_t *pkt) {
     log_rx_packet_to_monitor(pkt);
     uint8_t id = pkt->msg_desc.id;
     // ESP_LOGI(TAG, "Telecommand %d received from %02X", id, pkt->src_addr);
 
-    // Send ACK for the received command
-    rs485_send_packet(pkt->src_addr, MSG_TYPE_TC_ACK, id, NULL, 0);
+    // Send ACK for the received command (ACK goes back to Source)
+    RS485_packet_t ack_pkt;
+    // We cannot construct packets easily without a helper. 
+    // Wait, rs485_send_packet is for SERIALIZATION.
+    // We need to construct the STRUCT manually here if we want to queue it.
+    // NOTE: For now, I will create a temporary helper or manually stuffing:
+    
+    // Manual Construction of ACK:
+    ack_pkt.dest_addr = pkt->src_addr;
+    ack_pkt.src_addr = ADDR_OBC; // My address
+    ack_pkt.msg_desc.type = MSG_TYPE_TC_ACK;
+    ack_pkt.msg_desc.id = id;
+    ack_pkt.length = 0;
+    ack_pkt.crc = 0; // Driver will calculate
+    
+    tctlm_send_reply(src_id, &ack_pkt);
 
     switch (id) {
         case TC_ID_RESET: 
@@ -86,11 +123,14 @@ void TCTLM_processTelecommand(RS485_packet_t *pkt) {
 // TELECOMMAND ACK HANDLER (ACKs for command OBC sent)
 // ============================================================================
 
-void TCTLM_processTelecommandAck(RS485_packet_t *pkt) {
+void TCTLM_processTelecommandAck(InterfaceID_t src_id, RS485_packet_t *pkt) {
     log_rx_packet_to_monitor(pkt);
     // ESP_LOGI(TAG, "TC ACK received from %02X for ID %d", pkt->src_addr, pkt->msg_desc.id);
 
     uint8_t src_address = pkt->src_addr;
+    
+    // Acknowledgements are responses to OUR commands, so we don't reply to them.
+    // We just forward them to the relevant logic module.
 
     switch (src_address) {
         case ADDR_EPS:
@@ -111,14 +151,14 @@ void TCTLM_processTelecommandAck(RS485_packet_t *pkt) {
 // TELEMETRY REQUEST HANDLER (when someone requests data from OBC)
 // ============================================================================
 
-void TCTLM_processTelemetryRequest(RS485_packet_t *pkt) {
+void TCTLM_processTelemetryRequest(InterfaceID_t src_id, RS485_packet_t *pkt) {
     log_rx_packet_to_monitor(pkt);
     uint8_t id = pkt->msg_desc.id;
     // ESP_LOGI(TAG, "Telemetry Request %d from %02X", id, pkt->src_addr);
 
     switch (id) {
         case TLM_ID_IDENTIFICATION:
-            obc_handle_telemetry_request(pkt);
+            obc_handle_telemetry_request(src_id, pkt);
             break;
 
         default:
@@ -131,9 +171,20 @@ void TCTLM_processTelemetryRequest(RS485_packet_t *pkt) {
 // TELEMETRY RESPONSE HANDLER (responses to OBC's requests)
 // ============================================================================
 
-void TCTLM_processTelemetryResponse(RS485_packet_t *pkt) {
+void TCTLM_processTelemetryResponse(InterfaceID_t src_id, RS485_packet_t *pkt) {
     log_rx_packet_to_monitor(pkt);
     // ESP_LOGD(TAG, "TLM Response: ID=%d, Src=%02X, Len=%d", pkt->msg_desc.id, pkt->src_addr, pkt->length);
+    
+    // If we received telemetry (e.g. from EPS), we might want to FORWARD it to the Ground Station (USB)
+    // if the GSU asked for it, or if we are streaming.
+    // For now, if it came from RS485, we likely want to mirror it to USB? 
+    // User Requirement: "Pipe A (GSU Link) ... Pipe B (Bus Link)"
+    // Typically GSU wants to see everything.
+    
+    // Forwarding Logic:
+    if (src_id == IF_RS485) {
+        tctlm_send_reply(IF_USB, pkt);
+    }
     
     switch (pkt->src_addr) {
         case ADDR_EPS:
@@ -154,7 +205,7 @@ void TCTLM_processTelemetryResponse(RS485_packet_t *pkt) {
 // BULK TRANSFER HANDLER
 // ============================================================================
 
-void TCTLM_processBulkTransfer(RS485_packet_t *pkt) {
+void TCTLM_processBulkTransfer(InterfaceID_t src_id, RS485_packet_t *pkt) {
     log_rx_packet_to_monitor(pkt);
     ESP_LOGI(TAG, "Bulk transfer from %02X", pkt->src_addr);
 }
@@ -163,7 +214,7 @@ void TCTLM_processBulkTransfer(RS485_packet_t *pkt) {
 // UNKNOWN MESSAGE HANDLER 
 // ============================================================================
 
-void TCTLM_processUnknownMessage(RS485_packet_t *pkt) {
+void TCTLM_processUnknownMessage(InterfaceID_t src_id, RS485_packet_t *pkt) {
     log_rx_packet_to_monitor(pkt);
     ESP_LOGW(TAG, "Unknown message type %d from %02X", pkt->msg_desc.type, pkt->src_addr);
 }

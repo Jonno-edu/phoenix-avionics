@@ -127,11 +127,13 @@ uint8_t system_config_get_log_level(void) { return sys_config.log_level; }
 bool system_config_get_sim_mode(void) { return sys_config.sim_mode_enabled; }
 uint8_t system_config_get_telem_rate(void) { return sys_config.telem_rate_hz; }
 
+#include "tctlm.h"
+
 // ============================================================================
 // TELEMETRY REQUEST HANDLER
 // ============================================================================
 
-void obc_handle_telemetry_request(RS485_packet_t *pkt) {
+void obc_handle_telemetry_request(InterfaceID_t src_id, RS485_packet_t *pkt) {
     if (pkt == NULL) return;
     
     uint8_t id = pkt->msg_desc.id;
@@ -142,7 +144,19 @@ void obc_handle_telemetry_request(RS485_packet_t *pkt) {
             uint8_t buffer[sizeof(SystemData_t)];
             getSystemIdentInfo(&sys_data);
             system_data_pack(&sys_data, buffer);
-            rs485_send_packet(pkt->src_addr, MSG_TYPE_TLM_RESP, id, buffer, sizeof(SystemData_t));
+            
+            // Send Reply Packet
+            RS485_packet_t reply;
+            reply.dest_addr = pkt->src_addr;
+            reply.src_addr = ADDR_OBC;
+            reply.msg_desc.type = MSG_TYPE_TLM_RESP;
+            reply.msg_desc.id = id;
+            reply.length = sizeof(SystemData_t);
+            memcpy(reply.data, buffer, sizeof(SystemData_t));
+            reply.crc = 0; // Calculated by driver
+            
+            tctlm_send_reply(src_id, &reply);
+            
             ESP_LOGI(TAG, "Sent identification to 0x%02X", pkt->src_addr);
             break;
         }

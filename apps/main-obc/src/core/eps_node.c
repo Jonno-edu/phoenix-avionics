@@ -1,6 +1,7 @@
 #include "core/eps_node.h"
 #include "core/logging.h"
 #include "rs485_protocol.h"
+#include "../tasks/rs485_task.h"
 #include <string.h>
 #include <FreeRTOS.h>
 #include <semphr.h>
@@ -188,12 +189,12 @@ uint32_t eps_node_get_measurements_age_ms(void) {
 
 void eps_request_power_status(void) {
     ESP_LOGD(TAG, "Requesting EPS power status");
-    rs485_send_packet(ADDR_EPS, MSG_TYPE_TLM_REQ, TLM_ID_EPS_POWER, NULL, 0);
+    rs485_send_packet(rs485_get_default_instance(), ADDR_EPS, MSG_TYPE_TLM_REQ, TLM_ID_EPS_POWER, NULL, 0);
 }
 
 void eps_request_measurements(void) {
     ESP_LOGD(TAG, "Requesting EPS measurements");
-    rs485_send_packet(ADDR_EPS, MSG_TYPE_TLM_REQ, TLM_ID_EPS_MEASURE, NULL, 0);
+    rs485_send_packet(rs485_get_default_instance(), ADDR_EPS, MSG_TYPE_TLM_REQ, TLM_ID_EPS_MEASURE, NULL, 0);
 }
 
 void eps_send_power_command(const EpsPowerSetCmd_t *cmd) {
@@ -207,7 +208,7 @@ void eps_send_power_command(const EpsPowerSetCmd_t *cmd) {
              cmd->line_5v_1, cmd->line_5v_2, cmd->line_5v_3, 
              cmd->line_12v);
 
-    rs485_send_packet(ADDR_EPS, MSG_TYPE_TELECOMMAND, TC_ID_EPS_POWER, (uint8_t*)cmd, sizeof(EpsPowerSetCmd_t));
+    rs485_send_packet(rs485_get_default_instance(), ADDR_EPS, MSG_TYPE_TELECOMMAND, TC_ID_EPS_POWER, (uint8_t*)cmd, sizeof(EpsPowerSetCmd_t));
 }
 
 // ============================================================================

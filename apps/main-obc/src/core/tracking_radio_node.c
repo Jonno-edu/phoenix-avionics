@@ -1,6 +1,7 @@
 #include "core/tracking_radio_node.h"
 #include "core/logging.h"
 #include "rs485_protocol.h"
+#include "../tasks/rs485_task.h"
 #include <string.h>
 #include <FreeRTOS.h>
 #include <semphr.h>
@@ -48,7 +49,7 @@ void tracking_radio_node_init(void) {
 void tracking_radio_request_health(void) {
     // Request specific status/health from Tracking Radio
     // Updated to use TLM_ID_IDENTIFICATION as per latest requirement
-    rs485_send_packet(ADDR_TRACKING_RADIO, MSG_TYPE_TLM_REQ, TLM_ID_IDENTIFICATION, NULL, 0);
+    rs485_send_packet(rs485_get_default_instance(), ADDR_TRACKING_RADIO, MSG_TYPE_TLM_REQ, TLM_ID_IDENTIFICATION, NULL, 0);
     ESP_LOGD(TAG, "Sent health request to Tracking Radio");
 }
 
@@ -78,7 +79,8 @@ bool tracking_radio_send_beacon(const TrackingBeacon_t *beacon_data) {
     xSemaphoreTake(ack_semaphore, 0);
 
     // 2. Send the packet ONCE (No Retry Loop)
-    rs485_send_packet(ADDR_TRACKING_RADIO, MSG_TYPE_TELECOMMAND, TC_ID_TRACKING_BEACON, (uint8_t*)beacon_data, sizeof(TrackingBeacon_t));
+    rs485_send_packet(rs485_get_default_instance(), ADDR_TRACKING_RADIO, MSG_TYPE_TELECOMMAND, TC_ID_TRACKING_BEACON, (uint8_t*)beacon_data, sizeof(TrackingBeacon_t));
+
 
     // 3. Wait for ACK (Single timeout check)
     //    We wait briefly to know if it succeeded, but we do NOT re-send if it fails.

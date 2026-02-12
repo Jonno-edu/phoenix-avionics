@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include "telemetry_defs.h"
 #include "rs485_protocol.h"
+#include "../../src/tasks/queue_manager.h" // For InterfaceID_t
 
 // ID: ID_TLM_IDENTIFICATION
 typedef struct {
@@ -14,7 +15,7 @@ typedef struct {
     uint8_t firmware_major;
     uint8_t firmware_minor;
     uint16_t uptime_seconds;
-    uint16_t uptime_milliseconds;         // Bit 0: CMD_PENDING
+    uint16_t uptime_milliseconds;         
 } PACKED_STRUCT TlmIdentificationPayload_t;
 
 // System identification data structure
@@ -40,10 +41,10 @@ uint8_t system_config_get_log_level(void);
 bool system_config_get_sim_mode(void);
 uint8_t system_config_get_telem_rate(void);
 
-#endif // OBC_DATA_H
-
 /**
  * @brief Handle a Telemetry Request (for OBC data)
  * @param pkt The request packet
  */
-void obc_handle_telemetry_request(RS485_packet_t *pkt);
+void obc_handle_telemetry_request(InterfaceID_t src_id, RS485_packet_t *pkt);
+
+#endif // OBC_DATA_H
