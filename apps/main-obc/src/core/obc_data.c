@@ -145,7 +145,7 @@ void obc_handle_telemetry_request(InterfaceID_t src_id, RS485_packet_t *pkt) {
     uint8_t id = pkt->msg_desc.id;
     
     switch (id) {
-        case TLM_ID_IDENTIFICATION: {
+        case TLM_COMMON_IDENT: {
             SystemData_t sys_data;
             uint8_t buffer[sizeof(SystemData_t)];
             getSystemIdentInfo(&sys_data);

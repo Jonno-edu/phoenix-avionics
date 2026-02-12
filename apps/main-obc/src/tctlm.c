@@ -127,7 +127,7 @@ void TCTLM_processTelemetryRequest(CommsInterfaceId_t src_id, RS485_packet_t *pk
     // ESP_LOGI(TAG, "Telemetry Request %d from %02X", id, pkt->src_addr);
 
     switch (id) {
-        case TLM_ID_IDENTIFICATION:
+        case TLM_COMMON_IDENT:
             obc_handle_telemetry_request((InterfaceID_t)src_id, pkt);
             break;
 

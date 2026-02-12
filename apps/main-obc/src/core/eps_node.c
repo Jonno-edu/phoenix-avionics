@@ -189,12 +189,12 @@ uint32_t eps_node_get_measurements_age_ms(void) {
 
 void eps_request_power_status(void) {
     ESP_LOGD(TAG, "Requesting EPS power status");
-    rs485_send_packet(rs485_get_default_instance(), ADDR_EPS, MSG_TYPE_TLM_REQ, TLM_ID_EPS_POWER, NULL, 0);
+    rs485_send_packet(rs485_get_default_instance(), ADDR_EPS, MSG_TYPE_TLM_REQ, TLM_EPS_POWER, NULL, 0);
 }
 
 void eps_request_measurements(void) {
     ESP_LOGD(TAG, "Requesting EPS measurements");
-    rs485_send_packet(rs485_get_default_instance(), ADDR_EPS, MSG_TYPE_TLM_REQ, TLM_ID_EPS_MEASURE, NULL, 0);
+    rs485_send_packet(rs485_get_default_instance(), ADDR_EPS, MSG_TYPE_TLM_REQ, TLM_EPS_MEASURE, NULL, 0);
 }
 
 void eps_send_power_command(const EpsPowerSetCmd_t *cmd) {
@@ -212,7 +212,7 @@ void eps_send_power_command(const EpsPowerSetCmd_t *cmd) {
     uint8_t *raw = (uint8_t*)cmd;
     ESP_LOGI(TAG, "CMD HEX: %02X %02X", raw[0], raw[1]);
 
-    rs485_send_packet(rs485_get_default_instance(), ADDR_EPS, MSG_TYPE_TELECOMMAND, TC_ID_EPS_POWER, (uint8_t*)cmd, sizeof(EpsPowerSetCmd_t));
+    rs485_send_packet(rs485_get_default_instance(), ADDR_EPS, MSG_TYPE_TELECOMMAND, TC_EPS_POWER, (uint8_t*)cmd, sizeof(EpsPowerSetCmd_t));
 }
 
 // ============================================================================
@@ -341,11 +341,11 @@ void eps_handle_telecommand_ack(RS485_packet_t *pkt) {
     uint8_t id = pkt->msg_desc.id;
     
     switch (id) {
-        case TC_ID_EPS_POWER:
+        case TC_EPS_POWER:
             ESP_LOGI(TAG, "EPS Power command acknowledged by 0x%02X", pkt->src_addr);
             break;
 
-        case TC_ID_RESET:
+        case TC_COMMON_RESET:
             ESP_LOGI(TAG, "Reset command acknowledged by 0x%02X", pkt->src_addr);
             break;
 
@@ -361,14 +361,14 @@ void eps_handle_telemetry_response(RS485_packet_t *pkt) {
     uint8_t id = pkt->msg_desc.id;
 
     switch (id) {
-        case TLM_ID_IDENTIFICATION:
+        case TLM_COMMON_IDENT:
             /* Note: Identification is common, so we might want to store specific EPS info if needed 
                For now just logging or standard struct. EPS uses legacy or common struct. */
                // The original code didn't do much specific for EPS IDENT except logging.
             ESP_LOGI(TAG, "EPS Identification received from 0x%02X", pkt->src_addr);
             break;
 
-        case TLM_ID_EPS_POWER:
+        case TLM_EPS_POWER:
             if (pkt->length >= sizeof(EpsPowerStatus_t)) {
                 EpsPowerStatus_t power_status;
                 memcpy(&power_status, pkt->data, sizeof(EpsPowerStatus_t));
@@ -378,7 +378,7 @@ void eps_handle_telemetry_response(RS485_packet_t *pkt) {
             }
             break;
 
-        case TLM_ID_EPS_MEASURE: 
+        case TLM_EPS_MEASURE: 
             if (pkt->length >= sizeof(EpsMeasurements_t)) {
                 EpsMeasurements_t measurements;
                 memcpy(&measurements, pkt->data, sizeof(EpsMeasurements_t));

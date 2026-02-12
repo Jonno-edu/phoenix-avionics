@@ -72,13 +72,13 @@ typedef struct {
     int16_t  mag_z;                 // 400-416: Scaled
     
     // -- GPS Data --
-    int32_t  gps_lat;               // 416-448: deg * 1e7
-    int32_t  gps_lon;               // 448-480: deg * 1e7
+    int32_t  gps_lat;               // 416-448: deg scaled
+    int32_t  gps_lon;               // 448-480: deg scaled
     int32_t  gps_alt;               // 480-512: mm (Raw integer)
     
-    int16_t  gps_vel_n;             // 512-528: m/s * 10
-    int16_t  gps_vel_e;             // 528-544: m/s * 10
-    int16_t  gps_vel_d;             // 544-560: m/s * 10
+    int16_t  gps_vel_n;             // 512-528: m/s Scaled
+    int16_t  gps_vel_e;             // 528-544: m/s Scaled
+    int16_t  gps_vel_d;             // 544-560: m/s Scaled
     
     uint32_t itow;                  // 560-592: ms
     uint16_t gps_week;              // 592-608: week count

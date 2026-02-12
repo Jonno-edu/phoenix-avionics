@@ -59,27 +59,60 @@ static const char* get_msg_type_color(uint8_t type) {
 // ============================================================================
 // HELPER: Get telemetry/command ID name
 // ============================================================================
-static const char* get_tlm_id_name(uint8_t id) {
-    switch (id) {
-        case 0: return "IDENT";
-        case 1: return "EPS_PWR";
-        case 2: return "EPS_MEAS";
-        case 3: return "TRK_BEACON";
-        case 4: return "STATUS";
-        default: return "???";
+static const char* get_tlm_name(uint8_t id, uint8_t addr) {
+    if (addr == ADDR_EPS) {
+        switch (id) {
+            case TLM_COMMON_IDENT:    return "IDENT";
+            case TLM_EPS_POWER:       return "EPS_PWR";
+            case TLM_EPS_MEASURE:     return "EPS_MEAS";
+            default: return "???";
+        }
+    } else if (addr == ADDR_TRACKING_RADIO) {
+        switch (id) {
+            case TLM_COMMON_IDENT:    return "IDENT";
+            case TLM_RADIO_DATA:      return "TRK_DATA";
+            case TLM_RADIO_STATUS:    return "TRK_STATUS";
+            default: return "???";
+        }
+    } else if (addr == ADDR_OBC) {
+        switch (id) {
+            case TLM_COMMON_IDENT:    return "IDENT";
+            case TLM_OBC_SENSOR_DATA: return "OBC_SENS";
+            default: return "???";
+        }
     }
+    
+    // Fallback for common IDs if address is unknown
+    if (id == TLM_COMMON_IDENT) return "IDENT";
+    return "???";
 }
 
-static const char* get_tc_id_name(uint8_t id) {
-    switch (id) {
-        case 0: return "RESET";
-        case 1: return "EPS_PWR";
-        case 2: return "TRK_BEACON";
-        case 5: return "TELEM_RATE";
-        case 6: return "LOG_LVL";
-        case 8: return "SIM_STATE";
-        default: return "???";
+static const char* get_tc_name(uint8_t id, uint8_t addr) {
+    if (addr == ADDR_OBC) {
+        switch (id) {
+            case TC_COMMON_RESET:     return "RESET";
+            case TC_OBC_TELEM_RATE:   return "TELEM_RATE";
+            case TC_OBC_LOG_LEVEL:    return "LOG_LVL";
+            case TC_OBC_SIM_MODE:     return "SIM_MODE";
+            case TC_OBC_AVIONICS_MODE: return "AVIONICS";
+            default: return "???";
+        }
+    } else if (addr == ADDR_EPS) {
+        switch (id) {
+            case TC_COMMON_RESET:     return "RESET";
+            case TC_EPS_POWER:        return "EPS_PWR";
+            default: return "???";
+        }
+    } else if (addr == ADDR_TRACKING_RADIO) {
+        switch (id) {
+            case TC_COMMON_RESET:     return "RESET";
+            case TC_RADIO_BEACON:     return "TRK_BEACON";
+            default: return "???";
+        }
     }
+
+    if (id == TC_COMMON_RESET) return "RESET";
+    return "???";
 }
 
 // ============================================================================
@@ -167,10 +200,16 @@ static void print_decoded_packet(const uint8_t *data, uint16_t len, bool is_tx) 
     
     // Print ID name based on message type
     const char *id_name;
-    if (msg_type == 2 || msg_type == 3) {  // TC or TC_ACK
-        id_name = get_tc_id_name(msg_id);
+    if (msg_type == 2 || msg_type == 3) {  // TC (2) or TC_ACK (3)
+        // For command/acks, the "owner" of the ID is the Slave.
+        // If it's TX, dest is slave. If it's RX, src is slave.
+        uint8_t component_addr = is_tx ? dest_addr : src_addr;
+        id_name = get_tc_name(msg_id, component_addr);
     } else {
-        id_name = get_tlm_id_name(msg_id);
+        // For telemetry, the "owner" of the ID is the Slave.
+        // For REQ (4), dest is slave. For RESP (5), src is slave.
+        uint8_t component_addr = (msg_type == 4) ? dest_addr : src_addr;
+        id_name = get_tlm_name(msg_id, component_addr);
     }
     printf("%sID=%d(%s) ", MON_COLOR_DESC, msg_id, id_name);
     

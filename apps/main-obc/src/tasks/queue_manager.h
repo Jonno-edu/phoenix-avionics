@@ -44,4 +44,17 @@ extern QueueHandle_t xPilotCommandQueue;
 // Initialization
 void queue_manager_init(void);
 
+/**
+ * @brief Inject a synthetic packet into the command inbox.
+ *        Useful for internal state changes or simulation.
+ * 
+ * @param src_interface The source ID (e.g., IF_LOOPBACK)
+ * @param msg_type      Message Type (e.g., MSG_TYPE_TELECOMMAND)
+ * @param msg_id        Message ID (e.g., TC_COMMON_RESET)
+ * @param payload       Data buffer
+ * @param len           Length of payload
+ * @return true if queued successfully
+ */
+bool cmd_inject_packet(InterfaceID_t src_interface, uint8_t msg_type, uint8_t msg_id, const uint8_t *payload, uint8_t len);
+
 #endif // QUEUE_MANAGER_H

@@ -30,7 +30,7 @@ void obc_handle_telecommand(InterfaceID_t src_id, RS485_packet_t *pkt) {
     send_ack(src_id, pkt->src_addr, id);
 
     switch (id) {
-        case TC_ID_RESET: 
+        case TC_COMMON_RESET: 
             if (pkt->length >= 1 && pkt->data[0] == 0x85) {
                 ESP_LOGE(TAG, "RESET COMMAND RECEIVED! Rebooting...");
                 // In a real system: platform_reset();
@@ -39,21 +39,21 @@ void obc_handle_telecommand(InterfaceID_t src_id, RS485_packet_t *pkt) {
             }
             break;
 
-        case TC_ID_LOG_LEVEL:
+        case TC_OBC_LOG_LEVEL:
              if (pkt->length >= 1) {
                 system_config_set_log_level(pkt->data[0]);
                 ESP_LOGI(TAG, "Log Level set to %d", pkt->data[0]);
              }
              break;
 
-        case TC_ID_TELEM_RATE:
+        case TC_OBC_TELEM_RATE:
              if (pkt->length >= 1) {
                 system_config_set_telem_rate(pkt->data[0]);
                 ESP_LOGI(TAG, "Telemetry Rate set to %dHz", pkt->data[0]);
              }
              break;
              
-        case TC_ID_SIM_MODE:
+        case TC_OBC_SIM_MODE:
              if (pkt->length >= 1) {
                 bool enable = (pkt->data[0] != 0);
                 system_config_set_sim_mode(enable);
@@ -61,7 +61,7 @@ void obc_handle_telecommand(InterfaceID_t src_id, RS485_packet_t *pkt) {
              }
              break;
 
-        case TC_ID_AVIONICS_MODE:
+        case TC_OBC_AVIONICS_MODE:
              if (pkt->length >= 1) {
                 uint8_t mode = pkt->data[0];
                 system_config_set_avionics_mode(mode);

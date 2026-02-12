@@ -1,71 +1,76 @@
 # Phoenix Avionics (OBC Firmware)
 
-Avionics software for the Phoenix mission's On-Board Computer (OBC), based on the Raspberry Pi Pico 2 (RP2350). The system runs on FreeRTOS and acts as the central command and control unit, communicating with subsystems via RS485.
+Avionics software for the Phoenix mission's On-Board Computer (OBC), based on the Raspberry Pi Pico 2 (RP2350). The system runs on FreeRTOS and acts as the central command and control unit.
 
-## System Capabilities
+## Applications
 
-- **Role**: RS485 Bus Master (Address `0x01`).
+The workspace contains two distinct applications located in `apps/`:
+
+### 1. Main OBC (`apps/main-obc`)
+The primary flight software.
+- **Role**: RS485 Bus Master, System Controller.
 - **OS**: FreeRTOS Kernel (SMP enabled).
-- **Telemetry**: USB Console (CDC) for debugging + RS485 for subsystem comms.
+- **Features**:
+  - **TCTLM Dispatcher**: Handle Telecommands (Reset, Log Level, Sim Mode) and Telemetry.
+  - **Twin-Pipe Communication**: Dedicated channels for command/response (Queue A) and high-speed telemetry streaming (Queue B).
+  - **Subsystem Management**: Polls EPS, Radio, and HIL node via RS485.
 
-### Architecture
-The firmware is structured into modular FreeRTOS tasks:
-- **`rs485_task`**: Manages the RS485 bus protocol, handles packet reception/transmission, and routes commands.
-- **`eps_polling_task`**: Periodically (1Hz) polls the Electrical Power System (EPS) for status and health.
-- **`heartbeat_task`**: Provides visual system health indication via LED.
-
-### Communication Protocol
-Uses a custom **HDLC-inspired RS485 protocol** provided by `lib/esl-comms`:
-- **Physical**: UART 115200 8N1.
-- **Framing**: Start/End markers with byte stuffing (COBS-like escaping).
-- **Integrity**: 16-bit CRC (CCITT).
-- **Mode**: Half-Duplex (Master/Slave architecture).
-- **Updates**: Recently optimized for block-based DMA-friendly transmission to improve bus efficiency.
-
-## Hardware Configuration (RP2350)
-
-| Interface     | Pin   | Function          |
-| ------------- | ----- | ----------------- |
-| **RS485 TX**  | GP4   | UART1 TX          |
-| **RS485 RX**  | GP5   | UART1 RX          |
-| **RS485 DE/RE**| GP3   | Direction Control |
-| **Console**   | USB   | CDC Serial        |
-
-## Software-in-the-Loop (SIL)
-
-The project includes a functional SIL target for macOS/Linux. This allows running the full flight software on your host machine without hardware.
-
-- **Variant**: Select `mac_host` (or linux) in CMake.
-- **IO**: Stubs the hardware UART and redirects RS485 traffic to a **Virtual Serial Port (PTY)**.
-- **Testing**: Python tools in `tools/` can connect to this virtual port to simulate the EPS or other subsystems.
-
-## Getting Started
-
-1. **Clone**:
-   ```bash
-   git clone --recurse-submodules https://github.com/Jonno-edu/phoenix-avionics.git
-   ```
-
-2. **Build (Hardware)**:
-   - Select `Debug-rp2350` variant.
-   - Run task: **"Flash and Monitor via SSH Rockchip"** (if using remote lab) or regular Build.
-
-3. **Build (Simulation)**:
-   - Select `Debug-mac` variant.
-   - Build and Run.
-   - The terminal will display: `SIL Virtual Serial Port Created: /dev/pts/X`.
-   - Run `python tools/test_ping.py --port /dev/pts/X` to talk to the simulated OBC.
+### 2. HIL Node (`apps/hil-node`)
+A Hardware-in-the-Loop simulation bridge.
+- **Role**: Responds to OBC queries by returning simulated sensor data.
+- **Features**:
+  - **I2C Slave**: Emulates sensor hardware (IMU, GPS, Barometer).
+  - **Simulation Bridge**: Injects synthetic data from a host PC into the I2C bus.
 
 ## Project Structure
 
+```text
+ apps/
+   ├── main-obc/       # Flight Software
+   └── hil-node/       # HIL Simulation Bridge
+ lib/
+   ├── esl-comms/      # Shared Protocol Library (RS485/TCTLM)
+   └── FreeRTOS-Kernel/# RTOS Source
+ common/             # Shared definitions (sensor configs)
+ tools/              # Python scripts for deployment & testing
+ rockchip/           # Deployment scripts for the remote lab host
 ```
-├── lib/
-│   ├── esl-comms/       # Protocol definitions
-│   └── FreeRTOS-Kernel/ # RTOS Source
-├── src/
-│   ├── apps/           # High-level logic (OBC state machine)
-│   ├── tasks/          # FreeRTOS tasks
-│   ├── hal/            # Hardware Abstraction (RP2350 + SIL)
-│   └── core/           # System logging types
-└── tools/              # Python test scripts for SIL/HIL
-```
+
+## Development Workflow
+
+This project uses **CMake Variants** and **VS Code Tasks** for a streamlined workflow.
+
+### 1. Select Variant
+Use the CMake Variant selector in the status bar (or `CMake: Select Variant`) to choose:
+- **Main OBC**: Builds the flight software.
+- **HIL Node**: Builds the simulation node.
+
+### 2. Build & Deploy
+We use a remote development setup (Rockchip Host). The following VS Code tasks are available:
+
+- **Flash OBC**: Builds `main-obc` and flashes it to the OBC Pico.
+- **Flash HIL Node**: Builds `hil-node` and flashes it to the HIL Pico.
+- **Monitor OBC**: Opens a remote `minicom` session for the OBC UART.
+- **Flash All**: Flashes both devices in sequence.
+
+### 3. Telemetry & Streaming
+- **Command Mode**: Standard command/response via RS485.
+- **Stream Mode**: High-speed binary dump of sensor data.
+- **Console**: Debug logs available via USB CDC (when enabled) or UART.
+
+## Communication Architecture
+
+### Protocol
+Uses the **ESL-Comms** library:
+- **RS485**: Custom HDLC-like framing with COBS escaping.
+- **TCTLM**: Generic dispatcher for Event, Telecommand, and Telemetry messages.
+
+### Generic Component IDs
+The TCTLM layer uses generic `CommsInterfaceId_t` types, allowing the same library to be used by both the OBC (RS485 Master) and HIL Node (RS485 Slave).
+
+## Software-in-the-Loop (SIL)
+
+A generic `mac_host` (or Linux) variant is available to run logic on a PC.
+- **IO**: Redirects RS485 traffic to a Virtual Serial Port (PTY).
+- **Usage**: Select `Mac Host` variant -> Build -> Run.
+

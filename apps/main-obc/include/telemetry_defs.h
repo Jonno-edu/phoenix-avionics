@@ -18,33 +18,47 @@
 #define ADDR_TRACKING_RADIO  0x03 
 #define ADDR_GSE             0xF0
 
+// ============================================================================
+// COMMON IDs (Supported by ALL Devices)
+// ============================================================================
+// TC: Telecommands (Host -> Device)
+#define TC_COMMON_RESET         0x00
+
+// TLM: Telemetry Responses (Device -> Host)
+#define TLM_COMMON_IDENT        0x00 // Identification Response
 
 // ============================================================================
-// TELECOMMAND IDs
+// EPS SPECIFIC IDs (Target: ADDR_EPS)
 // ============================================================================
-#define TC_ID_RESET             0
-#define TC_ID_EPS_POWER         1
-#define TC_ID_TRACKING_BEACON   2
-#define TC_ID_TRACKING_BEACON_ACK 2
-#define TC_ID_TELEM_RATE        5
-#define TC_ID_LOG_LEVEL         6
-#define TC_ID_SIM_MODE          8
-#define TC_ID_AVIONICS_MODE     9
+// TC: Telecommands
+#define TC_EPS_POWER            0x01 // Set power lines
+
+// TLM: Telemetry Responses
+#define TLM_EPS_POWER           0x01 // Get power line status
+#define TLM_EPS_MEASURE         0x02 // Get voltage/current measurements
 
 // ============================================================================
-// TELEMETRY IDs
+// TRACKING RADIO SPECIFIC IDs (Target: ADDR_TRACKING_RADIO)
 // ============================================================================
-#define TLM_ID_IDENTIFICATION   0
-#define TLM_ID_EPS_POWER        1
-#define TLM_ID_EPS_MEASURE      2
+// TC: Telecommands
+#define TC_RADIO_BEACON         0x02 // Send Beacon 
+// Note: No TC_RADIO_BEACON_ACK needed; ACKs use the Command ID (0x02)
 
-//Definitions copied from example in comms library
-// #define ID_TLM_IDENTIFICATION   1
-// #define ID_TLM_EPS_POWER_STATUS 5
-// #define ID_TLM_EPS_MEASUREMENTS 6
-#define ID_TLM_SENSOR_DATA      2
-#define ID_TLM_TRACKING_BEACON  3
-#define ID_TLM_STATUS           4
+// TLM: Telemetry Responses
+#define TLM_RADIO_DATA          0x03 // Beacon/Sensor Data downlinked
+#define TLM_RADIO_STATUS        0x04 // Radio health status
+
+// ============================================================================
+// OBC / SYSTEM IDs (Target: ADDR_OBC)
+// ============================================================================
+// TC: Telecommands (Ground -> OBC)
+#define TC_OBC_TELEM_RATE       0x05
+#define TC_OBC_LOG_LEVEL        0x06
+#define TC_OBC_SIM_MODE         0x08
+#define TC_OBC_AVIONICS_MODE    0x09
+
+// TLM: Telemetry Responses (OBC -> Ground)
+#define TLM_OBC_SENSOR_DATA     0x02 // OBC Internal Sensors 
 
 
 #endif // TELEMETRY_DEFS_H

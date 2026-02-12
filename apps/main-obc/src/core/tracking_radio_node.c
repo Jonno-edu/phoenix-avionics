@@ -48,8 +48,8 @@ void tracking_radio_node_init(void) {
 
 void tracking_radio_request_health(void) {
     // Request specific status/health from Tracking Radio
-    // Updated to use TLM_ID_IDENTIFICATION as per latest requirement
-    rs485_send_packet(rs485_get_default_instance(), ADDR_TRACKING_RADIO, MSG_TYPE_TLM_REQ, TLM_ID_IDENTIFICATION, NULL, 0);
+    // Updated to use TLM_COMMON_IDENT as per latest requirement
+    rs485_send_packet(rs485_get_default_instance(), ADDR_TRACKING_RADIO, MSG_TYPE_TLM_REQ, TLM_COMMON_IDENT, NULL, 0);
     ESP_LOGD(TAG, "Sent health request to Tracking Radio");
 }
 
@@ -79,7 +79,7 @@ bool tracking_radio_send_beacon(const TrackingBeacon_t *beacon_data) {
     xSemaphoreTake(ack_semaphore, 0);
 
     // 2. Send the packet ONCE (No Retry Loop)
-    rs485_send_packet(rs485_get_default_instance(), ADDR_TRACKING_RADIO, MSG_TYPE_TELECOMMAND, TC_ID_TRACKING_BEACON, (uint8_t*)beacon_data, sizeof(TrackingBeacon_t));
+    rs485_send_packet(rs485_get_default_instance(), ADDR_TRACKING_RADIO, MSG_TYPE_TELECOMMAND, TC_RADIO_BEACON, (uint8_t*)beacon_data, sizeof(TrackingBeacon_t));
 
 
     // 3. Wait for ACK (Single timeout check)
@@ -105,11 +105,11 @@ void tracking_radio_handle_telecommand_ack(RS485_packet_t *pkt) {
     uint8_t message_ID = pkt->msg_desc.id;
 
     switch (message_ID) {
-        case TC_ID_TRACKING_BEACON_ACK:
+        case TC_RADIO_BEACON:
             tracking_radio_confirm_beacon_ack();
             break;
             
-        case TC_ID_RESET:
+        case TC_COMMON_RESET:
             ESP_LOGI(TAG, "Reset command acknowledged by 0x%02X", pkt->src_addr);
             break;
 
@@ -125,7 +125,7 @@ void tracking_radio_handle_telemetry_response(RS485_packet_t *pkt) {
     uint8_t message_ID = pkt->msg_desc.id;
 
     switch (message_ID) {
-        case TLM_ID_IDENTIFICATION:
+        case TLM_COMMON_IDENT:
              if (pkt->length >= sizeof(TlmIdentificationPayload_t)) {
                 TlmIdentificationPayload_t tlm;
                 memcpy(&tlm, pkt->data, sizeof(TlmIdentificationPayload_t));
