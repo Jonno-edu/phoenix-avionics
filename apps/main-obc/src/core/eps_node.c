@@ -208,6 +208,10 @@ void eps_send_power_command(const EpsPowerSetCmd_t *cmd) {
              cmd->line_5v_1, cmd->line_5v_2, cmd->line_5v_3, 
              cmd->line_12v);
 
+    // DEBUG: Hex dump the command payload
+    uint8_t *raw = (uint8_t*)cmd;
+    ESP_LOGI(TAG, "CMD HEX: %02X %02X", raw[0], raw[1]);
+
     rs485_send_packet(rs485_get_default_instance(), ADDR_EPS, MSG_TYPE_TELECOMMAND, TC_ID_EPS_POWER, (uint8_t*)cmd, sizeof(EpsPowerSetCmd_t));
 }
 

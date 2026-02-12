@@ -58,7 +58,8 @@ typedef enum {
     RS485_MON_OFF = 0,      // Monitor disabled
     RS485_MON_RAW,          // Raw hex bytes only
     RS485_MON_DECODED,      // Decoded with labels
-    RS485_MON_VERBOSE       // Full decode with payload interpretation
+    RS485_MON_VERBOSE,      // Full decode with payload interpretation
+    RS485_MON_STREAM        // Direct binary stream (no formatting)
 } Rs485MonitorMode_t;
 
 // ============================================================================

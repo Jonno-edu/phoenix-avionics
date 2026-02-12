@@ -11,7 +11,7 @@
 
 static const char *TAG = "DEBUG_CLI";
 
-static bool cli_enabled = true;
+static bool cli_enabled = false;
 
 // ============================================================================
 // INITIALIZATION
@@ -55,12 +55,19 @@ void debug_cli_help_menu(void) {
     printf("\n");
     fflush(stdout);
     printf("--- Log Level ---\n");
-    printf(" 0 Set log level: None\n");
-    printf(" 1 Set log level: Error\n");
-    printf(" 2 Set log level: Info\n");
-    printf(" 3 Set log level: Debug\n");
+    printf(" ) Set log level: None (Shift+0)\n");
+    printf(" ! Set log level: Error (Shift+1)\n");
+    printf(" @ Set log level: Info  (Shift+2)\n");
+    printf(" # Set log level: Debug (Shift+3)\n");
     printf("\n");
     fflush(stdout);
+    printf("--- RS485 Monitor ---\n");
+    printf(" 0 Monitor: OFF\n");
+    printf(" 1 Monitor: RAW (Hex dump)\n");
+    printf(" 2 Monitor: DECODED\n");
+    printf(" 3 Monitor: VERBOSE\n");
+    printf(" 4 Monitor: STREAM (Raw binary, logs off)\n");
+    printf("\n");
     printf("--- CLI Control ---\n");
     printf(" h Print this help\n");
     printf(" ? Print this help\n");
@@ -218,23 +225,23 @@ bool debug_cli_process_char(uint8_t ch) {
             print_eps_measurements();
             break;  
 
-        // Log Level
-        // case '0':
-        //     printf("[CLI] Setting log level: None\n");
-        //     system_config_set_log_level(0);
-        //     break;
-        // case '1':
-        //     printf("[CLI] Setting log level: Error\n");
-        //     system_config_set_log_level(1);
-        //     break;
-        // case '2':
-        //     printf("[CLI] Setting log level: Info\n");
-        //     system_config_set_log_level(2);
-        //     break;
-        // case '3':
-        //     printf("[CLI] Setting log level: Debug\n");
-        //     system_config_set_log_level(3);
-        //     break;
+        // Log Level (Shift + Number)
+        case ')': // Shift-0
+            printf("[CLI] Setting log level: None\n");
+            system_config_set_log_level(0);
+            break;
+        case '!': // Shift-1
+            printf("[CLI] Setting log level: Error\n");
+            system_config_set_log_level(1);
+            break;
+        case '@': // Shift-2
+            printf("[CLI] Setting log level: Info\n");
+            system_config_set_log_level(2);
+            break;
+        case '#': // Shift-3
+            printf("[CLI] Setting log level: Debug\n");
+            system_config_set_log_level(3);
+            break;
 
         //RS485 Monitor Control
         case '0':
@@ -252,6 +259,12 @@ bool debug_cli_process_char(uint8_t ch) {
         case '3':
             printf("[CLI] Setting RS485 Monitor Mode: VERBOSE\n");
             rs485_monitor_set_mode(RS485_MON_VERBOSE);
+            break;
+        case '4':
+            printf("[CLI] Setting RS485 Monitor Mode: STREAM (Logs Disabled)\n");
+            // Turn off system logs to ensure clean stream
+            system_config_set_log_level(0);
+            rs485_monitor_set_mode(RS485_MON_STREAM);
             break;
 
 

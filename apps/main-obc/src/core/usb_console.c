@@ -1,6 +1,6 @@
 // usb_console.c
 #include "core/usb_console.h"
-#include "core/debug_cli.h"
+// #include "core/debug_cli.h"
 #include <stdio.h>
 #include "FreeRTOS.h"
 #include "task.h"
@@ -34,11 +34,8 @@ static void on_usb_rx(void *param) {
     
     int ch;
     while ((ch = getchar_timeout_us(0)) != PICO_ERROR_TIMEOUT) {
-        if (debug_cli_is_enabled()) {
-            debug_cli_process_char((uint8_t)ch);
-        } else {
-            console_buffer_push((uint8_t)ch);
-        }
+        // Direct all USB input to the console buffer (for Packet Parser)
+        console_buffer_push((uint8_t)ch);
     }
 }
 #endif

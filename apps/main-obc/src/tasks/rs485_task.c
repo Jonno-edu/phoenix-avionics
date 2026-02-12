@@ -7,6 +7,7 @@
 #include "hal/rs485_hal.h"
 #include "core/usb_console.h"
 #include "core/obc_data.h"
+#include "core/rs485_monitor.h" // Added for monitor logging
 #include <FreeRTOS.h>
 #include <task.h>
 #include <stdio.h>
@@ -42,8 +43,12 @@ static void rs485_tx_bridge(const uint8_t *data, uint16_t length) {
 
 // Callback to bridge protocol lib to USB Console (Egress USB)
 static void usb_tx_bridge(const uint8_t *data, uint16_t length) {
-    // ESP_LOGD(TAG, "TX USB (%u):", length);
-    console_send(data, length);
+    // Only send raw binary if we are in STREAM mode.
+    // In human-readable modes (VERBOSE, DECODED), we do not want raw binary 
+    // packets corrupting the log output.
+    if (rs485_monitor_get_mode() == RS485_MON_STREAM) {
+        console_send(data, length);
+    }
 }
 
 // Global instances
@@ -76,7 +81,10 @@ static void vRS485Task(void *pvParameters) {
         // Pipe B (RS485 Hardware)
 #if PICO_BUILD
         while (rs485_hal_bytes_available()) {
-            rs485_process_byte(&main_bus_ctx, rs485_hal_read_byte());
+            uint8_t b = rs485_hal_read_byte();
+            // Pass to monitor (handles raw streaming or verbose logging)
+            rs485_monitor_log_byte(b, false);
+            rs485_process_byte(&main_bus_ctx, b);
             
             if (rs485_get_packet(&main_bus_ctx, &packet)) {
                 // Wrap and Queue

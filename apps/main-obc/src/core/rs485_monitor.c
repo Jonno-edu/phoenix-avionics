@@ -13,7 +13,7 @@
 // ============================================================================
 // STATE
 // ============================================================================
-static Rs485MonitorMode_t monitor_mode = RS485_MON_OFF;
+static Rs485MonitorMode_t monitor_mode = RS485_MON_VERBOSE;
 
 // ============================================================================
 // HELPER: Get device name from address
@@ -74,6 +74,7 @@ static const char* get_tc_id_name(uint8_t id) {
     switch (id) {
         case 0: return "RESET";
         case 1: return "EPS_PWR";
+        case 2: return "TRK_BEACON";
         case 5: return "TELEM_RATE";
         case 6: return "LOG_LVL";
         case 8: return "SIM_STATE";
@@ -94,8 +95,10 @@ void rs485_monitor_init(void) {
 void rs485_monitor_set_mode(Rs485MonitorMode_t mode) {
     monitor_mode = mode;
     
-    const char *mode_names[] = {"OFF", "RAW", "DECODED", "VERBOSE"};
-    printf("[MON] RS485 Monitor mode: %s\n", mode_names[mode]);
+    const char *mode_names[] = {"OFF", "RAW", "DECODED", "VERBOSE", "STREAM"};
+    if (mode != RS485_MON_STREAM) {
+        printf("[MON] RS485 Monitor mode: %s\n", mode_names[mode]);
+    }
 }
 
 Rs485MonitorMode_t rs485_monitor_get_mode(void) {
@@ -258,6 +261,10 @@ void rs485_monitor_log_tx(const uint8_t *data, uint16_t len) {
     if (data == NULL || len == 0) return;
     
     switch (monitor_mode) {
+        case RS485_MON_STREAM:
+            for(uint16_t i=0; i<len; i++) putchar(data[i]);
+            break;
+
         case RS485_MON_RAW:
             printf("%s>>> TX: ", MON_COLOR_TX);
             print_raw_hex(data, len, MON_COLOR_TX);
@@ -282,6 +289,10 @@ void rs485_monitor_log_rx(const uint8_t *data, uint16_t len) {
     if (data == NULL || len == 0) return;
     
     switch (monitor_mode) {
+        case RS485_MON_STREAM:
+            // Handled by byte-level logging in task loop
+            break;
+
         case RS485_MON_RAW:
             printf("%s<<< RX: ", MON_COLOR_RX);
             print_raw_hex(data, len, MON_COLOR_RX);
@@ -303,12 +314,23 @@ void rs485_monitor_log_rx(const uint8_t *data, uint16_t len) {
 
 void rs485_monitor_log_byte(uint8_t byte, bool is_tx) {
     if (monitor_mode == RS485_MON_OFF) return;
+
+    if (monitor_mode == RS485_MON_STREAM) {
+        // Just print the raw byte
+        putchar(byte); 
+        return;
+    }
     
+    // Only print raw bytes if we operate in a raw/byte-oriented mode.
+    // In DECODED/VERBOSE modes, we only want to see full packets (log_rx/log_tx), not individual bytes.
+    // If we print both, we get garbage intermixed with packets.
+    /*
     if (is_tx) {
         printf("%s%02X %s", MON_COLOR_TX, byte, MON_COLOR_RESET);
     } else {
         printf("%s%02X %s", MON_COLOR_RX, byte, MON_COLOR_RESET);
     }
+    */
 }
 
 // ============================================================================
