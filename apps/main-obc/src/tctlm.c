@@ -16,7 +16,7 @@ static const char *TAG = "TCTLM";
 // ============================================================================
 // ROUTING HELPER
 // ============================================================================
-void tctlm_send_reply(InterfaceID_t dest, RS485_packet_t *pkt) {
+void tctlm_send_reply(CommsInterfaceId_t dest, RS485_packet_t *pkt) {
     if (pkt == NULL) return;
 
     if (dest == IF_USB) {
@@ -71,7 +71,7 @@ static void log_rx_packet_to_monitor(RS485_packet_t *pkt) {
 // EVENT HANDLER
 // ============================================================================
 
-void TCTLM_processEvent(InterfaceID_t src_id, RS485_packet_t *pkt) {
+void TCTLM_processEvent(CommsInterfaceId_t src_id, RS485_packet_t *pkt) {
     log_rx_packet_to_monitor(pkt);
     ESP_LOGI(TAG, "Event received from %02X", pkt->src_addr);
 }
@@ -80,20 +80,20 @@ void TCTLM_processEvent(InterfaceID_t src_id, RS485_packet_t *pkt) {
 // TELECOMMAND HANDLER (commands received by OBC)
 // ============================================================================
 
-void TCTLM_processTelecommand(InterfaceID_t src_id, RS485_packet_t *pkt) {
+void TCTLM_processTelecommand(CommsInterfaceId_t src_id, RS485_packet_t *pkt) {
     log_rx_packet_to_monitor(pkt);
     // uint8_t id = pkt->msg_desc.id;
     // ESP_LOGI(TAG, "Telecommand %d received from %02X", id, pkt->src_addr);
     
     // Delegate to OBC Data Handler (Logic Node)
-    obc_handle_telecommand(src_id, pkt);
+    obc_handle_telecommand((InterfaceID_t)src_id, pkt);
 }
 
 // ============================================================================
 // TELECOMMAND ACK HANDLER (ACKs for command OBC sent)
 // ============================================================================
 
-void TCTLM_processTelecommandAck(InterfaceID_t src_id, RS485_packet_t *pkt) {
+void TCTLM_processTelecommandAck(CommsInterfaceId_t src_id, RS485_packet_t *pkt) {
     log_rx_packet_to_monitor(pkt);
     // ESP_LOGI(TAG, "TC ACK received from %02X for ID %d", pkt->src_addr, pkt->msg_desc.id);
 
@@ -121,14 +121,14 @@ void TCTLM_processTelecommandAck(InterfaceID_t src_id, RS485_packet_t *pkt) {
 // TELEMETRY REQUEST HANDLER (when someone requests data from OBC)
 // ============================================================================
 
-void TCTLM_processTelemetryRequest(InterfaceID_t src_id, RS485_packet_t *pkt) {
+void TCTLM_processTelemetryRequest(CommsInterfaceId_t src_id, RS485_packet_t *pkt) {
     log_rx_packet_to_monitor(pkt);
     uint8_t id = pkt->msg_desc.id;
     // ESP_LOGI(TAG, "Telemetry Request %d from %02X", id, pkt->src_addr);
 
     switch (id) {
         case TLM_ID_IDENTIFICATION:
-            obc_handle_telemetry_request(src_id, pkt);
+            obc_handle_telemetry_request((InterfaceID_t)src_id, pkt);
             break;
 
         default:
@@ -141,7 +141,7 @@ void TCTLM_processTelemetryRequest(InterfaceID_t src_id, RS485_packet_t *pkt) {
 // TELEMETRY RESPONSE HANDLER (responses to OBC's requests)
 // ============================================================================
 
-void TCTLM_processTelemetryResponse(InterfaceID_t src_id, RS485_packet_t *pkt) {
+void TCTLM_processTelemetryResponse(CommsInterfaceId_t src_id, RS485_packet_t *pkt) {
     log_rx_packet_to_monitor(pkt);
     // ESP_LOGD(TAG, "TLM Response: ID=%d, Src=%02X, Len=%d", pkt->msg_desc.id, pkt->src_addr, pkt->length);
     
@@ -175,7 +175,7 @@ void TCTLM_processTelemetryResponse(InterfaceID_t src_id, RS485_packet_t *pkt) {
 // BULK TRANSFER HANDLER
 // ============================================================================
 
-void TCTLM_processBulkTransfer(InterfaceID_t src_id, RS485_packet_t *pkt) {
+void TCTLM_processBulkTransfer(CommsInterfaceId_t src_id, RS485_packet_t *pkt) {
     log_rx_packet_to_monitor(pkt);
     ESP_LOGI(TAG, "Bulk transfer from %02X", pkt->src_addr);
 }
@@ -184,7 +184,7 @@ void TCTLM_processBulkTransfer(InterfaceID_t src_id, RS485_packet_t *pkt) {
 // UNKNOWN MESSAGE HANDLER 
 // ============================================================================
 
-void TCTLM_processUnknownMessage(InterfaceID_t src_id, RS485_packet_t *pkt) {
+void TCTLM_processUnknownMessage(CommsInterfaceId_t src_id, RS485_packet_t *pkt) {
     log_rx_packet_to_monitor(pkt);
     ESP_LOGW(TAG, "Unknown message type %d from %02X", pkt->msg_desc.type, pkt->src_addr);
 }
