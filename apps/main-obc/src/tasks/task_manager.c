@@ -8,7 +8,6 @@
 #include "telemetry_task.h" // Keeping for now, but will likely be deprecated/merged
 #include "sensors_task.h"
 #include "hil_sensor_task.h"
-#include "core/debug_cli.h"
 #include "core/eps_node.h"
 #include "core/tracking_radio_node.h"
 #include <FreeRTOS.h>
@@ -47,7 +46,6 @@ void tasks_create_all(void) {
     
     eps_node_init();
     tracking_radio_node_init();
-    debug_cli_init();
 
     xTaskCreate(vStartupCheck, "StartupCheck", 512, NULL, tskIDLE_PRIORITY, NULL);
 }

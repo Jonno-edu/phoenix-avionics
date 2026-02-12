@@ -29,7 +29,8 @@ static struct {
 static volatile SystemConfig_t sys_config = {
     .log_level = 3,         // Default: 3=Debug
     .sim_mode_enabled = false,
-    .telem_rate_hz = 1      // Default: 1Hz
+    .telem_rate_hz = 1,     // Default: 1Hz
+    .avionics_mode = 0      // Default: 0=Debug
 };
 
 // Boot time reference
@@ -123,9 +124,14 @@ void system_config_set_telem_rate(uint8_t rate_hz) {
     if(rate_hz > 0) sys_config.telem_rate_hz = rate_hz;
 }
 
+void system_config_set_avionics_mode(uint8_t mode) {
+    sys_config.avionics_mode = mode;
+}
+
 uint8_t system_config_get_log_level(void) { return sys_config.log_level; }
 bool system_config_get_sim_mode(void) { return sys_config.sim_mode_enabled; }
 uint8_t system_config_get_telem_rate(void) { return sys_config.telem_rate_hz; }
+uint8_t system_config_get_avionics_mode(void) { return sys_config.avionics_mode; }
 
 #include "tctlm.h"
 

@@ -1,6 +1,7 @@
 #include "tctlm.h"
 #include "rs485_protocol.h"
 #include "core/obc_data.h"
+#include "core/obc_commands.h"
 #include "core/rocket_data.h"
 #include "core/eps_node.h"
 #include "core/tracking_radio_node.h"
@@ -81,42 +82,11 @@ void TCTLM_processEvent(InterfaceID_t src_id, RS485_packet_t *pkt) {
 
 void TCTLM_processTelecommand(InterfaceID_t src_id, RS485_packet_t *pkt) {
     log_rx_packet_to_monitor(pkt);
-    uint8_t id = pkt->msg_desc.id;
+    // uint8_t id = pkt->msg_desc.id;
     // ESP_LOGI(TAG, "Telecommand %d received from %02X", id, pkt->src_addr);
-
-    // Send ACK for the received command (ACK goes back to Source)
-    RS485_packet_t ack_pkt;
-    // We cannot construct packets easily without a helper. 
-    // Wait, rs485_send_packet is for SERIALIZATION.
-    // We need to construct the STRUCT manually here if we want to queue it.
-    // NOTE: For now, I will create a temporary helper or manually stuffing:
     
-    // Manual Construction of ACK:
-    ack_pkt.dest_addr = pkt->src_addr;
-    ack_pkt.src_addr = ADDR_OBC; // My address
-    ack_pkt.msg_desc.type = MSG_TYPE_TC_ACK;
-    ack_pkt.msg_desc.id = id;
-    ack_pkt.length = 0;
-    ack_pkt.crc = 0; // Driver will calculate
-    
-    tctlm_send_reply(src_id, &ack_pkt);
-
-    switch (id) {
-        case TC_ID_RESET: 
-            if (pkt->length >= 1 && pkt->data[0] == 0x85) {
-                ESP_LOGE(TAG, "RESET COMMAND RECEIVED! Rebooting...");
-                // TODO: Trigger actual reset
-            } else {
-                ESP_LOGW(TAG, "Reset command with invalid confirmation byte");
-            }
-            break;
-
-        // Shouldn't get a telecommand from any other device to the OBC?      
-
-        default:
-            ESP_LOGW(TAG, "Unknown TC ID: %d", id);
-            break;
-    }
+    // Delegate to OBC Data Handler (Logic Node)
+    obc_handle_telecommand(src_id, pkt);
 }
 
 // ============================================================================

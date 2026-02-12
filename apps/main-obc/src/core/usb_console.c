@@ -1,6 +1,5 @@
 // usb_console.c
 #include "core/usb_console.h"
-// #include "core/debug_cli.h"
 #include <stdio.h>
 #include "FreeRTOS.h"
 #include "task.h"

@@ -24,10 +24,12 @@
 // ============================================================================
 #define TC_ID_RESET             0
 #define TC_ID_EPS_POWER         1
-#define TC_ID_TRACKING_BEACON   0x02
-#define TC_ID_TRACKING_BEACON_ACK 0x02
-// #define TC_ID_AVIONICS_MODE     2
-// #define TC_ID_UPDATE_TRIGGER    3
+#define TC_ID_TRACKING_BEACON   2
+#define TC_ID_TRACKING_BEACON_ACK 2
+#define TC_ID_TELEM_RATE        5
+#define TC_ID_LOG_LEVEL         6
+#define TC_ID_SIM_MODE          8
+#define TC_ID_AVIONICS_MODE     9
 
 // ============================================================================
 // TELEMETRY IDs
