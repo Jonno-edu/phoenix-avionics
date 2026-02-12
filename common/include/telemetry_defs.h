@@ -26,6 +26,13 @@
 
 // TLM: Telemetry Responses (Device -> Host)
 #define TLM_COMMON_IDENT        0x00 // Identification Response
+#define TLM_COMMON_LOG          0x05 // Log Message (Payload: [Level 1B] + [Text])
+
+// Log Levels (First byte of payload)
+#define LOG_LEVEL_ERROR         0
+#define LOG_LEVEL_WARN          1
+#define LOG_LEVEL_INFO          2
+#define LOG_LEVEL_DEBUG         3
 
 // ============================================================================
 // EPS SPECIFIC IDs (Target: ADDR_EPS)
@@ -56,11 +63,11 @@
 #define TC_OBC_LOG_LEVEL        0x06
 #define TC_OBC_SIM_MODE         0x08
 
-// Log Levels for TC_OBC_LOG_LEVEL
-#define LOG_LEVEL_NONE          0
-#define LOG_LEVEL_ERROR         1
-#define LOG_LEVEL_INFO          2
-#define LOG_LEVEL_DEBUG         3
+// Log Levels for TC_OBC_LOG_LEVEL (Deprecated/Redefined above)
+// #define LOG_LEVEL_NONE          0
+// #define LOG_LEVEL_ERROR         1
+// #define LOG_LEVEL_INFO          2
+// #define LOG_LEVEL_DEBUG         3
 
 #define TC_OBC_AVIONICS_MODE    0x09
 #define TC_OBC_ENABLE_TUNNEL    0x0A // "Please forward all RS485 traffic to USB"

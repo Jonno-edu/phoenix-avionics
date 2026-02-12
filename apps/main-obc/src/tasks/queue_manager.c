@@ -1,5 +1,6 @@
 #include "queue_manager.h"
 #include <stdio.h> 
+#include "core/logging_shim.h" 
 
 QueueHandle_t xEstimatorQueue = NULL;
 QueueHandle_t xPilotCommandQueue = NULL;
@@ -60,7 +61,7 @@ bool cmd_inject_packet(InterfaceID_t src_interface, uint8_t msg_type, uint8_t ms
     }
 
     if (xQueueSend(q_command_inbox, &event, 0) != pdTRUE) {
-        printf("FAILED to inject command: Queue Full\n");
+        LOGE("QM", "FAILED to inject command: Queue Full");
         return false;
     }
 

@@ -38,6 +38,7 @@ rsync -avz --progress \
     "$LOCAL_PY_DIR/phoenix_sensor_stream.csv" \
     "$LOCAL_PY_DIR/obc_monitor.py" \
     "$LOCAL_PY_DIR/cmd_get_ident.py" \
+    "$LOCAL_PY_DIR/monitor_logs.py" \
     "$LOCAL_PY_DIR/cmd_set_log.py" \
     "$LOCAL_PY_DIR/run_hil.sh" \
     "$LOCAL_PY_DIR/hil_node.uf2" \

@@ -6,6 +6,7 @@
 #include "core/eps_node.h"
 #include "core/tracking_radio_node.h"
 #include "core/logging.h"
+#include "core/logging_shim.h"
 #include "core/rs485_monitor.h"
 #include "tasks/queue_manager.h" // For queues and InterfaceID_t
 #include <stdint.h>
@@ -73,7 +74,7 @@ static void log_rx_packet_to_monitor(RS485_packet_t *pkt) {
 
 void TCTLM_processEvent(CommsInterfaceId_t src_id, RS485_packet_t *pkt) {
     log_rx_packet_to_monitor(pkt);
-    ESP_LOGI(TAG, "Event received from %02X", pkt->src_addr);
+    LOGI(TAG, "Event received from %02X", pkt->src_addr);
 }
 
 // ============================================================================
@@ -112,7 +113,7 @@ void TCTLM_processTelecommandAck(CommsInterfaceId_t src_id, RS485_packet_t *pkt)
             break;
 
         default:
-            ESP_LOGD(TAG, "TC ACK received: ID=%d from 0x%02X", pkt->msg_desc.id, pkt->src_addr);
+            LOGD(TAG, "TC ACK received: ID=%d from 0x%02X", pkt->msg_desc.id, pkt->src_addr);
             break;
     }
 }
@@ -124,7 +125,7 @@ void TCTLM_processTelecommandAck(CommsInterfaceId_t src_id, RS485_packet_t *pkt)
 void TCTLM_processTelemetryRequest(CommsInterfaceId_t src_id, RS485_packet_t *pkt) {
     log_rx_packet_to_monitor(pkt);
     uint8_t id = pkt->msg_desc.id;
-    ESP_LOGI(TAG, "Telemetry Request %d from %02X", id, pkt->src_addr);
+    LOGI(TAG, "Telemetry Request %d from %02X", id, pkt->src_addr);
 
     switch (id) {
         case TLM_COMMON_IDENT:
@@ -132,7 +133,7 @@ void TCTLM_processTelemetryRequest(CommsInterfaceId_t src_id, RS485_packet_t *pk
             break;
 
         default:
-            ESP_LOGW(TAG, "Unknown TLM Req ID: %d from 0x%02X", id, pkt->src_addr);
+            LOGW(TAG, "Unknown TLM Req ID: %d from 0x%02X", id, pkt->src_addr);
             break;
     }
 }

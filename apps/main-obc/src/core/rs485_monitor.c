@@ -3,6 +3,39 @@
 #include "core/obc_data.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
+#include "core/logging_shim.h"
+
+// ============================================================================
+// LOGGING REDIRECTION
+// ============================================================================
+static char mon_buf[1024];
+static int mon_idx = 0;
+
+static void mon_flush() {
+    if (mon_idx > 0) {
+        mon_buf[mon_idx] = 0;
+        GSU_LOG(LOG_LEVEL_INFO, "%s", mon_buf);
+        mon_idx = 0;
+    }
+}
+
+static void mon_printf(const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    int len = vsnprintf(&mon_buf[mon_idx], sizeof(mon_buf) - mon_idx, fmt, args);
+    va_end(args);
+    
+    if (len > 0) {
+        mon_idx += len;
+        if (mon_idx >= (int)sizeof(mon_buf)) mon_idx = (int)sizeof(mon_buf) - 1;
+        if (mon_buf[mon_idx-1] == '\n') {
+           mon_buf[mon_idx-1] = 0; 
+           mon_flush();
+        }
+    }
+}
+#define printf mon_printf
 
 // ============================================================================
 // CONSTANTS

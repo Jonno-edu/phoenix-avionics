@@ -6,6 +6,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "core/obc_data.h"
+#include "core/logging_shim.h" // Include GSU_LOG definition
 
 #if PICO_BUILD
     #include <pico/stdlib.h>
@@ -46,19 +47,35 @@ static inline const char* log_get_task_name(void) {
 // ESP-style Logging Macros
 // Format: L (Timestamp) [TASK] [TAG]: Message
 #define ESP_LOGE(tag, fmt, ...) \
-    do { if (system_config_get_log_level() >= 1) printf(LOG_COLOR_RED "E (%lu) [%s] [%s]: " fmt LOG_COLOR_RESET "\n", (unsigned long)LOG_GET_TIME(), log_get_task_name(), tag, ##__VA_ARGS__); } while(0)
+    do { \
+        if (system_config_get_log_level() >= 1) { \
+            GSU_LOG(LOG_LEVEL_ERROR, "(%lu) [%s] [%s]: " fmt, (unsigned long)LOG_GET_TIME(), log_get_task_name(), tag, ##__VA_ARGS__); \
+        } \
+    } while(0)
 
 #define ESP_LOGW(tag, fmt, ...) \
-    do { if (system_config_get_log_level() >= 2) printf(LOG_COLOR_YELLOW "W (%lu) [%s] [%s]: " fmt LOG_COLOR_RESET "\n", (unsigned long)LOG_GET_TIME(), log_get_task_name(), tag, ##__VA_ARGS__); } while(0)
+    do { \
+        if (system_config_get_log_level() >= 2) { \
+            GSU_LOG(LOG_LEVEL_WARN,  "(%lu) [%s] [%s]: " fmt, (unsigned long)LOG_GET_TIME(), log_get_task_name(), tag, ##__VA_ARGS__); \
+        } \
+    } while(0)
 
 #define ESP_LOGI(tag, fmt, ...) \
-    do { if (system_config_get_log_level() >= 2) printf(LOG_COLOR_GREEN "I (%lu) [%s] [%s]: " fmt LOG_COLOR_RESET "\n", (unsigned long)LOG_GET_TIME(), log_get_task_name(), tag, ##__VA_ARGS__); } while(0)
+    do { \
+        if (system_config_get_log_level() >= 2) { \
+            GSU_LOG(LOG_LEVEL_INFO,  "(%lu) [%s] [%s]: " fmt, (unsigned long)LOG_GET_TIME(), log_get_task_name(), tag, ##__VA_ARGS__); \
+        } \
+    } while(0)
 
 #define ESP_LOGD(tag, fmt, ...) \
-    do { if (system_config_get_log_level() >= 3) printf(LOG_COLOR_CYAN "D (%lu) [%s] [%s]: " fmt LOG_COLOR_RESET "\n", (unsigned long)LOG_GET_TIME(), log_get_task_name(), tag, ##__VA_ARGS__); } while(0)
+    do { \
+        if (system_config_get_log_level() >= 3) { \
+            GSU_LOG(LOG_LEVEL_DEBUG, "(%lu) [%s] [%s]: " fmt, (unsigned long)LOG_GET_TIME(), log_get_task_name(), tag, ##__VA_ARGS__); \
+        } \
+    } while(0)
 
 #define ESP_LOGV(tag, fmt, ...) \
-    do { if (system_config_get_log_level() >= 3) printf(LOG_COLOR_BLUE "V (%lu) [%s] [%s]: " fmt LOG_COLOR_RESET "\n", (unsigned long)LOG_GET_TIME(), log_get_task_name(), tag, ##__VA_ARGS__); } while(0)
+    ESP_LOGD(tag, fmt, ##__VA_ARGS__)
 
 // Raw hex dump helper
 static inline void ESP_LOG_BUFFER_HEX(const char *tag, const void *buffer, uint16_t buff_len) {

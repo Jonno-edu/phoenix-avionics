@@ -55,6 +55,21 @@ def main():
                         
                     print(f"\n[Response Received] Src: 0x{header['src']:02X}, ID: {header['id']}")
                     
+                    if header['id'] == tlm.TLM_COMMON_LOG:
+                        level = payload[0]
+                        text = payload[1:].decode('utf-8', errors='replace')
+                        
+                        if level == tlm.LOG_LEVEL_ERROR:
+                            print(f"\033[91m[ERROR] {text}\033[0m")
+                        elif level == tlm.LOG_LEVEL_WARN:
+                            print(f"\033[93m[WARN]  {text}\033[0m")
+                        elif level == tlm.LOG_LEVEL_INFO:
+                            # print(f"\033[32m[INFO]  {text}\033[0m") # Optional Green
+                            print(f"[INFO]  {text}")
+                        else:
+                            print(f"[DEBUG] {text}")
+                        continue
+
                     # Check if it's the response we want
                     if header['id'] == tlm.TLM_COMMON_IDENT and header['src'] == tlm.ADDR_OBC:
                         if header['id'] in TELEMETRY_MAP:

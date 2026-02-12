@@ -143,6 +143,7 @@ set(COMMON_SOURCES
     ${CMAKE_SOURCE_DIR}/lib/esl-math/src/quaternion.c
     ${CMAKE_SOURCE_DIR}/lib/esl-math/src/vector2.c
     ${CMAKE_SOURCE_DIR}/lib/esl-math/src/vector3.c
+    src/core/logging_shim.c
 )
 
 # Hardware-only source files (sensors, I2C, RS485 HAL, etc.)
