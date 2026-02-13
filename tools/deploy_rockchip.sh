@@ -10,7 +10,7 @@ WORKSPACE_DIR="$(dirname "$SCRIPT_DIR")"
 ROCKCHIP_USER="rock"
 ROCKCHIP_IP="100.115.224.114"
 REMOTE_DIR="/home/rock/phoenix_gsu"
-LOCAL_PY_DIR="$WORKSPACE_DIR/rockchip"
+LOCAL_PY_DIR="$WORKSPACE_DIR/phoenix-gsu"
 
 # 1. GENERATE CONFIGS
 echo "--------------------------------------"
@@ -31,18 +31,10 @@ echo "   - telemetry_defs.py (Updated)"
 echo "--------------------------------------"
 echo "2. Deploying to Rockchip ($ROCKCHIP_IP)..."
 
-# Use rsync with the robust paths
-rsync -avz --progress \
-    "$LOCAL_PY_DIR/rockchip_streamer.py" \
-    "$LOCAL_PY_DIR/sensor_config.py" \
-    "$LOCAL_PY_DIR/phoenix_sensor_stream.csv" \
-    "$LOCAL_PY_DIR/obc_monitor.py" \
-    "$LOCAL_PY_DIR/cmd_get_ident.py" \
-    "$LOCAL_PY_DIR/monitor_logs.py" \
-    "$LOCAL_PY_DIR/cmd_set_log.py" \
-    "$LOCAL_PY_DIR/run_hil.sh" \
-    "$LOCAL_PY_DIR/hil_node.uf2" \
-    "$LOCAL_PY_DIR/common" \
+# Use rsync to sync the entire folder
+rsync -avz --progress --delete \
+    --exclude "__pycache__" \
+    "$LOCAL_PY_DIR/" \
     $ROCKCHIP_USER@$ROCKCHIP_IP:$REMOTE_DIR/
 
 if [ $? -eq 0 ]; then

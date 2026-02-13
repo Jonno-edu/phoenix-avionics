@@ -1,0 +1,1 @@
+Any files added here and not to the phoneix repo and synced via rsync will be deleted
