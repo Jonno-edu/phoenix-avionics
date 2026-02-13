@@ -95,6 +95,18 @@ void eps_request_measurements(void);
 // ============================================================================
 
 /**
+ * @brief Request the EPS to reset itself. Use with caution!
+ * Note: This is a command to the EPS to perform a reset. It does NOT reset the OBC or this software module.
+ */
+void eps_request_mcu_reset(void);
+
+/**
+ * @brief Request the EPS to perform a full reset (simulate power cycle)
+ * Note: This is a command to the EPS to perform a full reset. It does NOT reset the OBC or this software module.
+ */
+void eps_request_full_reset(void);
+
+/**
  * @brief Set the state of a specific EPS line
  * @param line The line to control
  * @param state The state to set (ON/OFF/AUTO)

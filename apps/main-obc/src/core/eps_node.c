@@ -197,6 +197,16 @@ void eps_request_measurements(void) {
     rs485_send_packet(rs485_get_default_instance(), ADDR_EPS, MSG_TYPE_TLM_REQ, TLM_EPS_MEASURE, NULL, 0);
 }
 
+void eps_request_mcu_reset(void) {
+    ESP_LOGD(TAG, "Requesting EsPS MCU to reset");
+    rs485_send_packet(rs485_get_default_instance(), ADDR_EPS, MSG_TYPE_TELECOMMAND, TC_COMMON_RESET, NULL, 0);
+}
+
+void eps_request_full_reset(void) {
+    ESP_LOGD(TAG, "Requesting EPS to perform full reset");
+    rs485_send_packet(rs485_get_default_instance(), ADDR_EPS, MSG_TYPE_TELECOMMAND, TC_EPS_FULL_RESET, NULL, 0);
+}
+
 void eps_send_power_command(const EpsPowerSetCmd_t *cmd) {
     if (cmd == NULL) {
         ESP_LOGW(TAG, "NULL pointer passed to send_power_command");
@@ -347,6 +357,10 @@ void eps_handle_telecommand_ack(RS485_packet_t *pkt) {
 
         case TC_COMMON_RESET:
             ESP_LOGI(TAG, "Reset command acknowledged by 0x%02X", pkt->src_addr);
+            break;
+
+        case TC_EPS_FULL_RESET:
+            ESP_LOGI(TAG, "Full Reset command acknowledged by 0x%02X", pkt->src_addr);
             break;
 
         default:

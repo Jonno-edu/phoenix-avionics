@@ -39,6 +39,7 @@
 // ============================================================================
 // TC: Telecommands
 #define TC_EPS_POWER            0x01 // Set power lines
+#define TC_EPS_FULL_RESET       0x03 // Reset EPS (Simulate power cycle)
 
 // TLM: Telemetry Responses
 #define TLM_EPS_POWER           0x01 // Get power line status
