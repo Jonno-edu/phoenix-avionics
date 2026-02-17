@@ -6,6 +6,7 @@
 	],
 	"settings": {
 		"cmake.launchBehavior": "reuseTerminal",
-		"cmake.options.statusBarVisibility": "compact"
+		"cmake.options.statusBarVisibility": "compact",
+		"raspberry-pi-pico.useCmakeTools": true
 	}
 }

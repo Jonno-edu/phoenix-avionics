@@ -1,40 +1,21 @@
 {
     "configurations": [
         {
-            "name": "OBC",
-            "configurationProvider": "ms-vscode.cmake-tools",
-            "compilerPath": "/usr/bin/arm-none-eabi-gcc",
-            "compileCommands": "${workspaceFolder}/build/obc/compile_commands.json",
-            "intelliSenseMode": "linux-gcc-arm",
+            "name": "Pico",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/opt/pico-sdk/**",
-                "${workspaceFolder}/lib/FreeRTOS-Kernel/include",
-                "${workspaceFolder}/lib/FreeRTOS-Kernel/portable/ThirdParty/Community-Supported-Ports/GCC/RP2350_ARM_NTZ/non_secure"
+                "${userHome}/.pico-sdk/sdk/2.2.0/**"
             ],
-            "defines": [
-                "PICO_BUILD=1",
-                "PICO_ON_DEVICE=1",
-                "PICO_RP2350=1"
-            ]
-        },
-        {
-            "name": "HIL",
-            "configurationProvider": "ms-vscode.cmake-tools",
-            "compilerPath": "/usr/bin/arm-none-eabi-gcc",
-            "compileCommands": "${workspaceFolder}/build/hil/compile_commands.json",
-            "intelliSenseMode": "linux-gcc-arm",
-            "includePath": [
-                "${workspaceFolder}/**",
-                "/opt/pico-sdk/**",
-                "${workspaceFolder}/lib/FreeRTOS-Kernel/include",
-                "${workspaceFolder}/lib/FreeRTOS-Kernel/portable/ThirdParty/Community-Supported-Ports/GCC/RP2350_ARM_NTZ/non_secure"
+            "forcedInclude": [
+                "${workspaceFolder}/build/generated/pico_base/pico/config_autogen.h",
+                "${userHome}/.pico-sdk/sdk/2.2.0/src/common/pico_base_headers/include/pico.h"
             ],
-            "defines": [
-                "PICO_BUILD=1",
-                "PICO_ON_DEVICE=1",
-                "PICO_RP2350=1"
-            ]
+            "defines": [],
+            "compilerPath": "${userHome}/.pico-sdk/toolchain/14_2_Rel1/bin/arm-none-eabi-gcc",
+            "compileCommands": "${workspaceFolder}/build/compile_commands.json",
+            "cStandard": "c17",
+            "cppStandard": "c++14",
+            "intelliSenseMode": "linux-gcc-arm"
         }
     ],
     "version": 4

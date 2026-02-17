@@ -1,185 +1,102 @@
 {
     "version": "2.0.0",
-    "inputs": [
-        {
-            "id": "selectVariant",
-            "type": "pickString",
-            "description": "Select Variant to Configure",
-            "options": [
-                {
-                    "label": "Main OBC (RP2350)",
-                    "value": "OBC"
-                },
-                {
-                    "label": "HIL Node (RP2350)",
-                    "value": "HIL"
-                }
-            ],
-            "default": "OBC"
-        }
-    ],
     "tasks": [
         {
-            "label": "Configure Active Variant",
-            "type": "shell",
+            "label": "Compile Project",
+            "type": "process",
+            "isBuildCommand": true,
+            "command": "${userHome}/.pico-sdk/ninja/v1.12.1/ninja",
+            "args": ["-C", "${workspaceFolder}/build"],
             "group": "build",
-            "command": "VARIANT=\"${input:selectVariant}\"; if [ \"$VARIANT\" = \"OBC\" ]; then PLATFORM=\"rp2350\"; BUILD_DIR=\"${workspaceFolder}/build/obc\"; elif [ \"$VARIANT\" = \"HIL\" ]; then PLATFORM=\"rp2350\"; BUILD_DIR=\"${workspaceFolder}/build/hil\"; fi; echo \"Configuring $VARIANT for $PLATFORM in $BUILD_DIR...\"; rm -f \"$BUILD_DIR/CMakeCache.txt\"; cmake -B \"$BUILD_DIR\" -S \"${workspaceFolder}\" -DPICO_PLATFORM=$PLATFORM -DBUILD_TARGET=$VARIANT",
-            "problemMatcher": [],
-            "detail": "Selects variant (OBC/HIL), sets the correct PICO_PLATFORM, and runs CMake configure."
-        },
-        {
-            "label": "Build Active Variant",
-            "type": "shell",
-            "group": "build",
-            "command": "BUILD_DIR=\"${command:cmake.buildDirectory}\"; echo \"Building in: $BUILD_DIR\"; cmake --build \"$BUILD_DIR\" -j $(nproc)",
-            "problemMatcher": [],
-            "detail": "Builds the currently selected CMake Variant"
-        },
-        {
-            "label": "Flash Configuration",
-            "type": "shell",
-            "group": "build",
-            "linux": {
-                "command": "BUILD_DIR=\"${command:cmake.buildDirectory}\"; echo \"Using Build Dir: $BUILD_DIR\"; VARIANT=$(grep \"BUILD_TARGET:STRING\" \"$BUILD_DIR/CMakeCache.txt\" | cut -d= -f2); echo \"Target Variant: $VARIANT\"; if [ \"$VARIANT\" = \"OBC\" ]; then UF2=\"phoenix-avionics.uf2\"; BUS=\"1\"; DEV=\"/dev/ttyOBC\"; elif [ \"$VARIANT\" = \"HIL\" ]; then UF2=\"hil_node.uf2\"; BUS=\"7\"; DEV=\"/dev/ttyACM3\"; else echo \"Current variant is '$VARIANT'. Please select 'Main OBC' or 'HIL Node' from the CMake Variant selector (bottom bar) instead of 'ALL/Debug'.\"; exit 1; fi; echo \"Flashing $UF2 to Bus $BUS...\"; cmake --build \"$BUILD_DIR\" -j $(nproc) && find \"$BUILD_DIR\" -name \"$UF2\" -exec scp {} rock@100.115.224.114:~/firmware.uf2 \\; && ssh -t rock@100.115.224.114 \"sudo fuser -k $DEV 2>/dev/null; echo 'Rebooting to Bootloader...'; sudo picotool reboot --bus $BUS -f -u; echo 'Waiting for USB...'; sleep 3; echo 'Flashing...'; sudo picotool load --bus $BUS -x ~/firmware.uf2\""
-            },
-            "problemMatcher": [],
-            "detail": "Builds and flashes the currently selected CMake Variant"
-        },
-        {
-            "label": "Monitor Active Variant",
-            "type": "shell",
-            "group": "build",
-            "linux": {
-                "command": "BUILD_DIR=\"${command:cmake.buildDirectory}\"; VARIANT=$(grep \"BUILD_TARGET:STRING\" \"$BUILD_DIR/CMakeCache.txt\" | cut -d= -f2); if [ \"$VARIANT\" = \"OBC\" ]; then DEV=\"/dev/ttyOBC\"; elif [ \"$VARIANT\" = \"HIL\" ]; then DEV=\"/dev/ttyHIL\"; else echo \"Invalid variant selected.\"; exit 1; fi; echo \"Opening Monitor for $VARIANT on $DEV...\"; ssh -t rock@100.115.224.114 \"sudo fuser -k $DEV 2>/dev/null; sudo rm -f /var/lock/LCK..*; sleep 1; sudo minicom -D $DEV -b 115200\""
-            },
             "presentation": {
                 "reveal": "always",
-                "panel": "dedicated",
-                "focus": true
+                "panel": "dedicated"
             },
-            "detail": "Opens minicom for the currently selected CMake Variant"
+            "problemMatcher": "$gcc",
+            "windows": {
+                "command": "${env:USERPROFILE}/.pico-sdk/ninja/v1.12.1/ninja.exe"
+            }
         },
         {
-            "label": "Flash and Monitor",
-            "dependsOn": [
-                "Flash Configuration",
-                "Monitor Active Variant"
-            ],
-            "dependsOrder": "sequence",
-            "group": "build",
-            "problemMatcher": [],
-            "detail": "Build, Flash, and then Open Monitor"
-        },
-        {
-            "label": "Reboot Pico",
-            "type": "shell",
-            "group": "build",
-            "command": "ssh -t rock@100.115.224.114 'sudo picotool reboot -f -u'",
-            "detail": "Reboot any connected Pico (Warning: might reboot both)"
-        },
-        {
-            "label": "Flash HIL Node",
-            "type": "shell",
-            "group": "build",
-            "command": "BUILD_DIR=\"/workspace/build/hil\"; UF2=\"hil_node.uf2\"; BUS=\"7\"; DEV=\"/dev/ttyACM3\"; echo \"Flashing HIL Node...\"; cmake --build \"$BUILD_DIR\" && find \"$BUILD_DIR\" -name \"$UF2\" -exec scp {} rock@100.115.224.114:~/firmware.uf2 \\; && ssh -t rock@100.115.224.114 \"sudo fuser -k $DEV 2>/dev/null; echo 'Rebooting to Bootloader...'; sudo picotool reboot --bus $BUS -f -u; echo 'Waiting for USB...'; sleep 3; echo 'Flashing...'; sudo picotool load --bus $BUS -x ~/firmware.uf2\"",
-            "problemMatcher": [],
-            "detail": "Explicitly builds and flashes the HIL Node"
-        },
-        {
-            "label": "Flash OBC",
-            "type": "shell",
-            "group": "build",
-            "command": "BUILD_DIR=\"/workspace/build/obc\"; UF2=\"phoenix-avionics.uf2\"; BUS=\"1\"; DEV=\"/dev/ttyOBC\"; echo \"Flashing OBC...\"; cmake --build \"$BUILD_DIR\" && find \"$BUILD_DIR\" -name \"$UF2\" -exec scp {} rock@100.115.224.114:~/firmware.uf2 \\; && ssh -t rock@100.115.224.114 \"sudo fuser -k $DEV 2>/dev/null; echo 'Rebooting to Bootloader...'; sudo picotool reboot --bus $BUS -f -u; echo 'Waiting for USB...'; sleep 3; echo 'Flashing...'; sudo picotool load --bus $BUS -x ~/firmware.uf2\"",
-            "problemMatcher": [],
-            "detail": "Explicitly builds and flashes the Main OBC"
-        },
-        {
-            "label": "Monitor HIL Node",
-            "type": "shell",
-            "group": "build",
-            "command": "DEV=\"/dev/ttyHIL\"; echo \"Opening Monitor for HIL on $DEV...\"; ssh -t rock@100.115.224.114 \"sudo fuser -k $DEV 2>/dev/null; sudo rm -f /var/lock/LCK..*; sleep 1; sudo minicom -D $DEV -b 115200\"",
-            "presentation": {
-                "reveal": "always",
-                "panel": "dedicated",
-                "focus": true
-            },
-            "detail": "Explicitly opens minicom for the HIL Node"
-        },
-        {
-            "label": "Monitor OBC",
-            "type": "shell",
-            "group": "build",
-            "command": "DEV=\"/dev/ttyOBC\"; echo \"Opening Monitor for OBC on $DEV...\"; ssh -t rock@100.115.224.114 \"sudo fuser -k $DEV 2>/dev/null; sudo rm -f /var/lock/LCK..*; sleep 1; sudo minicom -D $DEV -b 115200\"",
-            "presentation": {
-                "reveal": "always",
-                "panel": "dedicated",
-                "focus": true
-            },
-            "detail": "Explicitly opens minicom for the Main OBC"
-        },
-        {
-            "label": "Flash All",
-            "dependsOn": [
-                "Flash HIL Node",
-                "Flash OBC"
-            ],
-            "dependsOrder": "sequence",
-            "group": "build",
-            "problemMatcher": [],
-            "detail": "Flashes both HIL Node and OBC"
-        },
-        {
-            "label": "rsync to rockchip",
-            "type": "shell",
-            "group": "build",
-            "command": "./tools/deploy_rockchip.sh",
-            "problemMatcher": [],
-            "detail": "Generates sensors.json configs and syncs python scripts to Rockchip"
-        },
-        {
-            "label": "Start HIL Stream",
-            "type": "shell",
-            "group": "build",
-            "command": "ssh -t rock@100.115.224.114 \"/home/rock/phoenix_gsu/run_hil.sh\"",
-            "presentation": {
-                "reveal": "always",
-                "panel": "dedicated",
-                "focus": true,
-                "clear": true
-            },
-            "problemMatcher": [],
-            "detail": "Runs the HIL streamer wrapper script."
-        },
-        {
-            "label": "start HIL on rockchip",
-            "dependsOn": [
-                "rsync to rockchip",
-                "Start HIL Stream"
-            ],
-            "dependsOrder": "sequence",
-            "group": "build",
-            "problemMatcher": [],
-            "detail": "Updates config, deploys to Rockchip, and immediately starts streaming"
-        },
-        {
-            "type": "cppbuild",
-            "label": "C/C++: aarch64-linux-gnu-gcc build active file",
-            "command": "/usr/bin/aarch64-linux-gnu-gcc",
+            "label": "Run Project",
+            "type": "process",
+            "command": "${env:HOME}/.pico-sdk/picotool/2.2.0-a4/picotool/picotool",
             "args": [
-                "-fdiagnostics-color=always",
-                "-g",
-                "${file}",
-                "-o",
-                "${fileDirname}/${fileBasenameNoExtension}"
+                "load",
+                "${command:raspberry-pi-pico.launchTargetPath}",
+                "-fx"
             ],
-            "options": {
-                "cwd": "${fileDirname}"
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated"
             },
-            "problemMatcher": [
-                "$gcc"
+            "problemMatcher": [],
+            "windows": {
+                "command": "${env:USERPROFILE}/.pico-sdk/picotool/2.2.0-a4/picotool/picotool.exe"
+            }
+        },
+        {
+            "label": "Flash",
+            "type": "process",
+            "command": "${userHome}/.pico-sdk/openocd/0.12.0+dev/openocd.exe",
+            "args": [
+                "-s",
+                "${userHome}/.pico-sdk/openocd/0.12.0+dev/scripts",
+                "-f",
+                "interface/cmsis-dap.cfg",
+                "-f",
+                "target/${command:raspberry-pi-pico.getTarget}.cfg",
+                "-c",
+                "adapter speed 5000; program \"${command:raspberry-pi-pico.launchTargetPath}\" verify reset exit"
             ],
-            "group": "build",
-            "detail": "compiler: /usr/bin/aarch64-linux-gnu-gcc"
+            "problemMatcher": [],
+            "windows": {
+                "command": "${env:USERPROFILE}/.pico-sdk/openocd/0.12.0+dev/openocd.exe",
+            }
+        },
+        {
+            "label": "Rescue Reset",
+            "type": "process",
+            "command": "${userHome}/.pico-sdk/openocd/0.12.0+dev/openocd.exe",
+            "args": [
+                "-s",
+                "${userHome}/.pico-sdk/openocd/0.12.0+dev/scripts",
+                "-f",
+                "interface/cmsis-dap.cfg",
+                "-f",
+                "target/${command:raspberry-pi-pico.getChip}-rescue.cfg",
+                "-c",
+                "adapter speed 5000; reset halt; exit"
+            ],
+            "problemMatcher": [],
+            "windows": {
+                "command": "${env:USERPROFILE}/.pico-sdk/openocd/0.12.0+dev/openocd.exe",
+            }
+        },
+        {
+            "label": "RISC-V Reset (RP2350)",
+            "type": "process",
+            "command": "${userHome}/.pico-sdk/openocd/0.12.0+dev/openocd.exe",
+            "args": [
+                "-s",
+                "${userHome}/.pico-sdk/openocd/0.12.0+dev/scripts",
+                "-c",
+                "set USE_CORE { rv0 rv1 cm0 cm1 }",
+                "-f",
+                "interface/cmsis-dap.cfg",
+                "-f",
+                "target/rp2350.cfg",
+                "-c",
+                "adapter speed 5000; init;",
+                "-c",
+                "write_memory 0x40120158 8 { 0x3 }; echo [format \"Info : ARCHSEL 0x%02x\" [read_memory 0x40120158 8 1]];",
+                "-c",
+                "reset halt; targets rp2350.rv0; echo [format \"Info : ARCHSEL_STATUS 0x%02x\" [read_memory 0x4012015C 8 1]]; exit"
+            ],
+            "problemMatcher": [],
+            "windows": {
+                "command": "${env:USERPROFILE}/.pico-sdk/openocd/0.12.0+dev/openocd.exe",
+            }
         }
     ]
 }
