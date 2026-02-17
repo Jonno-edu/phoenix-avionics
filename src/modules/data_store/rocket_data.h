@@ -2,7 +2,7 @@
 #define ROCKET_DATA_H
 
 #include "telemetry_defs.h" // From esl-comms library
-#include "telemetry.h"      // For TrackingBeacon_t
+#include "modules/communication/telemetry.h"      // For TrackingBeacon_t
 
 /**
  * @brief Initialize the rocket data store (clear all fields)

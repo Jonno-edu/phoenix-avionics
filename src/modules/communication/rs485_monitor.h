@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "rs485_protocol.h"
 
 // ============================================================================
 // MONITOR CONFIGURATION

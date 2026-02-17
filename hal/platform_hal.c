@@ -3,8 +3,8 @@
 #include <task.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "core/usb_console.h"
-#include "core/logging.h"
+#include "usb_console.h"
+#include "logging.h"
 
 #if PICO_BUILD
     #include "hal/rs485_hal.h"

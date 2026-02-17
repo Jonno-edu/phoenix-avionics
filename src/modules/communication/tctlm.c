@@ -1,14 +1,14 @@
 #include "tctlm.h"
 #include "rs485_protocol.h"
-#include "core/obc_data.h"
-#include "core/obc_commands.h"
-#include "core/rocket_data.h"
-#include "core/eps_node.h"
-#include "core/tracking_radio_node.h"
-#include "core/logging.h"
-#include "core/logging_shim.h"
-#include "core/rs485_monitor.h"
-#include "../tasks/queue_manager.h"
+#include "tasks/queue_manager.h"
+#include "modules/data_store/obc_data.h"
+#include "modules/communication/obc_commands.h"
+#include "modules/data_store/rocket_data.h"
+#include "modules/subsystems/eps_node.h"
+#include "modules/subsystems/tracking_radio_node.h"
+#include "logging.h"
+#include "logging_shim.h"
+#include "modules/communication/rs485_monitor.h"
 #include <stdint.h>
 #include <string.h>
 

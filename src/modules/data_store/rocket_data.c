@@ -1,7 +1,7 @@
 // rocket_data.c
 
-#include "core/rocket_data.h"
-#include "telemetry.h"
+#include "modules/data_store/rocket_data.h"
+#include "modules/communication/telemetry.h"
 #include <string.h>
 #include <math.h>
 

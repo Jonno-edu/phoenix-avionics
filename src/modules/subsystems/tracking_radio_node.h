@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "telemetry_defs.h"
-#include "telemetry.h"
+#include "modules/communication/telemetry.h"
 #include "rs485_protocol.h"
 
 // ============================================================================

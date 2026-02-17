@@ -74,6 +74,10 @@
 #define TC_OBC_ENABLE_TUNNEL    0x0A // "Please forward all RS485 traffic to USB"
 #define TC_OBC_FLIGHT_STATE     0x0B
 
+#define TC_OBC_SYSTEM_REBOOT    0x0C
+#define TC_OBC_SYSTEM_SHUTDOWN  0x0D
+#define TC_OBC_DATALOG_ENABLE   0x0E
+
 
 // TLM: Telemetry Responses (OBC -> Ground)
 #define TLM_OBC_SENSOR_DATA     0x02 // OBC Internal Sensors 

@@ -1,7 +1,6 @@
 #include "command_handler_task.h"
-#include "../tasks/task_manager.h"
-#include "core/logging.h"
-#include "../tasks/queue_manager.h"
+#include "tasks/queue_manager.h"
+#include "logging.h"
 #include "tctlm.h"
 #include "rs485_protocol.h"
 #include <FreeRTOS.h>

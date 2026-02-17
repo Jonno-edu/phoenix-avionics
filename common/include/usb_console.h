@@ -4,10 +4,11 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #define CONSOLE_BUFFER_SIZE 256
 
-void console_send(const uint8_t *data, uint16_t len);
+void console_send(const uint8_t *data, size_t length);
 void console_init(void);
 
 // Circular Buffer Access

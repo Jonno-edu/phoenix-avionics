@@ -43,7 +43,7 @@ else()
     message(STATUS "Building for Pico Board: ${PICO_BOARD}")
 endif()
 
-# --- FreeRTOS setup (mirrors previous apps/main-obc behavior) ---
+# --- FreeRTOS setup ---
 if(NOT FREERTOS_KERNEL_PATH)
     set(FREERTOS_KERNEL_PATH ${CMAKE_SOURCE_DIR}/lib/FreeRTOS-Kernel)
 endif()
@@ -70,47 +70,106 @@ endif()
 # The application target
 set(TARGET_NAME phoenix_avionics_monorepo)
 
-# This is required to let FreeRTOS find our FreeRTOSConfig.h config file
+# FreeRTOS config - now at root
 add_library(freertos_config INTERFACE)
-target_include_directories(freertos_config SYSTEM INTERFACE ${CMAKE_SOURCE_DIR}/include)
+target_include_directories(freertos_config SYSTEM INTERFACE ${CMAKE_SOURCE_DIR})
 
-# Common source files
-set(COMMON_SOURCES
+###########################################
+# Source Files Organized by Module
+###########################################
+
+# Main entry point
+set(MAIN_SOURCES
     src/main.c
+)
+
+# Board Support Package
+set(BSP_SOURCES
     bsp/bsp_init.c
+)
+
+# Hardware Abstraction Layer
+set(HAL_SOURCES
     hal/platform_hal.c
-    src/tasks/task_manager.c
-    src/tasks/queue_manager.c
+)
+
+# Flight Control Module (Core 0)
+set(FLIGHT_CONTROL_SOURCES
     src/modules/flight_control/pilot_tasks.c
+)
+
+# Communication Module (Core 1)
+set(COMMUNICATION_SOURCES
     src/modules/communication/command_handler_task.c
-    src/tasks/heartbeat_task.c
     src/modules/communication/rs485_task.c
     src/modules/communication/telemetry_task.c
-    src/tasks/sensors_task.c
-    src/tasks/hil_sensor_task.c
-    src/core/usb_console.c
-    ${CMAKE_SOURCE_DIR}/lib/esl-comms/src/rs485_protocol.c
     src/modules/communication/tctlm.c
+    src/modules/communication/rs485_monitor.c
+    src/modules/communication/obc_commands.c
+)
+
+# Data Store Module
+set(DATA_STORE_SOURCES
     src/modules/data_store/obc_data.c
-    src/core/obc_commands.c
     src/modules/data_store/rocket_data.c
+)
+
+# Task Manager & Queues
+set(TASK_SOURCES
+    src/tasks/queue_manager.c
+)
+
+# Utils & Console
+set(UTIL_SOURCES
+    common/logging_shim.c
+    common/usb_console.c
+)
+
+# Subsystems Module
+set(SUBSYSTEMS_SOURCES
     src/modules/subsystems/eps_node.c
     src/modules/subsystems/tracking_radio_node.c
-    src/core/rs485_monitor.c
+)
+
+# Shared Libraries
+set(COMMS_LIB_SOURCES
+    ${CMAKE_SOURCE_DIR}/lib/esl-comms/src/rs485_protocol.c
+)
+
+set(MATH_LIB_SOURCES
     ${CMAKE_SOURCE_DIR}/lib/esl-math/src/dcm.c
     ${CMAKE_SOURCE_DIR}/lib/esl-math/src/matrix.c
     ${CMAKE_SOURCE_DIR}/lib/esl-math/src/quaternion.c
     ${CMAKE_SOURCE_DIR}/lib/esl-math/src/vector2.c
     ${CMAKE_SOURCE_DIR}/lib/esl-math/src/vector3.c
-    src/core/logging_shim.c
 )
 
+# Hardware-specific sources (only for Pico builds)
 set(HARDWARE_SOURCES
     hal/rs485_hal.c
     ${CMAKE_SOURCE_DIR}/lib/esl-sensors/src/baroMS5607.c
     ${CMAKE_SOURCE_DIR}/lib/esl-sensors/src/tempTMP117.c
     ${CMAKE_SOURCE_DIR}/lib/esl-sensors/src/i2c.c
 )
+
+# Combine common sources
+set(COMMON_SOURCES
+    ${MAIN_SOURCES}
+    ${BSP_SOURCES}
+    ${HAL_SOURCES}
+    ${FLIGHT_CONTROL_SOURCES}
+    ${COMMUNICATION_SOURCES}
+    ${DATA_STORE_SOURCES}
+    ${TASK_SOURCES}
+    ${SUBSYSTEMS_SOURCES}
+    ${UTIL_SOURCES}
+    ${COMMS_LIB_SOURCES}
+    ${MATH_LIB_SOURCES}
+)
+
+###########################################
+# Build Executable
+###########################################
 
 if(BUILD_FOR_HOST)
     add_executable(${TARGET_NAME} ${COMMON_SOURCES})
@@ -122,18 +181,18 @@ target_compile_definitions(${TARGET_NAME} PRIVATE
     $<$<NOT:$<BOOL:${BUILD_FOR_HOST}>>:PICO_BUILD=1>
 )
 
+###########################################
+# Include Directories (NEW MODULE STRUCTURE)
+###########################################
+
 target_include_directories(${TARGET_NAME} PRIVATE
-    include
-    ${CMAKE_SOURCE_DIR}/common/include
-    ${CMAKE_SOURCE_DIR}/lib/esl-comms/include
-    ${CMAKE_SOURCE_DIR}/lib/esl-math/include
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/src/tasks
-    ${CMAKE_SOURCE_DIR}/src/modules/flight_control
-    ${CMAKE_SOURCE_DIR}/src/bsp
-    ${CMAKE_SOURCE_DIR}/src/modules
-    ${CMAKE_SOURCE_DIR}/src/modules/communication
-    ${CMAKE_SOURCE_DIR}
+    .                                         # For FreeRTOSConfig.h at root
+    src                                       # For modules/xxx/yyy.h includes
+    bsp                                       # BSP headers
+    hal                                       # HAL headers
+    ${CMAKE_SOURCE_DIR}/common/include        # Common utilities
+    ${CMAKE_SOURCE_DIR}/lib/esl-comms/include # RS485 protocol
+    ${CMAKE_SOURCE_DIR}/lib/esl-math/include  # Math utilities
 )
 
 if(NOT BUILD_FOR_HOST)
@@ -142,8 +201,13 @@ if(NOT BUILD_FOR_HOST)
     )
 endif()
 
+###########################################
+# Build Type Specific Configuration
+###########################################
+
 if(BUILD_FOR_HOST)
     target_compile_definitions(${TARGET_NAME} PRIVATE HOST_BUILD=1)
+    
     add_library(FreeRTOS-Kernel STATIC
         ${FREERTOS_KERNEL_PATH}/tasks.c
         ${FREERTOS_KERNEL_PATH}/queue.c
@@ -154,20 +218,25 @@ if(BUILD_FOR_HOST)
         ${FREERTOS_KERNEL_PATH}/portable/ThirdParty/GCC/Posix/port.c
         ${FREERTOS_KERNEL_PATH}/portable/ThirdParty/GCC/Posix/utils/wait_for_event.c
     )
+    
     target_include_directories(FreeRTOS-Kernel PUBLIC
         ${FREERTOS_KERNEL_PATH}/include
         ${FREERTOS_KERNEL_PATH}/portable/ThirdParty/GCC/Posix
         ${FREERTOS_KERNEL_PATH}/portable/ThirdParty/GCC/Posix/utils
     )
+    
     target_compile_definitions(FreeRTOS-Kernel PUBLIC
         _DARWIN_C_SOURCE
     )
+    
     target_compile_options(FreeRTOS-Kernel PRIVATE
         -pthread
     )
+    
     add_library(FreeRTOS-Kernel-Heap3 STATIC
         ${FREERTOS_KERNEL_PATH}/portable/MemMang/heap_3.c
     )
+    
     target_link_libraries(FreeRTOS-Kernel-Heap3 PUBLIC FreeRTOS-Kernel)
     target_link_libraries(FreeRTOS-Kernel PUBLIC pthread)
 
@@ -177,7 +246,7 @@ if(BUILD_FOR_HOST)
         FreeRTOS-Kernel-Heap3
     )
 else()
-    # For Pico builds, include FreeRTOS import helper (searches FREERTOS_KERNEL_PATH)
+    # For Pico builds
     include(FreeRTOS_Kernel_import.cmake)
 
     target_link_libraries(${TARGET_NAME} PRIVATE
@@ -185,7 +254,6 @@ else()
         hardware_gpio
         hardware_i2c
         pico_multicore
-        pico_cyw43_arch_none
 
         freertos_config
         FreeRTOS-Kernel
@@ -198,7 +266,10 @@ else()
     pico_enable_stdio_usb(${TARGET_NAME} 1)
 endif()
 
-# Convenience flash/run targets
+###########################################
+# Custom Targets
+###########################################
+
 if(NOT BUILD_FOR_HOST)
     find_program(PICOTOOL picotool)
     if(PICOTOOL)

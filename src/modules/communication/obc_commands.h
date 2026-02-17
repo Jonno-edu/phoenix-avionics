@@ -2,7 +2,7 @@
 #define OBC_COMMANDS_H
 
 #include "rs485_protocol.h"
-#include "../../src/tasks/queue_manager.h" // For InterfaceID_t
+#include "tasks/queue_manager.h" // For InterfaceID_t
 
 /**
  * @brief Handle a Telecommand directed to the OBC

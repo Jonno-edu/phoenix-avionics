@@ -3,8 +3,8 @@
 #include <stdio.h>
 #include "FreeRTOS.h"
 #include "task.h"
-#include "core/logging.h"
-#include "core/rs485_monitor.h"
+#include "logging.h"
+#include "modules/communication/rs485_monitor.h"
 
 static const char *TAG = "RS485_HAL";
 

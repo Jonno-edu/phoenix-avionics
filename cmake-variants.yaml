@@ -1,25 +1,31 @@
-target_platform:
-  default: obc
+buildType:
+  default: debug
+  description: Build type
   choices:
-    obc:
-      short: Main OBC
+    debug:
+      short: Debug
       buildType: Debug
+    release:
+      short: Release
+      buildType: Release
+
+target_platform:
+  default: pico2_w
+  description: Target platform
+  choices:
+    pico2_w:
+      short: Pico 2W
+      long: Raspberry Pi Pico 2W (RP2350 + WiFi)
       settings:
-        PICO_BOARD: "pico2_w"
-        BUILD_TARGET: "OBC"
-        BUILD_TESTING: "OFF"
-    hil:
-      short: HIL Node
-      buildType: Debug
+        PICO_BOARD: pico2_w
+    pico2:
+      short: Pico 2
+      long: Raspberry Pi Pico 2 (RP2350)
       settings:
-        PICO_BOARD: "pico2_w"
-        BUILD_TARGET: "HIL"
-        BUILD_TESTING: "OFF"
-    mac:
-      short: Mac Host
-      buildType: Debug
+        PICO_BOARD: pico2
+    host:
+      short: Host
+      long: Host build for testing
       settings:
-        PICO_PLATFORM: "host"
-        PICO_BOARD: "host"
-        BUILD_TARGET: "ALL"
-        BUILD_TESTING: "ON"
+        PICO_PLATFORM: host
+        PICO_BOARD: host

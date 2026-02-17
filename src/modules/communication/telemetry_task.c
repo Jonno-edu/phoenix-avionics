@@ -1,10 +1,10 @@
 // telemetry_task.c
 
 #include "telemetry_task.h"
-#include "core/rocket_data.h"
-#include "core/logging.h"
-#include "core/eps_node.h"
-#include "core/tracking_radio_node.h"
+#include "modules/data_store/rocket_data.h"
+#include "logging.h"
+#include "modules/subsystems/eps_node.h"
+#include "modules/subsystems/tracking_radio_node.h"
 #include "telemetry_defs.h"
 #include "rs485_protocol.h"
 #include <FreeRTOS.h>

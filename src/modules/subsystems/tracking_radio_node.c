@@ -1,5 +1,5 @@
-#include "core/tracking_radio_node.h"
-#include "core/logging.h"
+#include "modules/subsystems/tracking_radio_node.h"
+#include "logging.h"
 #include "rs485_protocol.h"
 #include "../communication/rs485_task.h"
 #include <string.h>

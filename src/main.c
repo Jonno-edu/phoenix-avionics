@@ -4,15 +4,20 @@
 #include <stdlib.h>
 #include <FreeRTOS.h>
 #include <task.h>
-#include "core/usb_console.h"
+#include "logging.h"
+#include "usb_console.h"
 #include "rs485_protocol.h"
 #include "hal/rs485_hal.h"
-#include "core/obc_data.h"
-#include "core/rocket_data.h"
-#include "core/eps_node.h"
+#include "modules/data_store/obc_data.h"
+#include "modules/data_store/rocket_data.h"
+#include "modules/subsystems/eps_node.h"
 #include "bsp/bsp_init.h"
-#include "tasks/task_manager.h"
 #include "hal/platform_hal.h"
+#include "tasks/queue_manager.h"
+#include "modules/communication/command_handler_task.h"
+#include "modules/communication/rs485_task.h"
+#include "modules/communication/telemetry_task.h"
+#include "modules/flight_control/pilot_tasks.h"
 
 #if !PICO_BUILD
     #include <unistd.h>
@@ -38,7 +43,16 @@ int main() {
 #else
 #endif
 
-    tasks_create_all();
+    // Initialize Queues
+    queues_init();
+
+    // Initialize Tasks
+    pilot_tasks_init();
+    rs485_task_init();
+    command_handler_task_init();
+    telemetry_task_init();
+
+    ESP_LOGI("MAIN", "All tasks initialized. Starting scheduler...");
 
     vTaskStartScheduler();
 

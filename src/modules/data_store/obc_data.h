@@ -6,7 +6,7 @@
 #include <stdbool.h>
 #include "telemetry_defs.h"
 #include "rs485_protocol.h"
-#include "../../src/tasks/queue_manager.h" // For InterfaceID_t
+#include "tasks/queue_manager.h" // For InterfaceID_t
 
 // System identification data structure
 typedef TlmIdentificationPayload_t SystemData_t;

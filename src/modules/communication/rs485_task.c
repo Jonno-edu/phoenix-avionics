@@ -1,13 +1,13 @@
 // rs485_task.c
 
-#include "core/logging.h"
+#include "logging.h"
 #include "rs485_task.h"
-#include "../tasks/task_manager.h"
+#include "tasks/queue_manager.h"
 #include "rs485_protocol.h"
 #include "hal/rs485_hal.h"
-#include "core/usb_console.h"
-#include "core/obc_data.h"
-#include "core/rs485_monitor.h" // Added for monitor logging
+#include "usb_console.h"
+#include "modules/data_store/obc_data.h"
+#include "modules/communication/rs485_monitor.h" // Added for monitor logging
 #include <FreeRTOS.h>
 #include <task.h>
 #include <stdio.h>
@@ -16,7 +16,6 @@
 #include <hardware/watchdog.h>
 #endif
 
-#include "../tasks/queue_manager.h"
 
 static const char *TAG = "TRANSPORT";
 

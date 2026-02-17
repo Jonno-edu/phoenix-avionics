@@ -1,6 +1,6 @@
 #include "bsp_init.h"
 #include <stdio.h>
-#include "core/logging.h"
+#include "logging.h"
 
 #if PICO_BUILD
     #include "pico/stdlib.h"

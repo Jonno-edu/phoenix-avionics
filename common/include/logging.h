@@ -5,8 +5,8 @@
 #include <stdint.h>
 #include "FreeRTOS.h"
 #include "task.h"
-#include "core/obc_data.h"
-#include "core/logging_shim.h" // Include GSU_LOG definition
+#include "modules/data_store/obc_data.h"
+#include "logging_shim.h" // Include GSU_LOG definition
 
 #if PICO_BUILD
     #include <pico/stdlib.h>

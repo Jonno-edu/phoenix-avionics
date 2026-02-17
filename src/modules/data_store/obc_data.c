@@ -1,7 +1,7 @@
 // obc_data.c
-#include "core/obc_data.h"
+#include "modules/data_store/obc_data.h"
 #include <string.h>
-#include "core/logging.h"
+#include "logging.h"
 #include "rs485_protocol.h"
 
 static const char *TAG = "OBC_DATA";
