@@ -94,77 +94,77 @@ set(HAL_SOURCES
 )
 
 # Flight Control Module (Core 0)
-set(FLIGHT_CONTROL_SOURCES
-    src/modules/flight_control/pilot_tasks.c
-)
+# set(FLIGHT_CONTROL_SOURCES
+#     src/modules/flight_control/pilot_tasks.c
+# )
 
 # Communication Module (Core 1)
-set(COMMUNICATION_SOURCES
-    src/modules/communication/command_handler_task.c
-    src/modules/communication/rs485_task.c
-    src/modules/communication/telemetry_task.c
-    src/modules/communication/tctlm.c
-    src/modules/communication/rs485_monitor.c
-    src/modules/communication/obc_commands.c
-)
+# set(COMMUNICATION_SOURCES
+#     src/modules/communication/command_handler_task.c
+#     src/modules/communication/rs485_task.c
+#     src/modules/communication/telemetry_task.c
+#     src/modules/communication/tctlm.c
+#     src/modules/communication/rs485_monitor.c
+#     src/modules/communication/obc_commands.c
+# )
 
 # Data Store Module
-set(DATA_STORE_SOURCES
-    src/modules/data_store/obc_data.c
-    src/modules/data_store/rocket_data.c
-)
+# set(DATA_STORE_SOURCES
+#     src/modules/data_store/obc_data.c
+#     src/modules/data_store/rocket_data.c
+# )
 
 # Task Manager & Queues
-set(TASK_SOURCES
-    src/tasks/queue_manager.c
-)
+# set(TASK_SOURCES
+#     src/tasks/queue_manager.c
+# )
 
 # Utils & Console
-set(UTIL_SOURCES
-    common/logging_shim.c
-    common/usb_console.c
-)
+# set(UTIL_SOURCES
+#     common/logging_shim.c
+#     common/usb_console.c
+# )
 
-# Subsystems Module
-set(SUBSYSTEMS_SOURCES
-    src/modules/subsystems/eps_node.c
-    src/modules/subsystems/tracking_radio_node.c
-)
+# # Subsystems Module
+# set(SUBSYSTEMS_SOURCES
+#     src/modules/subsystems/eps_node.c
+#     src/modules/subsystems/tracking_radio_node.c
+# )
 
-# Shared Libraries
-set(COMMS_LIB_SOURCES
-    ${CMAKE_SOURCE_DIR}/lib/esl-comms/src/rs485_protocol.c
-)
+# # Shared Libraries
+# set(COMMS_LIB_SOURCES
+#     ${CMAKE_SOURCE_DIR}/lib/esl-comms/src/rs485_protocol.c
+# )
 
-set(MATH_LIB_SOURCES
-    ${CMAKE_SOURCE_DIR}/lib/esl-math/src/dcm.c
-    ${CMAKE_SOURCE_DIR}/lib/esl-math/src/matrix.c
-    ${CMAKE_SOURCE_DIR}/lib/esl-math/src/quaternion.c
-    ${CMAKE_SOURCE_DIR}/lib/esl-math/src/vector2.c
-    ${CMAKE_SOURCE_DIR}/lib/esl-math/src/vector3.c
-)
+# set(MATH_LIB_SOURCES
+#     ${CMAKE_SOURCE_DIR}/lib/esl-math/src/dcm.c
+#     ${CMAKE_SOURCE_DIR}/lib/esl-math/src/matrix.c
+#     ${CMAKE_SOURCE_DIR}/lib/esl-math/src/quaternion.c
+#     ${CMAKE_SOURCE_DIR}/lib/esl-math/src/vector2.c
+#     ${CMAKE_SOURCE_DIR}/lib/esl-math/src/vector3.c
+# )
 
 # Hardware-specific sources (only for Pico builds)
-set(HARDWARE_SOURCES
-    hal/rs485_hal.c
-    ${CMAKE_SOURCE_DIR}/lib/esl-sensors/src/baroMS5607.c
-    ${CMAKE_SOURCE_DIR}/lib/esl-sensors/src/tempTMP117.c
-    ${CMAKE_SOURCE_DIR}/lib/esl-sensors/src/i2c.c
-)
+# set(HARDWARE_SOURCES
+#     hal/rs485_hal.c
+#     ${CMAKE_SOURCE_DIR}/lib/esl-sensors/src/baroMS5607.c
+#     ${CMAKE_SOURCE_DIR}/lib/esl-sensors/src/tempTMP117.c
+#     ${CMAKE_SOURCE_DIR}/lib/esl-sensors/src/i2c.c
+# )
 
 # Combine common sources
 set(COMMON_SOURCES
     ${MAIN_SOURCES}
-    ${BSP_SOURCES}
-    ${HAL_SOURCES}
-    ${FLIGHT_CONTROL_SOURCES}
-    ${COMMUNICATION_SOURCES}
-    ${DATA_STORE_SOURCES}
-    ${TASK_SOURCES}
-    ${SUBSYSTEMS_SOURCES}
-    ${UTIL_SOURCES}
-    ${COMMS_LIB_SOURCES}
-    ${MATH_LIB_SOURCES}
+    # ${BSP_SOURCES}
+    # ${HAL_SOURCES}
+    # ${FLIGHT_CONTROL_SOURCES}
+    # ${COMMUNICATION_SOURCES}
+    # ${DATA_STORE_SOURCES}
+    # ${TASK_SOURCES}
+    # ${SUBSYSTEMS_SOURCES}
+    # ${UTIL_SOURCES}
+    # ${COMMS_LIB_SOURCES}
+    # ${MATH_LIB_SOURCES}
 )
 
 ###########################################
@@ -188,11 +188,11 @@ target_compile_definitions(${TARGET_NAME} PRIVATE
 target_include_directories(${TARGET_NAME} PRIVATE
     .                                         # For FreeRTOSConfig.h at root
     src                                       # For modules/xxx/yyy.h includes
-    bsp                                       # BSP headers
-    hal                                       # HAL headers
-    ${CMAKE_SOURCE_DIR}/common/include        # Common utilities
-    ${CMAKE_SOURCE_DIR}/lib/esl-comms/include # RS485 protocol
-    ${CMAKE_SOURCE_DIR}/lib/esl-math/include  # Math utilities
+    # bsp                                       # BSP headers
+    # hal                                       # HAL headers
+    # ${CMAKE_SOURCE_DIR}/common/include        # Common utilities
+    # ${CMAKE_SOURCE_DIR}/lib/esl-comms/include # RS485 protocol
+    # ${CMAKE_SOURCE_DIR}/lib/esl-math/include  # Math utilities
 )
 
 if(NOT BUILD_FOR_HOST)

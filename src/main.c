@@ -1,60 +1,51 @@
-// main.c
 #include <stdio.h>
-#include <stdbool.h>
-#include <stdlib.h>
-#include <FreeRTOS.h>
-#include <task.h>
-#include "logging.h"
-#include "usb_console.h"
-#include "rs485_protocol.h"
-#include "hal/rs485_hal.h"
-#include "modules/data_store/obc_data.h"
-#include "modules/data_store/rocket_data.h"
-#include "modules/subsystems/eps_node.h"
-#include "bsp/bsp_init.h"
-#include "hal/platform_hal.h"
-#include "tasks/queue_manager.h"
-#include "modules/communication/command_handler_task.h"
-#include "modules/communication/rs485_task.h"
-#include "modules/communication/telemetry_task.h"
-#include "modules/flight_control/pilot_tasks.h"
-
-#if !PICO_BUILD
-    #include <unistd.h>
-#else
-    #include <pico/stdlib.h>
-#endif
-
-int main() {
-    bsp_hardware_init();
-    
-    console_init();
-
-    // sleep_ms(2000); // Wait for console to stabilize
-
-    system_data_init();
-    rocket_data_init();
-    // eps_node_init();
-    rocket_data_fill_test_values();
-    system_config_init();
+#include "FreeRTOS.h"
+#include "task.h"
 
 #if PICO_BUILD
-    // bsp_peripheral_init();
+#include <pico/stdlib.h>
 #else
+#include <unistd.h>
 #endif
 
-    // Initialize Queues
-    queues_init();
+void vTask1(void *pvParameters) {
+    int count1 = 0;
+    for (;;) {
+        printf("Task 1 (printf test): %d\n", count1++);
+        fflush(stdout);
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
 
-    // Initialize Tasks
-    pilot_tasks_init();
-    rs485_task_init();
-    command_handler_task_init();
-    telemetry_task_init();
+void vTask2(void *pvParameters) {
+    int count2 = 0;
+    for (;;) {
+        printf("Task 2: %d\n", count2++);
+        fflush(stdout);
+        vTaskDelay(pdMS_TO_TICKS(200));
+    }
+}
 
-    ESP_LOGI("MAIN", "All tasks initialized. Starting scheduler...");
+void vTask3(void *pvParameters) {
+    int count3 = 0;
+    for (;;) {
+        printf("Task 3: %d\n", count3++);
+        fflush(stdout);
+        vTaskDelay(pdMS_TO_TICKS(300));
+    }
+}
+
+int main(void) {
+#if PICO_BUILD
+    stdio_init_all();
+#endif
+
+    xTaskCreate(vTask1, "Task1", 2048, NULL, 1, NULL);
+    xTaskCreate(vTask2, "Task2", 2048, NULL, 1, NULL);
+    xTaskCreate(vTask3, "Task3", 2048, NULL, 1, NULL);
 
     vTaskStartScheduler();
 
-    platform_panic("Scheduler returned unexpectedly!");
+    while (1) {
+    }
 }

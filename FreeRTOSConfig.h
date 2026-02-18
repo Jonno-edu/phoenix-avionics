@@ -75,8 +75,8 @@
 #define configAPPLICATION_ALLOCATED_HEAP        0
 
 /* Hook function related definitions. */
-#define configCHECK_FOR_STACK_OVERFLOW          1
-#define configUSE_MALLOC_FAILED_HOOK            1
+#define configCHECK_FOR_STACK_OVERFLOW          0
+#define configUSE_MALLOC_FAILED_HOOK            0
 #define configUSE_DAEMON_TASK_STARTUP_HOOK      0
 
 /* Run time and task stats gathering related definitions. */
@@ -97,14 +97,26 @@
 /* SMP port only */
 #if PICO_BUILD
 /* Pico build - dual core SMP */
-#define portSUPPORT_SMP                         1
-#define configNUMBER_OF_CORES                   2
+// #define portSUPPORT_SMP                         1
+// #define configNUMBER_OF_CORES                   2
+// /* In July 2023 FreeRTOS changed the name of this macro to the one above,
+//    but older versions of Pico SDK (1.*) were still using this one: */
+// #define configNUM_CORES                         configNUMBER_OF_CORES
+// /* configUSE_CORE_AFFINITY may be set only when configNUM_CORES > 1 */
+// #define configUSE_CORE_AFFINITY                 1
+// #define configRUN_MULTIPLE_PRIORITIES           1
+
+
+// Line by line debugging
+#define portSUPPORT_SMP                         0
+#define configNUMBER_OF_CORES                   1
 /* In July 2023 FreeRTOS changed the name of this macro to the one above,
    but older versions of Pico SDK (1.*) were still using this one: */
 #define configNUM_CORES                         configNUMBER_OF_CORES
 /* configUSE_CORE_AFFINITY may be set only when configNUM_CORES > 1 */
-#define configUSE_CORE_AFFINITY                 1
-#define configRUN_MULTIPLE_PRIORITIES           1
+#define configUSE_CORE_AFFINITY                 0
+#define configRUN_MULTIPLE_PRIORITIES           0
+
 #else
 /* Mac host build - single core only */
 #define portSUPPORT_SMP                         0
