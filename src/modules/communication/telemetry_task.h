@@ -1,6 +1,0 @@
-#ifndef TELEMETRY_TASK_H
-#define TELEMETRY_TASK_H
-
-void telemetry_task_init(void);
-
-#endif // TELEMETRY_TASK_H
