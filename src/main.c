@@ -1,51 +1,35 @@
 #include <stdio.h>
-#include "FreeRTOS.h"
-#include "task.h"
+#include <FreeRTOS.h>
+#include <task.h>
 
 #if PICO_BUILD
 #include <pico/stdlib.h>
-#else
-#include <unistd.h>
 #endif
 
-void vTask1(void *pvParameters) {
-    int count1 = 0;
-    for (;;) {
-        printf("Task 1 (printf test): %d\n", count1++);
-        fflush(stdout);
-        vTaskDelay(pdMS_TO_TICKS(100));
-    }
-}
-
-void vTask2(void *pvParameters) {
-    int count2 = 0;
-    for (;;) {
-        printf("Task 2: %d\n", count2++);
-        fflush(stdout);
-        vTaskDelay(pdMS_TO_TICKS(200));
-    }
-}
-
-void vTask3(void *pvParameters) {
-    int count3 = 0;
-    for (;;) {
-        printf("Task 3: %d\n", count3++);
-        fflush(stdout);
-        vTaskDelay(pdMS_TO_TICKS(300));
-    }
-}
+#include "common/pubsub.h"
+#include "modules/sensors/sensors.h"
+#include "modules/estimator/estimator.h"
 
 int main(void) {
 #if PICO_BUILD
+    // Pico SDK hardware init
     stdio_init_all();
 #endif
 
-    xTaskCreate(vTask1, "Task1", 2048, NULL, 1, NULL);
-    xTaskCreate(vTask2, "Task2", 2048, NULL, 1, NULL);
-    xTaskCreate(vTask3, "Task3", 2048, NULL, 1, NULL);
+    printf("Phoenix OBC Booting Clean Architecture...\n");
 
+    // 1. Initialize the pub/sub queues first
+    pubsub_init();
+
+    // 2. Initialize modules (spawns their FreeRTOS tasks)
+    sensors_init();
+    estimator_init();
+
+    // 3. Hand control over to FreeRTOS
     vTaskStartScheduler();
 
     while (1) {
+        // Should never reach here if the scheduler starts successfully
     }
+    return 0;
 }

@@ -155,6 +155,10 @@ set(HAL_SOURCES
 # Combine common sources
 set(COMMON_SOURCES
     ${MAIN_SOURCES}
+    src/common/pubsub.c
+    src/modules/sensors/sensors.c
+    src/modules/sensors/imu.c
+    src/modules/estimator/ekf.c
     # ${BSP_SOURCES}
     # ${HAL_SOURCES}
     # ${FLIGHT_CONTROL_SOURCES}
