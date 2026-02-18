@@ -35,7 +35,7 @@
       "device": "${command:raspberry-pi-pico.getChipUppercase}",
       "svdFile": "${userHome}/.pico-sdk/sdk/2.2.0/src/${command:raspberry-pi-pico.getChip}/hardware_regs/${command:raspberry-pi-pico.getChipUppercase}.svd",
       "runToEntryPoint": "",
-      "rtos": "FreeRTOS",
+      // "rtos": "FreeRTOS",
       "overrideLaunchCommands": [
         "set remotetimeout 60",
         "monitor reset init",
@@ -43,7 +43,12 @@
         "monitor reset run",
         "skip -gfi \"**/tinyusb/**\"",
         "skip -gfi \"**/pico_stdio_usb/**\"",
-        "skip -gfi \"**/usbd*.c\""
+        "skip -gfi \"**/usbd*.c\"",
+        "skip -gfi \"**/pico_multicore/**\"",
+        "skip -gfi \"**/multicore*\"",
+        "skip -gfi \"**/tasks.c\"",
+        "skip -gfi \"**/portable/**\"",
+        "skip -gfi \"**/FreeRTOS/**\""
       ]
     },
 
@@ -59,9 +64,18 @@
       "device": "${command:raspberry-pi-pico.getChipUppercase}",
       "svdFile": "${userHome}/.pico-sdk/sdk/2.2.0/src/${command:raspberry-pi-pico.getChip}/hardware_regs/${command:raspberry-pi-pico.getChipUppercase}.svd",
       "runToEntryPoint": "main",
+      "rtos": "FreeRTOS",
       "overrideLaunchCommands": [
         "monitor reset init",
-        "load \"${command:raspberry-pi-pico.launchTargetPath}\""
+        "load \"${command:raspberry-pi-pico.launchTargetPath}\"",
+        "skip -gfi \"**/tinyusb/**\"",
+        "skip -gfi \"**/pico_stdio_usb/**\"",
+        "skip -gfi \"**/usbd*.c\"",
+        "skip -gfi \"**/pico_multicore/**\"",
+        "skip -gfi \"**/multicore*\"",
+        "skip -gfi \"**/tasks.c\"",
+        "skip -gfi \"**/portable/**\"",
+        "skip -gfi \"**/FreeRTOS/**\""
       ]
     },
 
@@ -82,11 +96,20 @@
       ],
       "svdFile": "${userHome}/.pico-sdk/sdk/2.2.0/src/${command:raspberry-pi-pico.getChip}/hardware_regs/${command:raspberry-pi-pico.getChipUppercase}.svd",
       "runToEntryPoint": "",
+      "rtos": "FreeRTOS",
       "postLaunchCommands": ["monitor arm semihosting enable"],
       "overrideLaunchCommands": [
         "monitor reset init",
         "load \"${command:raspberry-pi-pico.launchTargetPath}\"",
-        "monitor reset init"
+        "monitor reset init",
+        "skip -gfi \"**/tinyusb/**\"",
+        "skip -gfi \"**/pico_stdio_usb/**\"",
+        "skip -gfi \"**/usbd*.c\"",
+        "skip -gfi \"**/pico_multicore/**\"",
+        "skip -gfi \"**/multicore*\"",
+        "skip -gfi \"**/tasks.c\"",
+        "skip -gfi \"**/portable/**\"",
+        "skip -gfi \"**/FreeRTOS/**\""
       ],
       "openOCDLaunchCommands": [
         "adapter speed 5000"

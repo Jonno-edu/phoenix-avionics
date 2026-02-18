@@ -177,6 +177,21 @@ else()
     add_executable(${TARGET_NAME} ${COMMON_SOURCES} ${HARDWARE_SOURCES})
 endif()
 
+target_sources(${TARGET_NAME} PRIVATE
+    src/FreeRTOS-openocd.c
+)
+
+# Preserve FreeRTOS symbols for debugger awareness and force debug optimization
+target_compile_options(${TARGET_NAME} PRIVATE 
+    $<$<CONFIG:Debug>:-O0 -fno-lto -fno-optimize-sibling-calls>
+)
+
+target_link_options(${TARGET_NAME} PRIVATE
+    -Wl,--undefined=pxCurrentTCB
+    -Wl,--undefined=pxReadyTasksLists
+    -Wl,--undefined=uxCurrentNumberOfTasks
+)
+
 target_compile_definitions(${TARGET_NAME} PRIVATE
     $<$<NOT:$<BOOL:${BUILD_FOR_HOST}>>:PICO_BUILD=1>
 )
