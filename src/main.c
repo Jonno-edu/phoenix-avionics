@@ -46,7 +46,7 @@ int main(void) {
     // Wait for USB to enumerate (up to 5s) before first print
     // This prevents losing early boot messages
     uint32_t usb_wait = 0;
-    while (!stdio_usb_connected() && usb_wait < 5000) {
+    while (!stdio_usb_connected() && usb_wait < 2000) {
         sleep_ms(10);
         usb_wait += 10;
     }

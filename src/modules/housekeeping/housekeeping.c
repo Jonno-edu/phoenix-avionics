@@ -24,23 +24,9 @@ void housekeeping_task(void *pvParameters)
     TickType_t last_wake = xTaskGetTickCount();
 
     while (1) {
-        TlmIdentificationPayload_t ident;
-        EpsPowerStatus_t           pwr;
-        EpsMeasurements_t          meas;
-
-        // ── EPS ───────────────────────────────────────
-        if (eps_request_ident(&ident, NODE_TIMEOUT_MS))
-            norb_publish(TOPIC_EPS_IDENT, &ident);
-
-        if (eps_request_power_status(&pwr, NODE_TIMEOUT_MS))
-            norb_publish(TOPIC_EPS_POWER_STATUS, &pwr);
-
-        if (eps_request_measurements(&meas, NODE_TIMEOUT_MS))
-            norb_publish(TOPIC_EPS_MEASUREMENTS, &meas);
-
-        // ── Tracking radio ────────────────────────────
-        if (tracking_radio_request_ident(&ident, NODE_TIMEOUT_MS))
-            norb_publish(TOPIC_TRACKING_RADIO_IDENT, &ident);
+        // Poll each node; node modules own their telemetry details.
+        eps_poll(NODE_TIMEOUT_MS);
+        tracking_radio_poll(NODE_TIMEOUT_MS);
 
         // Safe: called from task, not ISR
         rs485_hal_print_raw_log();

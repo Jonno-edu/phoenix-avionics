@@ -12,3 +12,7 @@ bool tracking_radio_request_ident(TlmIdentificationPayload_t *out,
 // Send tracking beacon to the radio (placeholder - not implemented yet).
 bool tracking_radio_send_beacon(const TlmTrackingBeaconPayload_t *beacon,
                                 uint32_t timeout_ms);
+
+// Poll helper: perform tracking radio telemetry requests and publish results
+// to NORB. Keeps housekeeping.c small — call from the periodic poll task.
+void tracking_radio_poll(uint32_t timeout_ms);

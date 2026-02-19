@@ -2,6 +2,7 @@
 #include "modules/datalink/datalink.h"
 #include "phoenix_icd.h"
 #include "logging.h"
+#include "norb/norb.h"
 #include <string.h>
 
 static const char *TAG = "EPS";
@@ -75,6 +76,24 @@ bool eps_request_measurements(EpsMeasurements_t *out, uint32_t timeout_ms)
     ESP_LOGI(TAG, "Vbat=%umV Ibat=%umA current_5v_1=%umA",
              out->batt_voltage_mv, out->batt_current_ma, out->current_5v_1_ma);
     return true;
+}
+
+// Poll helper: perform all housekeeping telemetry requests and publish results
+// to NORB. Keeps housekeeping.c small — the housekeeping task calls this.
+void eps_poll(uint32_t timeout_ms)
+{
+    TlmIdentificationPayload_t ident;
+    EpsPowerStatus_t           pwr;
+    EpsMeasurements_t          meas;
+
+    if (eps_request_ident(&ident, timeout_ms))
+        norb_publish(TOPIC_EPS_IDENT, &ident);
+
+    if (eps_request_power_status(&pwr, timeout_ms))
+        norb_publish(TOPIC_EPS_POWER_STATUS, &pwr);
+
+    if (eps_request_measurements(&meas, timeout_ms))
+        norb_publish(TOPIC_EPS_MEASUREMENTS, &meas);
 }
 
 // ── Telecommands ──────────────────────────────────────────────────────────────

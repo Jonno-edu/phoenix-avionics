@@ -23,3 +23,7 @@ bool eps_send_power_command(const EpsPowerSetCmd_t *cmd, uint32_t timeout_ms);
 bool eps_set_line(EpsLineIndex_t line, PowerSelect_t state, uint32_t timeout_ms);
 bool eps_turn_on_line(EpsLineIndex_t line);
 bool eps_turn_off_line(EpsLineIndex_t line);
+
+// Poll helper: perform all housekeeping telemetry requests and publish results
+// to NORB. Keeps housekeeping.c small — call from the periodic poll task.
+void eps_poll(uint32_t timeout_ms);

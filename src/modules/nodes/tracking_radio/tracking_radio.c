@@ -3,6 +3,8 @@
 #include "phoenix_icd.h"
 #include "logging.h"
 
+#include "norb/norb.h"
+
 #include <string.h>
 #include <stddef.h> // for NULL
 
@@ -47,4 +49,14 @@ bool tracking_radio_send_beacon(const TlmTrackingBeaconPayload_t *beacon,
     //       MSG_TYPE_TELECOMMAND_ACK, TC_RADIO_BEACON,
     //       NULL, timeout_ms);
     return false;
+}
+
+// Poll helper: perform tracking-radio telemetry requests and publish results
+// to NORB. Keeps housekeeping.c small — call from the periodic poll task.
+void tracking_radio_poll(uint32_t timeout_ms)
+{
+    TlmIdentificationPayload_t ident;
+
+    if (tracking_radio_request_ident(&ident, timeout_ms))
+        norb_publish(TOPIC_TRACKING_RADIO_IDENT, &ident);
 }
