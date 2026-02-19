@@ -9,7 +9,7 @@ void imu_task(void *params) {
     sensor_imu_t imu_data = {0};
 
     while (1) {
-        vTaskDelayUntil(&xLastWake, pdMS_TO_TICKS(4)); // 250 Hz (4ms)
+        vTaskDelayUntil(&xLastWake, pdMS_TO_TICKS(1)); // 250 Hz (4ms)
 
         // 1. Fake reading from SPI/I2C hardware for testing
         // Use true 64-bit microsecond hardware timer

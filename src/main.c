@@ -9,6 +9,7 @@
 #include "common/pubsub.h"
 #include "modules/sensors/sensors.h"
 #include "modules/estimator/estimator.h"
+#include "modules/housekeeping/housekeeping.h"
 
 int main(void) {
 #if PICO_BUILD
@@ -24,6 +25,13 @@ int main(void) {
     // 2. Initialize modules (spawns their FreeRTOS tasks)
     sensors_init();
     estimator_init();
+
+    xTaskCreate(housekeeping_task,
+            "housekeeping",
+            512,          // stack words — increase if needed
+            NULL,
+            2,            // priority: lower than sensors, higher than logging
+            NULL);
 
     // 3. Hand control over to FreeRTOS
     vTaskStartScheduler();

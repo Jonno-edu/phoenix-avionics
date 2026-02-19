@@ -4,7 +4,6 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "logging.h"
-#include "modules/communication/rs485_monitor.h"
 
 static const char *TAG = "RS485_HAL";
 
@@ -27,6 +26,7 @@ static const char *TAG = "RS485_HAL";
     void on_rs485_uart_rx(void) {
         while (uart_is_readable(RS485_UART_ID)) {
             uint8_t ch = uart_getc(RS485_UART_ID);
+            // rs485_monitor_log_rx(ch); // Removed old monitor call
             rs485_hal_buffer_push(ch);
         }
     }
@@ -45,7 +45,7 @@ static const char *TAG = "RS485_HAL";
     }
 
     void rs485_hal_send(const uint8_t *data, uint16_t len) {
-        rs485_monitor_log_tx(data, len);
+        // rs485_monitor_log_tx(data, len); // Removed old monitor call
         gpio_put(RS485_DE_RE_PIN, 1);
         __asm volatile("nop\nnop\nnop\nnop\nnop");
         uart_write_blocking(RS485_UART_ID, data, len);

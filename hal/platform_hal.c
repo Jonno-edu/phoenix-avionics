@@ -3,7 +3,6 @@
 #include <task.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "usb_console.h"
 #include "logging.h"
 
 #if PICO_BUILD

@@ -145,12 +145,12 @@ set(HAL_SOURCES
 # )
 
 # Hardware-specific sources (only for Pico builds)
-# set(HARDWARE_SOURCES
-#     hal/rs485_hal.c
+set(HARDWARE_SOURCES
+    hal/rs485_hal.c
 #     ${CMAKE_SOURCE_DIR}/lib/esl-sensors/src/baroMS5607.c
 #     ${CMAKE_SOURCE_DIR}/lib/esl-sensors/src/tempTMP117.c
 #     ${CMAKE_SOURCE_DIR}/lib/esl-sensors/src/i2c.c
-# )
+)
 
 # Combine common sources
 set(COMMON_SOURCES
@@ -159,6 +159,11 @@ set(COMMON_SOURCES
     src/modules/sensors/sensors.c
     src/modules/sensors/imu.c
     src/modules/estimator/ekf.c
+    src/modules/datalink/datalink.c
+    src/modules/tracking_radio/tracking_radio.c
+    src/modules/tctlm/tctlm.c
+    src/modules/housekeeping/housekeeping.c
+    ${CMAKE_SOURCE_DIR}/lib/esl-comms/src/rs485_protocol.c
     # ${BSP_SOURCES}
     # ${HAL_SOURCES}
     # ${FLIGHT_CONTROL_SOURCES}
@@ -207,11 +212,11 @@ target_compile_definitions(${TARGET_NAME} PRIVATE
 target_include_directories(${TARGET_NAME} PRIVATE
     .                                         # For FreeRTOSConfig.h at root
     src                                       # For modules/xxx/yyy.h includes
-    # bsp                                       # BSP headers
-    # hal                                       # HAL headers
-    # ${CMAKE_SOURCE_DIR}/common/include        # Common utilities
-    # ${CMAKE_SOURCE_DIR}/lib/esl-comms/include # RS485 protocol
-    # ${CMAKE_SOURCE_DIR}/lib/esl-math/include  # Math utilities
+    bsp                                       # BSP headers
+    hal                                       # HAL headers
+    ${CMAKE_SOURCE_DIR}/common/include        # Common utilities
+    ${CMAKE_SOURCE_DIR}/lib/esl-comms/include # RS485 protocol
+    ${CMAKE_SOURCE_DIR}/lib/esl-math/include  # Math utilities
 )
 
 if(NOT BUILD_FOR_HOST)
