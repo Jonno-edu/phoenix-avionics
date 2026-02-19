@@ -73,6 +73,9 @@ set(TARGET_NAME phoenix_avionics_monorepo)
 # FreeRTOS config - now at root
 add_library(freertos_config INTERFACE)
 target_include_directories(freertos_config SYSTEM INTERFACE ${CMAKE_SOURCE_DIR})
+target_compile_definitions(freertos_config INTERFACE
+    $<$<NOT:$<BOOL:${BUILD_FOR_HOST}>>:PICO_BUILD=1>
+)
 
 ###########################################
 # Source Files Organized by Module
@@ -199,10 +202,6 @@ target_link_options(${TARGET_NAME} PRIVATE
     -Wl,--undefined=pxCurrentTCB
     -Wl,--undefined=pxReadyTasksLists
     -Wl,--undefined=uxCurrentNumberOfTasks
-)
-
-target_compile_definitions(${TARGET_NAME} PRIVATE
-    $<$<NOT:$<BOOL:${BUILD_FOR_HOST}>>:PICO_BUILD=1>
 )
 
 ###########################################
