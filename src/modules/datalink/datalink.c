@@ -1,7 +1,7 @@
 #include "datalink.h"
 #include "rs485_protocol.h"
 #include "hal/rs485_hal.h"
-#include "protocol/phoenix_node_addrs.h"
+#include "protocol/telemetry_defs.h"
 #include "logging.h"
 
 #include "FreeRTOS.h"

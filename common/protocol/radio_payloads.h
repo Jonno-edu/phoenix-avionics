@@ -1,23 +1,10 @@
-#pragma once
+#ifndef RADIO_PAYLOADS_H
+#define RADIO_PAYLOADS_H
+
 #include <stdint.h>
+#include "telemetry_defs.h"
 
-#if defined(__GNUC__)
-    #define PACKED_STRUCT __attribute__((packed))
-#else
-    #define PACKED_STRUCT
-#endif
-
-// ID: ID_TLM_IDENTIFICATION (used by all nodes)
-typedef struct {
-    uint8_t  node_type;
-    uint8_t  interface_version;
-    uint8_t  firmware_major;
-    uint8_t  firmware_minor;
-    uint16_t uptime_seconds;
-    uint16_t uptime_milliseconds;
-} PACKED_STRUCT TlmIdentificationPayload_t;
-
-// ID: ID_TLM_TRACKING_BEACON
+// ID: TLM_RADIO_DATA
 typedef struct {
     uint16_t runtime_seconds;
     uint16_t runtime_milliseconds;
@@ -53,3 +40,5 @@ typedef struct {
     uint8_t  time_valid_flags;
     uint8_t  apogee_votes;
 } PACKED_STRUCT TlmTrackingBeaconPayload_t;
+
+#endif // RADIO_PAYLOADS_H

@@ -2,17 +2,16 @@
 #include <stdio.h>
 #include "hal/rs485_hal.h"
 #include "modules/datalink/datalink.h"
-#include "modules/tracking_radio/tracking_radio.h"
-#include "modules/eps/eps.h"
+#include "modules/nodes/eps/eps.h"
+#include "modules/nodes/tracking_radio/tracking_radio.h"
 #include "common/pubsub.h"
 #include "common/topics.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
 
-#define POLL_PERIOD_MS             1000
-#define TRACKING_RADIO_TIMEOUT_MS  100
-#define EPS_TIMEOUT_MS             100
+#define POLL_PERIOD_MS    1000
+#define NODE_TIMEOUT_MS   100
 
 void housekeeping_task(void *pvParameters)
 {
@@ -24,25 +23,24 @@ void housekeeping_task(void *pvParameters)
 
     TickType_t last_wake = xTaskGetTickCount();
 
-    while (1)
-    {
+    while (1) {
         TlmIdentificationPayload_t ident;
+        EpsPowerStatus_t           pwr;
+        EpsMeasurements_t          meas;
 
-        // --- Tracking radio health ---
-        if (tracking_radio_request_ident(&ident, TRACKING_RADIO_TIMEOUT_MS)) {
-            publish(TOPIC_TRACKING_RADIO_IDENT, &ident);
-            printf("[HK] tracking_radio: OK\n");
-        } else {
-            printf("[HK] tracking_radio: TIMEOUT\n");
-        }
-
-        // --- EPS health ---
-        if (eps_request_ident(&ident, EPS_TIMEOUT_MS)) {
+        // ── EPS ───────────────────────────────────────
+        if (eps_request_ident(&ident, NODE_TIMEOUT_MS))
             publish(TOPIC_EPS_IDENT, &ident);
-            printf("[HK] eps: OK\n");
-        } else {
-            printf("[HK] eps: TIMEOUT\n");
-        }
+
+        if (eps_request_power_status(&pwr, NODE_TIMEOUT_MS))
+            publish(TOPIC_EPS_POWER_STATUS, &pwr);
+
+        if (eps_request_measurements(&meas, NODE_TIMEOUT_MS))
+            publish(TOPIC_EPS_MEASUREMENTS, &meas);
+
+        // ── Tracking radio ────────────────────────────
+        if (tracking_radio_request_ident(&ident, NODE_TIMEOUT_MS))
+            publish(TOPIC_TRACKING_RADIO_IDENT, &ident);
 
         // Safe: called from task, not ISR
         rs485_hal_print_raw_log();
