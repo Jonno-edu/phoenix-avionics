@@ -7,6 +7,16 @@
 
 static const char *TAG = "RS485_HAL";
 
+static volatile bool g_raw_debug_enabled = false;
+
+void rs485_hal_set_raw_debug(bool enabled) {
+    g_raw_debug_enabled = enabled;
+}
+
+bool rs485_hal_raw_debug_enabled(void) {
+    return g_raw_debug_enabled;
+}
+
 #if PICO_BUILD
     #include <pico/stdlib.h>
     #include <hardware/uart.h>
@@ -43,6 +53,10 @@ static const char *TAG = "RS485_HAL";
 
     // Call this from a TASK (not ISR) to drain and print raw bytes
     void rs485_hal_print_raw_log(void) {
+        if (!g_raw_debug_enabled) {
+            raw_log_read = raw_log_write; // drain silently — prevent buffer overflow
+            return;
+        }
         while (raw_log_read != raw_log_write) {
             printf("[RS485 RX RAW] 0x%02X\n", raw_log_buf[raw_log_read]);
             raw_log_read = (raw_log_read + 1) % RAW_LOG_SIZE;
@@ -89,6 +103,8 @@ static const char *TAG = "RS485_HAL";
         (void)data;
         (void)len;
     }
+
+    void rs485_hal_print_raw_log(void) {}
 #endif
 
 #if PICO_BUILD

@@ -8,6 +8,15 @@
 #define RS485_BUFFER_SIZE 256
 
 /**
+ * @brief Enable or disable raw RX byte logging to USB serial.
+ * Default: disabled. Enable during debugging, disable for production.
+ * Can be toggled at runtime (e.g. via TC_OBC_LOG_LEVEL command).
+ */
+void rs485_hal_set_raw_debug(bool enabled);
+bool rs485_hal_raw_debug_enabled(void);
+
+
+/**
  * @brief Initialize RS485 Bus A hardware (UART1 + GPIO control).
  * 
  * Configures:

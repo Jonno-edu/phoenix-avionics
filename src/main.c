@@ -7,10 +7,11 @@
 #include <pico/stdio_usb.h>
 #endif
 
-#include "common/pubsub.h"
+#include "norb/norb.h"
 #include "modules/sensors/sensors.h"
 #include "modules/estimator/estimator.h"
 #include "modules/housekeeping/housekeeping.h"
+#include "hal/rs485_hal.h"
 
 // Stack overflow hook — called by FreeRTOS when a task overflows
 void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName) {
@@ -51,10 +52,11 @@ int main(void) {
     }
 #endif
 
+    rs485_hal_set_raw_debug(false); 
     printf("Phoenix OBC Booting...\n");
 
-    // 1. Initialize the pub/sub queues first
-    pubsub_init();
+    // 1. Initialize the nORB queues first
+    norb_init();
 
     // 2. Create the heartbeat task
     xTaskCreate(heartbeat_task, "heartbeat", 512, NULL, 1, NULL);

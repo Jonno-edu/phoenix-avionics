@@ -1,7 +1,7 @@
 #pragma once
 #include <stdbool.h>
 #include <stdint.h>
-#include "protocol/eps_payloads.h"
+#include "phoenix_icd.h"
 
 // ── Telemetry requests (called by housekeeping) ──────────────────────────────
 

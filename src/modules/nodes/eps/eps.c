@@ -1,7 +1,7 @@
 #include "eps.h"
 #include "modules/datalink/datalink.h"
-#include "protocol/telemetry_defs.h"
-#include "common/logging.h"
+#include "phoenix_icd.h"
+#include "logging.h"
 #include <string.h>
 
 static const char *TAG = "EPS";

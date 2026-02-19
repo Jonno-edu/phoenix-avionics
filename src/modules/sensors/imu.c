@@ -1,8 +1,8 @@
 #include <FreeRTOS.h>
 #include <task.h>
 #include "pico/time.h"
-#include "common/pubsub.h"
-#include "common/topic_defs/sensor_imu.h"
+#include "norb/norb.h"
+#include "norb/topic_defs/sensor_imu.h"
 
 void imu_task(void *params) {
     TickType_t xLastWake = xTaskGetTickCount();
@@ -17,6 +17,6 @@ void imu_task(void *params) {
         imu_data.accel_ms2[2] = 9.81f; // Fake 1G on Z-axis
 
         // 2. Publish to the void!
-        publish(TOPIC_SENSOR_IMU, &imu_data);
+        norb_publish(TOPIC_SENSOR_IMU, &imu_data);
     }
 }
