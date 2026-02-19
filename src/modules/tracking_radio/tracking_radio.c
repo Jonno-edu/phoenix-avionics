@@ -1,7 +1,7 @@
 #include "tracking_radio.h"
 #include "modules/datalink/datalink.h"
-#include "common/include/protocol/phoenix_node_addrs.h"
-#include "common/include/protocol/phoenix_tctlm_ids.h"
+#include "protocol/phoenix_node_addrs.h"
+#include "protocol/phoenix_tctlm_ids.h"
 #include "logging.h"
 
 #include <string.h>

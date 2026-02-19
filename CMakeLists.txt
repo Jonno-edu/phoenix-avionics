@@ -210,11 +210,12 @@ target_compile_definitions(${TARGET_NAME} PRIVATE
 ###########################################
 
 target_include_directories(${TARGET_NAME} PRIVATE
-    .                                         # For FreeRTOSConfig.h at root
-    src                                       # For modules/xxx/yyy.h includes
-    bsp                                       # BSP headers
-    hal                                       # HAL headers
-    ${CMAKE_SOURCE_DIR}/common/include        # Common utilities
+    .                                        # For FreeRTOSConfig.h at root
+    src                                      # For modules/xxx/yyy.h includes
+    src/common                               # logging.h, pubsub.h, topics.h
+    ${CMAKE_SOURCE_DIR}/common               # protocol/ (all-node wire contract)
+    bsp                                      # BSP headers
+    hal                                      # HAL headers
     ${CMAKE_SOURCE_DIR}/lib/esl-comms/include # RS485 protocol
     ${CMAKE_SOURCE_DIR}/lib/esl-math/include  # Math utilities
 )

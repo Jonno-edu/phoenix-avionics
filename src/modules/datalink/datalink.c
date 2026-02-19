@@ -1,7 +1,7 @@
 #include "datalink.h"
 #include "rs485_protocol.h"
 #include "hal/rs485_hal.h"
-#include "common/include/protocol/phoenix_node_addrs.h"
+#include "protocol/phoenix_node_addrs.h"
 #include "logging.h"
 
 #include "FreeRTOS.h"
@@ -91,6 +91,12 @@ datalink_status_t datalink_request_response(
     }
 
     xSemaphoreGive(g_bus_mutex); // release bus
+
+    if (result == DATALINK_TIMEOUT) {
+        ESP_LOGW(TAG, "TIMEOUT waiting for resp from 0x%02X (type:%d id:%d)",
+                 target_addr, expected_resp_type, expected_resp_id);
+    }
+
     return result;
 }
 

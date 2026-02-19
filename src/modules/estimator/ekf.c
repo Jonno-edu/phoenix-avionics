@@ -12,7 +12,7 @@ void ekf_task(void *params) {
     while (1) {
         vTaskDelayUntil(&xLastWake, pdMS_TO_TICKS(1)); // 250 Hz
 
-        // // Peek at the absolute newest IMU snapshot
+        // Peek at the absolute newest IMU snapshot
         // if (subscribe_poll(TOPIC_SENSOR_IMU, &imu)) {
             
         //     // Print it out to test!

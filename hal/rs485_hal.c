@@ -26,7 +26,7 @@ static const char *TAG = "RS485_HAL";
     void on_rs485_uart_rx(void) {
         while (uart_is_readable(RS485_UART_ID)) {
             uint8_t ch = uart_getc(RS485_UART_ID);
-            // rs485_monitor_log_rx(ch); // Removed old monitor call
+            printf("[RS485 RX RAW] 0x%02X\n", ch);
             rs485_hal_buffer_push(ch);
         }
     }
@@ -45,12 +45,21 @@ static const char *TAG = "RS485_HAL";
     }
 
     void rs485_hal_send(const uint8_t *data, uint16_t len) {
-        // rs485_monitor_log_tx(data, len); // Removed old monitor call
+        // --- DEBUG: print exact wire bytes ---
+        printf("[RS485 TX] %d bytes: ", len);
+        for (uint16_t i = 0; i < len; i++) printf("%02X ", data[i]);
+        printf("\n");
+        // --- END DEBUG ---
+
+        uart_set_irq_enables(RS485_UART_ID, false, false);
         gpio_put(RS485_DE_RE_PIN, 1);
         __asm volatile("nop\nnop\nnop\nnop\nnop");
         uart_write_blocking(RS485_UART_ID, data, len);
         uart_tx_wait_blocking(RS485_UART_ID);
         gpio_put(RS485_DE_RE_PIN, 0);
+        busy_wait_us(200);
+        while (uart_is_readable(RS485_UART_ID)) { (void)uart_getc(RS485_UART_ID); }
+        uart_set_irq_enables(RS485_UART_ID, true, false);
     }
 
 #else

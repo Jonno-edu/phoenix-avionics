@@ -1,7 +1,7 @@
 #pragma once
 #include <stdbool.h>
 #include <stdint.h>
-#include "common/include/protocol/phoenix_tctlm_payloads.h"
+#include "protocol/phoenix_tctlm_payloads.h"
 
 // Request the tracking radio's identification/health status.
 // Blocks until response received or timeout_ms elapses.
