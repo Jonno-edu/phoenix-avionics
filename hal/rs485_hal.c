@@ -19,6 +19,12 @@ static const char *TAG = "RS485_HAL";
     #define RS485_RX_PIN        5
     #define RS485_DE_RE_PIN     3
 
+    // Raw RX log buffer — ISR-safe, no FreeRTOS calls
+    #define RAW_LOG_SIZE 256
+    static volatile uint8_t  raw_log_buf[RAW_LOG_SIZE];
+    static volatile uint16_t raw_log_write = 0;
+    static volatile uint16_t raw_log_read  = 0;
+
     static volatile uint8_t rs485_rx_buffer[RS485_BUFFER_SIZE];
     static volatile uint16_t rs485_write_index = 0;
     static volatile uint16_t rs485_read_index = 0;
@@ -26,8 +32,20 @@ static const char *TAG = "RS485_HAL";
     void on_rs485_uart_rx(void) {
         while (uart_is_readable(RS485_UART_ID)) {
             uint8_t ch = uart_getc(RS485_UART_ID);
-            printf("[RS485 RX RAW] 0x%02X\n", ch);
+            
+            // Log to raw buffer for later printing from task
+            raw_log_buf[raw_log_write] = ch;
+            raw_log_write = (raw_log_write + 1) % RAW_LOG_SIZE;
+
             rs485_hal_buffer_push(ch);
+        }
+    }
+
+    // Call this from a TASK (not ISR) to drain and print raw bytes
+    void rs485_hal_print_raw_log(void) {
+        while (raw_log_read != raw_log_write) {
+            printf("[RS485 RX RAW] 0x%02X\n", raw_log_buf[raw_log_read]);
+            raw_log_read = (raw_log_read + 1) % RAW_LOG_SIZE;
         }
     }
 

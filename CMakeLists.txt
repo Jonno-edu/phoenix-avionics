@@ -164,6 +164,7 @@ set(COMMON_SOURCES
     src/modules/estimator/ekf.c
     src/modules/datalink/datalink.c
     src/modules/tracking_radio/tracking_radio.c
+    src/modules/eps/eps.c
     src/modules/tctlm/tctlm.c
     src/modules/housekeeping/housekeeping.c
     ${CMAKE_SOURCE_DIR}/lib/esl-comms/src/rs485_protocol.c

@@ -19,6 +19,16 @@
 void rs485_hal_init(void);
 
 /**
+ * @brief Print raw RX bytes from the log buffer (TASK SAFE).
+ */
+void rs485_hal_print_raw_log(void);
+
+/**
+ * @brief Set the direction pin.
+ */
+void rs485_hal_set_direction(bool tx_mode);
+
+/**
  * @brief Send a block of data over RS485 Bus A.
  * 
  * Automatically handles direction control:

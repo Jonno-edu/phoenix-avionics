@@ -29,7 +29,12 @@ static void heartbeat_task(void *pvParameters) {
     (void)pvParameters;
     while (1) {
         printf("Heartbeat: System is running...\n");
-        vTaskDelay(pdMS_TO_TICKS(1000));
+
+        // Print stack headroom for each task (in words)
+        printf("[STACK] heartbeat:    %lu words free\n",
+               uxTaskGetStackHighWaterMark(NULL));
+
+        vTaskDelay(pdMS_TO_TICKS(5000)); // every 5s
     }
 }
 
@@ -52,22 +57,21 @@ int main(void) {
     pubsub_init();
 
     // 2. Create the heartbeat task
-    xTaskCreate(heartbeat_task, "heartbeat", 256, NULL, 1, NULL);
+    xTaskCreate(heartbeat_task, "heartbeat", 512, NULL, 1, NULL);
 
-    // 3. Initialize modules (Optional: Commented out for debugging)
-    // sensors_init();
-    // estimator_init();
+    // 3. Initialize modules
+    sensors_init();
+    estimator_init();
 
-    /*
+    // 4. Create the housekeeping task (Step 3: datalink_init)
     xTaskCreate(housekeeping_task,
             "housekeeping",
             2048,          // stack words — rs485_send_packet needs ~1200 bytes alone
             NULL,
-            2,            // priority: lower than sensors, higher than logging
+            2,             // priority
             NULL);
-    */
 
-    // 4. Hand control over to FreeRTOS
+    // 5. Hand control over to FreeRTOS
     vTaskStartScheduler();
 
     while (1) {

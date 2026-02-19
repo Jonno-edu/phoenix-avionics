@@ -15,7 +15,6 @@ typedef struct {
     uint8_t  firmware_minor;
     uint16_t uptime_seconds;
     uint16_t uptime_milliseconds;
-    uint8_t  status_flags;
 } PACKED_STRUCT TlmIdentificationPayload_t;
 
 // ID: ID_TLM_TRACKING_BEACON

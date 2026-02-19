@@ -7,9 +7,10 @@
 static QueueHandle_t topic_queues[TOPIC_COUNT];
 
 void pubsub_init(void) {
-    // Initialize the depth-1 queue for the IMU
-    topic_queues[TOPIC_SENSOR_IMU] = xQueueCreate(1, sizeof(sensor_imu_t));
+    // Initialize depth-1 queues for topics
+    topic_queues[TOPIC_SENSOR_IMU]           = xQueueCreate(1, sizeof(sensor_imu_t));
     topic_queues[TOPIC_TRACKING_RADIO_IDENT] = xQueueCreate(1, sizeof(TlmIdentificationPayload_t));
+    topic_queues[TOPIC_EPS_IDENT]            = xQueueCreate(1, sizeof(TlmIdentificationPayload_t));
 }
 
 void publish(topic_id_t topic, const void *data) {
