@@ -13,12 +13,6 @@ typedef enum {
     TOPIC_EPS_POWER_STATUS,
     TOPIC_EPS_MEASUREMENTS,
 
-    // Future
-    // TOPIC_VEHICLE_STATE,
-    // TOPIC_BARO,
-    // TOPIC_GPS,
-    // TOPIC_ACTUATOR_CMD,
-
     TOPIC_COUNT   // ← always last, used to size the queue array
 } topic_id_t;
 
