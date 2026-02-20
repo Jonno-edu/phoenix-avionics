@@ -2,6 +2,13 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "SSH: Flash & Monitor",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "echo 'Deploying to Remote Device...'",
+      "preLaunchTask": "Run Project & Monitor (SSH)"
+    },
+    {
       "name": "Pico Flash Only (remote OpenOCD)",
       "cwd": "${workspaceRoot}",
       "executable": "${command:raspberry-pi-pico.launchTargetPath}",
