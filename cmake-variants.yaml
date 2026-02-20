@@ -10,22 +10,19 @@ buildType:
       buildType: Release
 
 target_platform:
-  default: pico2_w
+  default: rp2350
   description: Target platform
   choices:
-    pico2_w:
-      short: Pico 2W
-      long: Raspberry Pi Pico 2W (RP2350 + WiFi)
-      settings:
-        PICO_BOARD: pico2_w
-    pico2:
-      short: Pico 2
+    rp2350:
+      short: RP2350
       long: Raspberry Pi Pico 2 (RP2350)
       settings:
         PICO_BOARD: pico2
-    host:
-      short: Host
+        PICO_BUILD: 1
+    local:
+      short: Local
       long: Host build for testing
       settings:
         PICO_PLATFORM: host
         PICO_BOARD: host
+        PICO_BUILD: 0

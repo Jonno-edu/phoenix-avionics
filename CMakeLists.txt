@@ -31,17 +31,25 @@ add_subdirectory(lib)
 if(PICO_PLATFORM STREQUAL "host")
     set(BUILD_FOR_HOST TRUE)
     set(PICO_BOARD "host" CACHE STRING "Board type" FORCE)
+    set(PICO_BUILD 0 CACHE STRING "Building for Pico" FORCE)
     message(STATUS "Building for HOST (Mac) - Unit Tests")
 elseif(PICO_BOARD STREQUAL "host")
     set(BUILD_FOR_HOST TRUE)
+    set(PICO_BUILD 0 CACHE STRING "Building for Pico" FORCE)
     message(STATUS "Building for HOST (Mac) - Unit Tests")
 else()
     set(BUILD_FOR_HOST FALSE)
+    if(NOT PICO_BUILD)
+        set(PICO_BUILD 1 CACHE STRING "Building for Pico" FORCE)
+    endif()
     if(NOT PICO_BOARD)
         set(PICO_BOARD pico2_w)
     endif()
     message(STATUS "Building for Pico Board: ${PICO_BOARD}")
 endif()
+
+# Global definition for IntelliSense and code gating
+add_definitions(-DPICO_BUILD=${PICO_BUILD})
 
 # --- FreeRTOS setup ---
 if(NOT FREERTOS_KERNEL_PATH)
@@ -73,9 +81,6 @@ set(TARGET_NAME phoenix_avionics_monorepo)
 # FreeRTOS config - now at root
 add_library(freertos_config INTERFACE)
 target_include_directories(freertos_config SYSTEM INTERFACE ${CMAKE_SOURCE_DIR})
-target_compile_definitions(freertos_config INTERFACE
-    $<$<NOT:$<BOOL:${BUILD_FOR_HOST}>>:PICO_BUILD=1>
-)
 
 ###########################################
 # Source Files Organized by Module
@@ -168,8 +173,8 @@ set(COMMON_SOURCES
     src/modules/tctlm/tctlm.c
     src/modules/housekeeping/housekeeping.c
     ${CMAKE_SOURCE_DIR}/lib/esl-comms/src/rs485_protocol.c
-    # ${BSP_SOURCES}
-    # ${HAL_SOURCES}
+    ${BSP_SOURCES}
+    ${HAL_SOURCES}
     # ${FLIGHT_CONTROL_SOURCES}
     # ${COMMUNICATION_SOURCES}
     # ${DATA_STORE_SOURCES}

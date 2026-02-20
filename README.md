@@ -138,7 +138,7 @@ the single source of truth shared with EPS and tracking radio firmware.
 └─────────────────────────────────────────────┘
 ```
 
-### NORB — Named Object Request Broker
+### nORB — nano Object Request Broker
 
 Modules communicate via topics, never by calling each other directly.
 Inspired by PX4's uORB.
