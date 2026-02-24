@@ -42,5 +42,8 @@
     "phoenix.ssh.remotePath": "/tmp/phoenix_avionics_monorepo.uf2",
     "phoenix.build.uf2": "${workspaceFolder}/build/phoenix_avionics_monorepo.uf2",
     "phoenix.ssh.bus": "8",
-    "phoenix.ssh.device": "/dev/ttyOBC"
+    "phoenix.ssh.device": "/dev/ttyOBC",
+    "chat.tools.terminal.autoApprove": {
+        "mv": true
+    }
 }

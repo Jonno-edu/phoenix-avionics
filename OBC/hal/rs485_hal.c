@@ -73,7 +73,7 @@ bool rs485_hal_raw_debug_enabled(void) {
         uart_set_irq_enables(RS485_UART_ID, true, false);
         irq_set_exclusive_handler(UART1_IRQ, on_rs485_uart_rx);
         irq_set_enabled(UART1_IRQ, true);
-        ESP_LOGI(TAG, "Bus A initialized on UART1 (GPIO 4/5), DE/RE on GPIO 3");
+        LOG_I(TAG, "Bus A initialized on UART1 (GPIO 4/5), DE/RE on GPIO 3");
     }
 
     void rs485_hal_send(const uint8_t *data, uint16_t len) {

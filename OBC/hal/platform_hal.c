@@ -20,7 +20,7 @@ void vApplicationStackOverflowHook(TaskHandle_t xTask, char* pcTaskName) {
     panic("Stack overflow. Task: %s\n", pcTaskName);
 #else
     (void)pcTaskName;
-    ESP_LOGE(TAG, "Stack overflow. Task: %s", pcTaskName);
+    LOG_E(TAG, "Stack overflow. Task: %s", pcTaskName);
     exit(1);
 #endif
 }
@@ -29,7 +29,7 @@ void vApplicationMallocFailedHook(void) {
 #if PICO_BUILD
     panic("malloc failed");
 #else
-    ESP_LOGE(TAG, "malloc failed");
+    LOG_E(TAG, "malloc failed");
     exit(1);
 #endif
 }
@@ -38,7 +38,7 @@ void platform_panic(const char *msg) {
 #if PICO_BUILD
     panic("%s", msg);
 #else
-    ESP_LOGE(TAG, "PANIC: %s", msg);
+    LOG_E(TAG, "PANIC: %s", msg);
     exit(1);
 #endif
 }
