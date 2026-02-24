@@ -1,0 +1,28 @@
+buildType:
+  default: debug
+  description: Build type
+  choices:
+    debug:
+      short: Debug
+      buildType: Debug
+    release:
+      short: Release
+      buildType: Release
+
+target_platform:
+  default: rp2350
+  description: Target platform
+  choices:
+    rp2350:
+      short: RP2350
+      long: Raspberry Pi Pico 2 (RP2350)
+      settings:
+        PICO_BOARD: pico2
+        PICO_BUILD: 1
+    local:
+      short: Local
+      long: Host build for testing
+      settings:
+        PICO_PLATFORM: host
+        PICO_BOARD: host
+        PICO_BUILD: 0
