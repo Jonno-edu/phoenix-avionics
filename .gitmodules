@@ -1,9 +1,3 @@
-[submodule "FreeRTOS-Kernel"]
-	path = OBC/lib/FreeRTOS-Kernel
-	url = https://github.com/FreeRTOS/FreeRTOS-Kernel.git
-[submodule "lib/pico-sdk"]
-	path = OBC/lib/pico-sdk
-	url = https://github.com/raspberrypi/pico-sdk.git
 [submodule "lib/esl-sensors"]
 	path = OBC/lib/esl-sensors
 	url = https://github.com/esl-sun/esl-sensors.git
