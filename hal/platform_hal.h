@@ -16,4 +16,11 @@ void platform_panic(const char *msg);
  */
 void platform_send_mux(const uint8_t *data, uint16_t len);
 
+/**
+ * @brief  Send raw data to the debug console/serial port.
+ * @param  data Pointer to the data buffer
+ * @param  len  Number of bytes to send
+ */
+void console_send(const uint8_t *data, uint16_t len);
+
 #endif // PLATFORM_HAL_H

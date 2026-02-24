@@ -41,6 +41,6 @@
     "phoenix.ssh.user": "rock",
     "phoenix.ssh.remotePath": "/tmp/phoenix_avionics_monorepo.uf2",
     "phoenix.build.uf2": "${workspaceFolder}/build/phoenix_avionics_monorepo.uf2",
-    "phoenix.ssh.bus": "7",
+    "phoenix.ssh.bus": "8",
     "phoenix.ssh.device": "/dev/ttyOBC"
 }

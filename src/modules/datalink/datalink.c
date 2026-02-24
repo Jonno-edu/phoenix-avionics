@@ -1,5 +1,6 @@
 #include "datalink.h"
 #include "rs485_protocol.h"
+#include "hal/platform_hal.h"
 #include "hal/rs485_hal.h"
 #include "phoenix_icd.h"
 #include "logging.h"
@@ -16,7 +17,7 @@ static SemaphoreHandle_t g_bus_mutex = NULL;
 static bool g_initialised = false;
 
 static void rs485_tx_callback(const uint8_t *data, uint16_t len) {
-    rs485_hal_send(data, len);
+    platform_send_mux(data, len);
 }
 
 void datalink_init(void) {

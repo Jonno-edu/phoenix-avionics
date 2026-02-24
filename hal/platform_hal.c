@@ -7,6 +7,7 @@
 
 #if PICO_BUILD
     #include "hal/rs485_hal.h"
+    #include <pico/stdlib.h>
 #else
     #include <unistd.h>
 #endif
@@ -39,6 +40,19 @@ void platform_panic(const char *msg) {
 #else
     ESP_LOGE(TAG, "PANIC: %s", msg);
     exit(1);
+#endif
+}
+
+void console_send(const uint8_t *data, uint16_t len) {
+    for (uint16_t i = 0; i < len; i++) {
+#if PICO_BUILD
+        putchar_raw(data[i]);
+#else
+        putchar(data[i]);
+#endif
+    }
+#if !PICO_BUILD
+    fflush(stdout);
 #endif
 }
 

@@ -12,19 +12,7 @@
 #include "modules/estimator/estimator.h"
 #include "modules/housekeeping/housekeeping.h"
 #include "hal/rs485_hal.h"
-
-// Stack overflow hook — called by FreeRTOS when a task overflows
-void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName) {
-    (void)xTask;
-    printf("STACK OVERFLOW in task: %s\n", pcTaskName);
-    for (;;); // halt — you will see this in debugger
-}
-
-// Heap exhaustion hook
-void vApplicationMallocFailedHook(void) {
-    printf("MALLOC FAILED - heap exhausted\n");
-    for (;;);
-}
+#include "bsp_init.h"
 
 static void heartbeat_task(void *pvParameters) {
     (void)pvParameters;
@@ -41,9 +29,10 @@ static void heartbeat_task(void *pvParameters) {
 
 int main(void) {
 #if PICO_BUILD
-    // Pico SDK hardware init
-    stdio_init_all();
-    // Wait for USB to enumerate (up to 5s) before first print
+    // Unified BSP hardware init (includes stdio_init_all and delays)
+    bsp_hardware_init();
+
+    // Extra wait for USB to enumerate (up to 5s) before first print
     // This prevents losing early boot messages
     uint32_t usb_wait = 0;
     while (!stdio_usb_connected() && usb_wait < 2000) {
