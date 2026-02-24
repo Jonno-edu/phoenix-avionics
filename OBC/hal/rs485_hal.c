@@ -3,11 +3,13 @@
 #include <stdio.h>
 #include "FreeRTOS.h"
 #include "task.h"
+#include "semphr.h"
 #include "logging.h"
 
 static const char *TAG = "RS485_HAL";
 
 static volatile bool g_raw_debug_enabled = false;
+static SemaphoreHandle_t g_rx_sem = NULL;
 
 void rs485_hal_set_raw_debug(bool enabled) {
     g_raw_debug_enabled = enabled;
@@ -40,6 +42,7 @@ bool rs485_hal_raw_debug_enabled(void) {
     static volatile uint16_t rs485_read_index = 0;
 
     void on_rs485_uart_rx(void) {
+        bool pushed = false;
         while (uart_is_readable(RS485_UART_ID)) {
             uint8_t ch = uart_getc(RS485_UART_ID);
             
@@ -48,6 +51,13 @@ bool rs485_hal_raw_debug_enabled(void) {
             raw_log_write = (raw_log_write + 1) % RAW_LOG_SIZE;
 
             rs485_hal_buffer_push(ch);
+            pushed = true;
+        }
+
+        if (pushed && g_rx_sem) {
+            BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+            xSemaphoreGiveFromISR(g_rx_sem, &xHigherPriorityTaskWoken);
+            portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
         }
     }
 
@@ -64,6 +74,10 @@ bool rs485_hal_raw_debug_enabled(void) {
     }
 
     void rs485_hal_init(void) {
+        if (!g_rx_sem) {
+            g_rx_sem = xSemaphoreCreateBinary();
+        }
+
         uart_init(RS485_UART_ID, RS485_BAUD_RATE);
         gpio_set_function(RS485_TX_PIN, GPIO_FUNC_UART);
         gpio_set_function(RS485_RX_PIN, GPIO_FUNC_UART);
@@ -123,6 +137,12 @@ bool rs485_hal_bytes_available(void) {
     return available;
 }
 
+bool rs485_hal_wait_for_bytes(uint32_t timeout_ms) {
+    if (rs485_hal_bytes_available()) return true;
+    if (!g_rx_sem) return false;
+    return xSemaphoreTake(g_rx_sem, pdMS_TO_TICKS(timeout_ms)) == pdTRUE;
+}
+
 uint8_t rs485_hal_read_byte(void) {
     taskENTER_CRITICAL();
     if (rs485_read_index == rs485_write_index) {
@@ -137,5 +157,6 @@ uint8_t rs485_hal_read_byte(void) {
 #else
 void rs485_hal_buffer_push(uint8_t byte) { (void)byte; }
 bool rs485_hal_bytes_available(void) { return false; }
+bool rs485_hal_wait_for_bytes(uint32_t timeout_ms) { (void)timeout_ms; return false; }
 uint8_t rs485_hal_read_byte(void) { return 0; }
 #endif

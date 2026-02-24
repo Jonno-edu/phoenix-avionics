@@ -4,14 +4,6 @@
 #include "FreeRTOS.h"
 #include "queue.h"
 
-static QueueHandle_t g_resp_queue = NULL;
-
-void tctlm_init(void) {
-    if (!g_resp_queue) {
-        g_resp_queue = xQueueCreate(1, sizeof(RS485_packet_t));
-    }
-}
-
 // --- Project Implementation of TCTLM high-level API ---
 
 rs485_status_t tctlm_send_telemetry_request(
@@ -23,17 +15,19 @@ rs485_status_t tctlm_send_telemetry_request(
     tctlm_get_time_ms_t get_time_ms,
     tctlm_poll_t poll_cb
 ) {
-    if (!inst || !g_resp_queue) return RS485_ERR_NO_PACKET;
+    if (!inst) return RS485_ERR_NO_PACKET;
+    QueueHandle_t q = (QueueHandle_t)inst->resp_queue;
+    if (!q) return RS485_ERR_NO_PACKET;
 
     // Clear any stale responses
-    xQueueReset(g_resp_queue);
+    xQueueReset(q);
 
     // 1. Send the request
     rs485_send_packet(inst, target_addr, MSG_TYPE_TLM_REQ, tm_id, NULL, 0);
 
     // 2. Wait for response on queue
     RS485_packet_t pkt;
-    if (xQueueReceive(g_resp_queue, &pkt, pdMS_TO_TICKS(timeout_ms)) == pdTRUE) {
+    if (xQueueReceive(q, &pkt, pdMS_TO_TICKS(timeout_ms)) == pdTRUE) {
         if (pkt.src_addr == target_addr && 
             pkt.msg_desc.type == MSG_TYPE_TLM_RESP && 
             pkt.msg_desc.id == tm_id) {
@@ -55,17 +49,19 @@ rs485_status_t tctlm_send_telecommand(
     tctlm_get_time_ms_t get_time_ms,
     tctlm_poll_t poll_cb
 ) {
-    if (!inst || !g_resp_queue) return RS485_ERR_NO_PACKET;
+    if (!inst) return RS485_ERR_NO_PACKET;
+    QueueHandle_t q = (QueueHandle_t)inst->resp_queue;
+    if (!q) return RS485_ERR_NO_PACKET;
 
     // Clear any stale responses
-    xQueueReset(g_resp_queue);
+    xQueueReset(q);
 
     // 1. Send the telecommand
     rs485_send_packet(inst, target_addr, MSG_TYPE_TELECOMMAND, cmd_id, payload, len);
 
     // 2. Wait for ACK on queue
     RS485_packet_t pkt;
-    if (xQueueReceive(g_resp_queue, &pkt, pdMS_TO_TICKS(timeout_ms)) == pdTRUE) {
+    if (xQueueReceive(q, &pkt, pdMS_TO_TICKS(timeout_ms)) == pdTRUE) {
         if (pkt.src_addr == target_addr && 
             pkt.msg_desc.type == MSG_TYPE_TC_ACK && 
             pkt.msg_desc.id == cmd_id) {
@@ -87,8 +83,9 @@ void TCTLM_processTelecommand(RS485_packet_t *pkt) {
 }
 
 void TCTLM_processTelecommandAck(RS485_packet_t *pkt) {
-    if (g_resp_queue) {
-        xQueueOverwrite(g_resp_queue, pkt);
+    rs485_instance_t *inst = (rs485_instance_t *)pkt->rx_instance;
+    if (inst && inst->resp_queue) {
+        xQueueOverwrite((QueueHandle_t)inst->resp_queue, pkt);
     }
 }
 
@@ -97,8 +94,9 @@ void TCTLM_processTelemetryRequest(RS485_packet_t *pkt) {
 }
 
 void TCTLM_processTelemetryResponse(RS485_packet_t *pkt) {
-    if (g_resp_queue) {
-        xQueueOverwrite(g_resp_queue, pkt);
+    rs485_instance_t *inst = (rs485_instance_t *)pkt->rx_instance;
+    if (inst && inst->resp_queue) {
+        xQueueOverwrite((QueueHandle_t)inst->resp_queue, pkt);
     }
 }
 

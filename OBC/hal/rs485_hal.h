@@ -71,6 +71,16 @@ void rs485_hal_buffer_push(uint8_t byte);
 uint8_t rs485_hal_read_byte(void);
 
 /**
+ * @brief Block the calling task until a byte is received OR the timeout occurs.
+ * 
+ * Uses a FreeRTOS binary semaphore given by the RX interrupt.
+ * 
+ * @param timeout_ms Max time to wait. Use portMAX_DELAY for indefinite.
+ * @return true if data became available, false on timeout.
+ */
+bool rs485_hal_wait_for_bytes(uint32_t timeout_ms);
+
+/**
  * @brief Check if there are bytes available in the RS485 RX buffer.
  * 
  * Thread-safe.

@@ -24,8 +24,7 @@ static void rs485_tx_callback(const uint8_t *data, uint16_t len) {
 }
 
 static void usb_tx_callback(const uint8_t *data, uint16_t len) {
-    // TODO: Implement platform_send_usb(data, len)
-    // platform_send_usb(data, len);
+    console_send(data, len);
 }
 
 // --- Library Glue: OS-specific callbacks ---
@@ -38,17 +37,15 @@ void datalink_init(void) {
     
     // Init RS485
     rs485_init(&g_rs485, rs485_tx_callback, ADDR_OBC);
+    g_rs485.resp_queue = xQueueCreate(1, sizeof(RS485_packet_t));
     g_bus_mutex = xSemaphoreCreateMutex();
     
     // Init USB
     rs485_init(&g_usb, usb_tx_callback, ADDR_OBC);
+    g_usb.resp_queue = xQueueCreate(1, sizeof(RS485_packet_t));
     g_usb_mutex = xSemaphoreCreateMutex();
     
     g_initialised = true;
-
-    // Initialize TCTLM queues
-    extern void tctlm_init(void);
-    tctlm_init();
 
     // Spawn the RX tasks
     xTaskCreate(datalink_rs485_rx_task, "dl_rs485_rx", 512, &g_rs485, 5, NULL);
