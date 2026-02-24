@@ -105,7 +105,7 @@ bool eps_send_power_command(const EpsPowerSetCmd_t *cmd, uint32_t timeout_ms)
         ADDR_EPS,
         MSG_TYPE_TELECOMMAND,    TC_EPS_POWER,
         (uint8_t *)cmd, sizeof(*cmd),
-        MSG_TYPE_TELECOMMAND_ACK, TC_EPS_POWER,
+        MSG_TYPE_TC_ACK, TC_EPS_POWER,
         NULL, timeout_ms
     );
     if (st == DATALINK_OK)

@@ -58,7 +58,7 @@ bool tracking_radio_send_beacon(const TlmTrackingBeaconPayload_t *beacon,
         ADDR_TRACKING_RADIO,
         MSG_TYPE_TELECOMMAND, TC_RADIO_BEACON,
         (const uint8_t*)beacon, sizeof(*beacon),
-        MSG_TYPE_TELECOMMAND_ACK, TC_RADIO_BEACON,
+        MSG_TYPE_TC_ACK, TC_RADIO_BEACON,
         &resp, timeout_ms
     );
 
