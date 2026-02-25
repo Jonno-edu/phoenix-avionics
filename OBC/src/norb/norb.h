@@ -103,7 +103,7 @@ bool norb_subscribe_poll(topic_id_t topic, void *data_out);
  *           ekf_update(&imu);
  *       } else {
  *           // 10ms with no IMU data — sensor may have stalled
- *           ESP_LOGW(TAG, "IMU timeout");
+ *           LOG_W(TAG, "IMU timeout");
  *       }
  *   }
  *

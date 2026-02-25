@@ -12,6 +12,10 @@ typedef enum {
 // Must be called once before any transactions (from main or a task init)
 void datalink_init(void);
 
+// RX Task entry points
+void datalink_rs485_rx_task(void *arg);
+void datalink_usb_rx_task(void *arg);
+
 // Blocking: send a request, wait for a matching response from target_addr.
 // Returns DATALINK_OK and populates out_resp on success.
 datalink_status_t datalink_request_response(

@@ -36,7 +36,7 @@ bool eps_request_ident(TlmIdentificationPayload_t *out, uint32_t timeout_ms)
     uint8_t n = resp.length < sizeof(*out) ? resp.length : sizeof(*out);
     memcpy(out, resp.data, n);
 
-    ESP_LOGI(TAG, "Ident: type=0x%02X fw=%u.%u uptime=%us",
+    LOG_I(TAG, "Ident: type=0x%02X fw=%u.%u uptime=%us",
              out->node_type, out->firmware_major,
              out->firmware_minor, out->uptime_seconds);
     return true;
@@ -49,12 +49,12 @@ bool eps_request_power_status(EpsPowerStatus_t *out, uint32_t timeout_ms)
         return false;
 
     if (resp.length < sizeof(*out)) {
-        ESP_LOGW(TAG, "Power status too short: %u bytes", resp.length);
+        LOG_W(TAG, "Power status too short: %u bytes", resp.length);
         return false;
     }
 
     memcpy(out, resp.data, sizeof(*out));
-    ESP_LOGI(TAG, "Power: 3V3[%d,%d,%d] 5V[%d,%d,%d] 12V[%d]",
+    LOG_I(TAG, "Power: 3V3[%d,%d,%d] 5V[%d,%d,%d] 12V[%d]",
              out->rail_3v3_1, out->rail_3v3_2, out->rail_3v3_3,
              out->rail_5v_1,  out->rail_5v_2,  out->rail_5v_3,
              out->rail_12v);
@@ -68,12 +68,12 @@ bool eps_request_measurements(EpsMeasurements_t *out, uint32_t timeout_ms)
         return false;
 
     if (resp.length < sizeof(*out)) {
-        ESP_LOGW(TAG, "Measurements too short: %u bytes", resp.length);
+        LOG_W(TAG, "Measurements too short: %u bytes", resp.length);
         return false;
     }
 
     memcpy(out, resp.data, sizeof(*out));
-    ESP_LOGI(TAG, "Vbat=%umV Ibat=%umA current_5v_1=%umA",
+    LOG_I(TAG, "Vbat=%umV Ibat=%umA current_5v_1=%umA",
              out->batt_voltage_mv, out->batt_current_ma, out->current_5v_1_ma);
     return true;
 }
@@ -109,9 +109,9 @@ bool eps_send_power_command(const EpsPowerSetCmd_t *cmd, uint32_t timeout_ms)
         NULL, timeout_ms
     );
     if (st == DATALINK_OK)
-        ESP_LOGI(TAG, "Power command ACK'd");
+        LOG_I(TAG, "Power command ACK'd");
     else
-        ESP_LOGW(TAG, "Power command %s", st == DATALINK_TIMEOUT ? "TIMEOUT" : "BAD RESP");
+        LOG_W(TAG, "Power command %s", st == DATALINK_TIMEOUT ? "TIMEOUT" : "BAD RESP");
     return (st == DATALINK_OK);
 }
 
@@ -131,7 +131,7 @@ bool eps_set_line(EpsLineIndex_t line, PowerSelect_t state, uint32_t timeout_ms)
         cmd.rail_5v_3  = current.rail_5v_3;
         cmd.rail_12v   = current.rail_12v;
     } else {
-        ESP_LOGW(TAG, "set_line: no current status, all other lines default OFF");
+        LOG_W(TAG, "set_line: no current status, all other lines default OFF");
     }
 
     // Apply the desired change
@@ -144,7 +144,7 @@ bool eps_set_line(EpsLineIndex_t line, PowerSelect_t state, uint32_t timeout_ms)
         case EPS_LINE_5V_3:  cmd.rail_5v_3  = state; break;
         case EPS_LINE_12V:   cmd.rail_12v   = state; break;
         default:
-            ESP_LOGW(TAG, "Invalid line index: %d", line);
+            LOG_W(TAG, "Invalid line index: %d", line);
             return false;
     }
 

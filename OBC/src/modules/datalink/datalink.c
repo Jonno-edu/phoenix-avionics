@@ -12,13 +12,19 @@
 
 static const char *TAG = "Datalink";
 
-// --- Private: one RS485 context, invisible to all other modules ---
+// --- Private: two RS485 contexts, invisible to all other modules ---
 static rs485_instance_t g_rs485;
+static rs485_instance_t g_usb;
 static SemaphoreHandle_t g_bus_mutex = NULL;
+static SemaphoreHandle_t g_usb_mutex = NULL;
 static bool g_initialised = false;
 
 static void rs485_tx_callback(const uint8_t *data, uint16_t len) {
     platform_send_mux(data, len);
+}
+
+static void usb_tx_callback(const uint8_t *data, uint16_t len) {
+    console_send(data, len);
 }
 
 // --- Library Glue: OS-specific callbacks ---
@@ -26,19 +32,24 @@ static uint32_t get_time_ms_cb(void) {
     return xTaskGetTickCount() * (1000 / configTICK_RATE_HZ);
 }
 
-static void poll_cb(void) {
-    while (rs485_hal_bytes_available()) {
-        uint8_t b = rs485_hal_read_byte();
-        rs485_process_byte(&g_rs485, b);
-    }
-    vTaskDelay(pdMS_TO_TICKS(1)); // yield to other tasks
-}
-
 void datalink_init(void) {
     rs485_hal_init();
+    
+    // Init RS485
     rs485_init(&g_rs485, rs485_tx_callback, ADDR_OBC);
+    g_rs485.resp_queue = xQueueCreate(1, sizeof(RS485_packet_t));
     g_bus_mutex = xSemaphoreCreateMutex();
+    
+    // Init USB
+    rs485_init(&g_usb, usb_tx_callback, ADDR_OBC);
+    g_usb.resp_queue = xQueueCreate(1, sizeof(RS485_packet_t));
+    g_usb_mutex = xSemaphoreCreateMutex();
+    
     g_initialised = true;
+
+    // Spawn the RX tasks
+    xTaskCreate(datalink_rs485_rx_task, "dl_rs485_rx", 512, &g_rs485, 5, NULL);
+    xTaskCreate(datalink_usb_rx_task, "dl_usb_rx", 512, &g_usb, 5, NULL);
 }
 
 datalink_status_t datalink_request_response(
@@ -59,9 +70,9 @@ datalink_status_t datalink_request_response(
 
     rs485_status_t status;
     if (req_type == MSG_TYPE_TLM_REQ) {
-        status = tctlm_send_telemetry_request(&g_rs485, target_addr, req_id, out_resp, timeout_ms, get_time_ms_cb, poll_cb);
+        status = tctlm_send_telemetry_request(&g_rs485, target_addr, req_id, out_resp, timeout_ms, get_time_ms_cb, NULL);
     } else if (req_type == MSG_TYPE_TELECOMMAND) {
-        status = tctlm_send_telecommand(&g_rs485, target_addr, req_id, (uint8_t*)req_payload, req_len, out_resp, timeout_ms, get_time_ms_cb, poll_cb);
+        status = tctlm_send_telecommand(&g_rs485, target_addr, req_id, (uint8_t*)req_payload, req_len, out_resp, timeout_ms, get_time_ms_cb, NULL);
     } else {
         // Generic fall-back if needed, but the library currently focuses on TLM and TC
         status = RS485_ERR_BAD_RESPONSE; 
@@ -70,11 +81,11 @@ datalink_status_t datalink_request_response(
     xSemaphoreGive(g_bus_mutex); // release bus
 
     if (status == RS485_OK) {
-        ESP_LOGI(TAG, "Response from 0x%02X: Type:%d ID:%d Len:%d", 
+        LOG_I(TAG, "Response from 0x%02X: Type:%d ID:%d Len:%d", 
                  out_resp->src_addr, out_resp->msg_desc.type, out_resp->msg_desc.id, out_resp->length);
         return DATALINK_OK;
     } else if (status == RS485_ERR_TIMEOUT) {
-        ESP_LOGW(TAG, "TIMEOUT waiting for resp from 0x%02X (type:%d id:%d)",
+        LOG_W(TAG, "TIMEOUT waiting for resp from 0x%02X (type:%d id:%d)",
                  target_addr, expected_resp_type, expected_resp_id);
         return DATALINK_TIMEOUT;
     } else {

@@ -17,8 +17,8 @@ void bsp_hardware_init(void) {
 #if PICO_BUILD
     stdio_init_all();
     sleep_ms(1000);
-    ESP_LOGI(TAG, "--- Phoenix Avionics Starting ---");
-    ESP_LOGI(TAG, "Initializing RS485 HAL...");
+    LOG_I(TAG, "--- Phoenix Avionics Starting ---");
+    LOG_I(TAG, "Initializing RS485 HAL...");
     rs485_hal_init();
 #else
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -27,16 +27,16 @@ void bsp_hardware_init(void) {
 
 void bsp_peripheral_init(void) {
 #if PICO_BUILD
-    ESP_LOGI(TAG, "Initializing Sensors...");
+    LOG_I(TAG, "Initializing Sensors...");
     if (!I2C_init()) {
-        ESP_LOGE(TAG, "CRITICAL: I2C initialization failed!");
+        LOG_E(TAG, "CRITICAL: I2C initialization failed!");
     }
 
     I2C_scan_bus();
 
     if (!BAROMS5607_init()) {
-        ESP_LOGE(TAG, "CRITICAL: Barometer initialization failed!");
+        LOG_E(TAG, "CRITICAL: Barometer initialization failed!");
     }
-    ESP_LOGI(TAG, "Init complete, starting scheduler.");
+    LOG_I(TAG, "Init complete, starting scheduler.");
 #endif
 }

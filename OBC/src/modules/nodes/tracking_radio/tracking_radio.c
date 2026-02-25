@@ -36,7 +36,7 @@ bool tracking_radio_request_ident(TlmIdentificationPayload_t *out,
 
     memcpy(out, resp.data, sizeof(TlmIdentificationPayload_t));
 
-    ESP_LOGI(TAG, "Ident: type=0x%02X fw=%u.%u uptime=%us",
+    LOG_I(TAG, "Ident: type=0x%02X fw=%u.%u uptime=%us",
              out->node_type, out->firmware_major,
              out->firmware_minor, out->uptime_seconds);
 
@@ -63,11 +63,11 @@ bool tracking_radio_send_beacon(const TlmTrackingBeaconPayload_t *beacon,
     );
 
     if (st != DATALINK_OK) {
-        ESP_LOGW(TAG, "Failed to send beacon to tracking radio");
+        LOG_W(TAG, "Failed to send beacon to tracking radio");
         return false;
     }
 
-    ESP_LOGI(TAG, "Beacon sent successfully, ACK received (len=%d)", resp.length);
+    LOG_I(TAG, "Beacon sent successfully, ACK received (len=%d)", resp.length);
     return true;
 }
 
