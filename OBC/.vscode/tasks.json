@@ -41,7 +41,9 @@
             "group": {
                 "kind": "build"
             },
-            "command": "ssh -t ${config:phoenix.ssh.user}@${config:phoenix.ssh.host} \"sudo fuser -k ${config:phoenix.ssh.device} 2>/dev/null; echo 'Rebooting to Bootloader...'; sudo picotool reboot --bus ${config:phoenix.ssh.bus} -f -u; echo 'Waiting for USB...'; sleep 3; echo 'Flashing...'; sudo picotool load --bus ${config:phoenix.ssh.bus} --ignore-partitions -x ${config:phoenix.ssh.remotePath} && echo FLASH_OK\"",
+            // The single quotes around the SSH payload prevent Windows PowerShell from
+            // trying to read Linux syntax like 2>/dev/null or semicolons.
+            "command": "ssh -t ${config:phoenix.ssh.user}@${config:phoenix.ssh.host} 'sudo fuser -k ${config:phoenix.ssh.device} 2>/dev/null; echo \"Rebooting to Bootloader...\"; sudo picotool reboot --bus ${config:phoenix.ssh.bus} -f -u; echo \"Waiting for USB...\"; sleep 3; echo \"Flashing...\"; sudo picotool load --bus ${config:phoenix.ssh.bus} --ignore-partitions -x ${config:phoenix.ssh.remotePath}'",
             "problemMatcher": [],
             "presentation": {
                 "reveal": "always",
@@ -65,15 +67,14 @@
         },
 
         // ── Bonus: Open Serial Monitor over SSH ───────────────────────
-        // Assumes the Pico mounts as the configured device on the Rockchip.
-        // Uses 'minicom' — install with: sudo apt install minicom
         {
             "label": "SSH: Serial Monitor",
             "type": "shell",
             "group": {
                 "kind": "build"
             },
-            "command": "ssh -t ${config:phoenix.ssh.user}@${config:phoenix.ssh.host} \"sudo fuser -k ${config:phoenix.ssh.device} 2>/dev/null; sudo rm -f /var/lock/LCK..*; sleep 1; sudo minicom -D ${config:phoenix.ssh.device} -b 115200\"",
+            // Added a polling loop to wait for the USB device to enumerate before launching minicom.
+            "command": "ssh -t ${config:phoenix.ssh.user}@${config:phoenix.ssh.host} 'sudo fuser -k ${config:phoenix.ssh.device} 2>/dev/null; sudo rm -f /var/lock/LCK..*; echo \"Waiting for ${config:phoenix.ssh.device} to enumerate...\"; timeout=15; while [ ! -e ${config:phoenix.ssh.device} ] && [ $timeout -gt 0 ]; do sleep 1; timeout=$((timeout - 1)); done; if [ -e ${config:phoenix.ssh.device} ]; then sudo minicom -D ${config:phoenix.ssh.device} -b 115200; else echo \"Timeout: ${config:phoenix.ssh.device} did not appear. Did the Pico crash on boot?\"; sleep 3; fi'",
             "problemMatcher": [],
             "presentation": {
                 "reveal": "always",
@@ -99,10 +100,12 @@
                 "panel": "shared"
             }
         },
+
+        // ── Local Universal Tool Paths ─────────────────────────────────
         {
             "label": "Compile Project",
             "type": "process",
-            "command": "${userHome}/.pico-sdk/ninja/v1.12.1/ninja",
+            "command": "ninja",
             "args": ["-C", "${workspaceFolder}/build"],
             "group": "build",
             "presentation": {
@@ -112,12 +115,18 @@
             "problemMatcher": "$gcc",
             "windows": {
                 "command": "${env:USERPROFILE}/.pico-sdk/ninja/v1.12.1/ninja.exe"
+            },
+            "osx": {
+                "command": "${env:HOME}/.pico-sdk/ninja/v1.12.1/ninja"
+            },
+            "linux": {
+                "command": "${env:HOME}/.pico-sdk/ninja/v1.12.1/ninja"
             }
         },
         {
             "label": "Run Project",
             "type": "process",
-            "command": "${env:HOME}/.pico-sdk/picotool/2.2.0-a4/picotool/picotool",
+            "command": "picotool",
             "args": [
                 "load",
                 "${command:raspberry-pi-pico.launchTargetPath}",
@@ -130,6 +139,9 @@
             "problemMatcher": [],
             "windows": {
                 "command": "${env:USERPROFILE}/.pico-sdk/picotool/2.2.0-a4/picotool/picotool.exe"
+            },
+            "osx": {
+                "command": "${env:HOME}/.pico-sdk/picotool/2.2.0-a4/picotool/picotool"
             }
         },
         {
@@ -149,7 +161,7 @@
             "group": "build",
             "problemMatcher": [],
             "windows": {
-                "command": "${env:USERPROFILE}/.pico-sdk/openocd/0.12.0+dev/openocd.exe",
+                "command": "${env:USERPROFILE}/.pico-sdk/openocd/0.12.0+dev/openocd.exe"
             }
         },
         {
@@ -169,7 +181,7 @@
             "group": "build",
             "problemMatcher": [],
             "windows": {
-                "command": "${env:USERPROFILE}/.pico-sdk/openocd/0.12.0+dev/openocd.exe",
+                "command": "${env:USERPROFILE}/.pico-sdk/openocd/0.12.0+dev/openocd.exe"
             }
         },
         {
@@ -195,7 +207,7 @@
             "group": "build",
             "problemMatcher": [],
             "windows": {
-                "command": "${env:USERPROFILE}/.pico-sdk/openocd/0.12.0+dev/openocd.exe",
+                "command": "${env:USERPROFILE}/.pico-sdk/openocd/0.12.0+dev/openocd.exe"
             }
         }
     ]
