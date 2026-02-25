@@ -53,6 +53,13 @@ Do not create long-lived subsystem branches (e.g. `OBC/master`). Instead, use sh
     ```
 2.  **Atomic Commits:** If a protocol change affects both the OBC and the GSU, **update both in the same commit/branch**. This guarantees the system always integrates correctly.
 3.  **Merge to master:** Once verified on hardware, merge back to `master`. Treat `master` as the "Flight Ready" integration branch.
+    *   **Enforce Clean History:** Always use a non-fast-forward merge (`--no-ff`) or a squash merge (`--squash`) to keep `master`'s history clean and readable. Do not use fast-forward merges.
+    ```bash
+    git checkout master
+    git pull origin master
+    git merge --no-ff feat/obc/my-feature
+    git push origin master
+    ```
 4.  **Clean up:** Delete feature branches after merging.
 
 ---
