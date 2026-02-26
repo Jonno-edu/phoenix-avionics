@@ -23,43 +23,16 @@
 #include <FreeRTOS.h>
 #include <queue.h>
 
-// Pull in all payload struct definitions
-#include "norb/topic_defs/sensor_imu.h"
-#include "phoenix_icd.h"
+/* norb_autogen_init_queues() is defined in norb_autogen.c (generated from
+ * the .msg files in src/norb/msg/ by tools/generate_norb_topics.py).
+ * It populates the queue array with one depth-1 queue per topic.
+ * To add a topic: create a .msg file in src/norb/msg/ and rebuild. */
+extern void norb_autogen_init_queues(QueueHandle_t *queues);
 
 static QueueHandle_t topic_queues[TOPIC_COUNT];
 
 void norb_init(void) {
-    // ── Sensor topics ──────────────────────────────────────────────────────
-    topic_queues[TOPIC_SENSOR_IMU] =
-        xQueueCreate(1, sizeof(sensor_imu_t));
-
-    // ── Node health topics ─────────────────────────────────────────────────
-    // TlmIdentificationPayload_t is shared — every node uses the same struct.
-    // node_type field distinguishes which node responded.
-    topic_queues[TOPIC_EPS_IDENT] =
-        xQueueCreate(1, sizeof(TlmIdentificationPayload_t));
-    topic_queues[TOPIC_TRACKING_RADIO_IDENT] =
-        xQueueCreate(1, sizeof(TlmIdentificationPayload_t));
-
-    // ── EPS power topics ───────────────────────────────────────────────────
-    topic_queues[TOPIC_EPS_POWER_STATUS] =
-        xQueueCreate(1, sizeof(EpsPowerStatus_t));
-    topic_queues[TOPIC_EPS_MEASUREMENTS] =
-        xQueueCreate(1, sizeof(EpsMeasurements_t));
-
-    
-    // ── OBC config topics ─────────────────────────────────────────────────
-    topic_queues[TOPIC_OBC_LOG_LEVEL] =
-        xQueueCreate(1, sizeof(EventLogConfig_t)); //TODO Set this somewhere
-
-    topic_queues[TOPIC_OBC_IDENT] =
-        xQueueCreate(1, sizeof(TlmIdentificationPayload_t));
-    // ── Future topics — uncomment as modules are added ─────────────────────
-    // topic_queues[TOPIC_VEHICLE_STATE] = xQueueCreate(1, sizeof(VehicleState_t));
-    // topic_queues[TOPIC_BARO]          = xQueueCreate(1, sizeof(sensor_baro_t));
-    // topic_queues[TOPIC_GPS]           = xQueueCreate(1, sizeof(sensor_gps_t));
-    // topic_queues[TOPIC_ACTUATOR_CMD]  = xQueueCreate(1, sizeof(ActuatorCmd_t));
+    norb_autogen_init_queues(topic_queues);
 }
 
 void norb_publish(topic_id_t topic, const void *data) {

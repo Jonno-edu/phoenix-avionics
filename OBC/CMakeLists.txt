@@ -75,6 +75,44 @@ else()
     FetchContent_MakeAvailable(freertos_kernel)
 endif()
 
+###########################################
+# nORB Topic Code Generation
+###########################################
+
+set(NORB_MSG_DIR ${CMAKE_SOURCE_DIR}/src/norb/msg)
+set(NORB_GEN_DIR ${CMAKE_BINARY_DIR}/norb_generated)
+
+# Glob .msg files. CONFIGURE_DEPENDS: CMake re-runs configure when files are
+# added or removed from the msg/ directory.
+file(GLOB NORB_MSG_FILES CONFIGURE_DEPENDS "${NORB_MSG_DIR}/*.msg")
+
+if(NOT NORB_MSG_FILES)
+    message(FATAL_ERROR "No .msg files found in ${NORB_MSG_DIR}")
+endif()
+
+# Build the expected output list so CMake knows what the command produces.
+set(NORB_GEN_OUTPUTS
+    ${NORB_GEN_DIR}/norb/topics.h
+    ${NORB_GEN_DIR}/norb_autogen.c
+)
+foreach(msg_file ${NORB_MSG_FILES})
+    get_filename_component(topic_name ${msg_file} NAME_WE)
+    list(APPEND NORB_GEN_OUTPUTS ${NORB_GEN_DIR}/norb/topic_defs/${topic_name}.h)
+endforeach()
+
+add_custom_command(
+    OUTPUT  ${NORB_GEN_OUTPUTS}
+    COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/generate_norb_topics.py
+            --outdir  ${NORB_GEN_DIR}
+            --topics  ${NORB_MSG_FILES}
+    DEPENDS ${NORB_MSG_FILES} ${CMAKE_SOURCE_DIR}/tools/generate_norb_topics.py
+    COMMENT "Generating nORB topic headers and init code from .msg files"
+    VERBATIM
+)
+
+# Convenience target so IDEs can trigger generation without a full build.
+add_custom_target(norb_generate DEPENDS ${NORB_GEN_OUTPUTS})
+
 # The application target
 set(TARGET_NAME phoenix_avionics_monorepo)
 
@@ -164,6 +202,7 @@ set(HARDWARE_SOURCES
 set(COMMON_SOURCES
     ${MAIN_SOURCES}
     src/norb/norb.c
+    ${NORB_GEN_DIR}/norb_autogen.c   # generated — populated by norb_generate
     src/modules/sensors/sensors.c
     src/modules/sensors/imu.c
     src/modules/estimator/ekf.c
@@ -216,6 +255,7 @@ target_link_options(${TARGET_NAME} PRIVATE
 ###########################################
 
 target_include_directories(${TARGET_NAME} PRIVATE
+    ${NORB_GEN_DIR}                          # Generated: norb/topics.h, norb/topic_defs/*.h
     .                                        # For FreeRTOSConfig.h at root
     src                                      # For modules/xxx/yyy.h includes
     ${CMAKE_SOURCE_DIR}/lib/phoenix-icd/include   # phoenix_icd.h (shared ICD)

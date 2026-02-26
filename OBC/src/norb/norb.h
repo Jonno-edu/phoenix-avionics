@@ -18,10 +18,12 @@
  * Inspired by PX4's uORB (micro Object Request Broker).
  *
  * ── Adding a new topic ────────────────────────────────────────────────────
- *   1. Add the topic name to topic_id_t in norb/topics.h
- *   2. Define the payload struct in norb/topic_defs/<your_topic>.h
- *   3. Add xQueueCreate() call in norb_init() in norb.c
- *   4. Include your topic_def header in norb.c
+ *   1. Create src/norb/msg/<your_topic>.msg  (see existing files for format)
+ *   2. Build — the generator runs automatically and produces:
+ *        norb/topic_defs/<your_topic>.h   (struct typedef)
+ *        norb/topics.h                    (updated enum)
+ *        norb_autogen.c                   (updated queue creation)
+ *      norb.c never needs to be touched.
  * ─────────────────────────────────────────────────────────────────────────
  */
 

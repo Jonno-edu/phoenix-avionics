@@ -2,11 +2,11 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "SSH: Flash & Monitor",
+      "name": "SSH: Flash",
       "type": "node-terminal",
       "request": "launch",
       "command": "echo 'Deploying to Remote Device...'",
-      "preLaunchTask": "Run Project & Monitor (SSH)"
+      "preLaunchTask": "SSH: Flash Pico"
     },
     {
       "name": "Pico Flash Only (remote OpenOCD)",
