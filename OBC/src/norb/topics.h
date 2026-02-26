@@ -13,6 +13,10 @@ typedef enum {
     TOPIC_EPS_POWER_STATUS,
     TOPIC_EPS_MEASUREMENTS,
 
+    // OBC Configuration
+    TOPIC_OBC_LOG_LEVEL,
+    TOPIC_OBC_IDENT,
+
     TOPIC_COUNT   // ← always last, used to size the queue array
 } topic_id_t;
 

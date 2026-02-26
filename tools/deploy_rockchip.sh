@@ -27,20 +27,26 @@ echo "1. Generating Sensor Configurations..."
 # echo "   - sensor_config.h/py (Updated)"
 # echo "   - telemetry_defs.py (Updated)"
 
-# 2. DEPLOY TO ROCKCHIP
+# 2. DEPLOY TO ROCKCHIP (Using scp for maximum compatibility)
 echo "--------------------------------------"
 echo "2. Deploying to Rockchip ($ROCKCHIP_IP)..."
 
-# Use rsync to sync the entire folder
-rsync -avz --progress --delete \
-    --exclude "__pycache__" \
-    "$LOCAL_PY_DIR/" \
-    $ROCKCHIP_USER@$ROCKCHIP_IP:$REMOTE_DIR/
+# Ensure the remote directory exists first, then copy
+ssh $ROCKCHIP_USER@$ROCKCHIP_IP "mkdir -p $REMOTE_DIR"
+scp -r "$LOCAL_PY_DIR/"* $ROCKCHIP_USER@$ROCKCHIP_IP:$REMOTE_DIR/
 
 if [ $? -eq 0 ]; then
     echo "--------------------------------------"
     echo "SUCCESS: Deployment Complete."
-    # echo "Run this on Rockchip: python3 $REMOTE_DIR/rockchip_streamer.py"
+    
+    echo "Restarting obc_monitor.service..."
+    ssh -t $ROCKCHIP_USER@$ROCKCHIP_IP "sudo systemctl restart obc_monitor.service"
+    
+    if [ $? -eq 0 ]; then
+        echo "Service restarted successfully."
+    else
+        echo "Warning: Failed to restart the service. You may need to check sudo permissions."
+    fi
 else
     echo "--------------------------------------"
     echo "ERROR: Deployment failed. Check IP and SSH keys."

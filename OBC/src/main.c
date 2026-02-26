@@ -14,14 +14,20 @@
 #include "hal/rs485_hal.h"
 #include "bsp_init.h"
 
+#include "modules/datalink/datalink.h"
+#include "phoenix_icd.h"
+
 static void heartbeat_task(void *pvParameters) {
     (void)pvParameters;
     while (1) {
-        printf("Heartbeat: System is running...\n");
+        // printf("Heartbeat: System is running...\n");
+        datalink_sendLog(LOG_LEVEL_DEBUG, "Heartbeat: System is running...");
 
         // Print stack headroom for each task (in words)
-        printf("[STACK] heartbeat:    %lu words free\n",
-               uxTaskGetStackHighWaterMark(NULL));
+        // printf("[STACK] heartbeat:    %lu words free\n",
+        //        uxTaskGetStackHighWaterMark(NULL));
+        datalink_sendLog(LOG_LEVEL_DEBUG, "[STACK] heartbeat:    %lu words free", 
+            uxTaskGetStackHighWaterMark(NULL));
 
         vTaskDelay(pdMS_TO_TICKS(5000)); // every 5s
     }
@@ -42,7 +48,8 @@ int main(void) {
 #endif
 
     rs485_hal_set_raw_debug(false); 
-    printf("Phoenix OBC Booting...\n");
+    // printf("Phoenix OBC Booting...\n");
+    datalink_sendLog(LOG_LEVEL_INFO, "Phoenix OBC Booting...");
 
     // 1. Initialize the nORB queues first
     norb_init();

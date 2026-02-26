@@ -4,6 +4,10 @@
 #include "FreeRTOS.h"
 #include "queue.h"
 
+#include "phoenix_icd.h"
+#include "norb/norb.h"
+#include "norb/topics.h"
+
 // --- Project Implementation of TCTLM high-level API ---
 
 rs485_status_t tctlm_send_telemetry_request(
@@ -36,6 +40,20 @@ rs485_status_t tctlm_send_telemetry_request(
         }
     }
     return RS485_ERR_TIMEOUT;
+}
+
+rs485_status_t tctlm_send_event(
+    rs485_instance_t *inst,
+    uint8_t target_addr,
+    uint8_t event_id,
+    uint8_t *payload,
+    uint8_t len
+) {
+    if (!inst) return RS485_ERR_NO_PACKET;
+
+    // Events are fire-and-forget, so we don't wait for any response.
+    rs485_send_packet(inst, target_addr, MSG_TYPE_EVENT, event_id, payload, len);
+    return RS485_OK;
 }
 
 rs485_status_t tctlm_send_telecommand(
@@ -90,7 +108,19 @@ void TCTLM_processTelecommandAck(RS485_packet_t *pkt) {
 }
 
 void TCTLM_processTelemetryRequest(RS485_packet_t *pkt) {
-    (void)pkt;
+    switch(pkt->msg_desc.id) {
+        case TLM_COMMON_IDENT:
+        {
+            TlmIdentificationPayload_t payload;
+            if (norb_subscribe_poll(TOPIC_OBC_IDENT, &payload)) {
+                datalink_send(pkt->src_addr, MSG_TYPE_TLM_RESP, TLM_COMMON_IDENT, (uint8_t*)&payload, sizeof(TlmIdentificationPayload_t));
+            }
+            break;
+        }
+        default:
+            return;
+            break;
+    }
 }
 
 void TCTLM_processTelemetryResponse(RS485_packet_t *pkt) {

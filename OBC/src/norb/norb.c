@@ -48,6 +48,13 @@ void norb_init(void) {
     topic_queues[TOPIC_EPS_MEASUREMENTS] =
         xQueueCreate(1, sizeof(EpsMeasurements_t));
 
+    
+    // ── OBC config topics ─────────────────────────────────────────────────
+    topic_queues[TOPIC_OBC_LOG_LEVEL] =
+        xQueueCreate(1, sizeof(EventLogConfig_t)); //TODO Set this somewhere
+
+    topic_queues[TOPIC_OBC_IDENT] =
+        xQueueCreate(1, sizeof(TlmIdentificationPayload_t));
     // ── Future topics — uncomment as modules are added ─────────────────────
     // topic_queues[TOPIC_VEHICLE_STATE] = xQueueCreate(1, sizeof(VehicleState_t));
     // topic_queues[TOPIC_BARO]          = xQueueCreate(1, sizeof(sensor_baro_t));

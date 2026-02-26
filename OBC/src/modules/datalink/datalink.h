@@ -9,6 +9,11 @@ typedef enum {
     DATALINK_BAD_RESPONSE,
 } datalink_status_t;
 
+#define CONFIG_LOG_ERROR 1
+#define CONFIG_LOG_WARN  1
+#define CONFIG_LOG_INFO  1
+#define CONFIG_LOG_DEBUG 1
+
 // Must be called once before any transactions (from main or a task init)
 void datalink_init(void);
 
@@ -39,3 +44,6 @@ void datalink_send(
     const uint8_t   *payload,
     uint8_t          len
 );
+
+// Convenience wrapper for sending log messages via datalink
+void datalink_sendLog(uint8_t log_level, const char *format, ...);

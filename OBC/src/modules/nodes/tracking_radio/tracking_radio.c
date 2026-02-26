@@ -46,12 +46,19 @@ bool tracking_radio_request_ident(TlmIdentificationPayload_t *out,
 bool tracking_radio_send_beacon(const TlmTrackingBeaconPayload_t *beacon,
                                 uint32_t timeout_ms)
 {
-    printf("[%s] I: Sending beacon (len=%zu): ", TAG, sizeof(*beacon));
+    // printf("[%s] I: Sending beacon (len=%zu): ", TAG, sizeof(*beacon));
+    // const uint8_t *raw = (const uint8_t *)beacon;
+    // for (size_t i = 0; i < sizeof(*beacon); i++) {
+    //     printf("%02X ", raw[i]);
+    // }
+    // printf("\n");
+    char log_buffer[sizeof(*beacon) * 3 + 1];
+    char *p = log_buffer;
     const uint8_t *raw = (const uint8_t *)beacon;
     for (size_t i = 0; i < sizeof(*beacon); i++) {
-        printf("%02X ", raw[i]);
+        p += sprintf(p, "%02X ", raw[i]);
     }
-    printf("\n");
+    datalink_sendLog(LOG_LEVEL_DEBUG, "[%s] I: Sending beacon (len=%zu): %s", TAG, sizeof(*beacon), log_buffer);
 
     RS485_packet_t resp;
     datalink_status_t st = datalink_request_response(

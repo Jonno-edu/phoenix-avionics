@@ -16,6 +16,8 @@
     #define PACKED_STRUCT
 #endif
 
+#define DBG_BUFFER_SIZE  128 // TODO move?
+
 // ============================================================================
 // DEVICE ADDRESSES
 // ============================================================================
@@ -27,7 +29,7 @@
 // COMMON IDs (supported by ALL nodes)
 #define TC_COMMON_RESET         0x00
 #define TLM_COMMON_IDENT        0x00
-#define TLM_COMMON_LOG          0x05
+#define EVENT_COMMON_LOG        0x01
 
 #define LOG_LEVEL_ERROR         0
 #define LOG_LEVEL_WARN          1
@@ -148,5 +150,13 @@ typedef struct {
     uint8_t  apogee_votes;
 
 } PACKED_STRUCT TlmTrackingBeaconPayload_t;
+
+// EVENT PAYLOAD STRUCTURES
+typedef struct {
+    bool error : 1;
+    bool warn  : 1;
+    bool info  : 1;
+    bool debug : 1;
+} PACKED_STRUCT EventLogConfig_t;
 
 #endif // PHOENIX_ICD_H

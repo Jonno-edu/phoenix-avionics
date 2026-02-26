@@ -10,6 +10,10 @@
 #include "task.h"
 #include "semphr.h"
 
+#include "norb/topics.h"
+#include "norb/norb.h"
+#include <stdarg.h>
+
 static const char *TAG = "Datalink";
 
 // --- Private: two RS485 contexts, invisible to all other modules ---
@@ -47,9 +51,16 @@ void datalink_init(void) {
     
     g_initialised = true;
 
+    EventLogConfig_t config;
+    config.error = CONFIG_LOG_ERROR;
+    config.warn  = CONFIG_LOG_WARN;
+    config.info  = CONFIG_LOG_INFO;
+    config.debug = CONFIG_LOG_DEBUG;
+    norb_publish(TOPIC_OBC_LOG_LEVEL, &config);
+
     // Spawn the RX tasks
-    xTaskCreate(datalink_rs485_rx_task, "dl_rs485_rx", 512, &g_rs485, 5, NULL);
-    xTaskCreate(datalink_usb_rx_task, "dl_usb_rx", 512, &g_usb, 5, NULL);
+    xTaskCreate(datalink_rs485_rx_task, "dl_rs485_rx", 1024, &g_rs485, 5, NULL);
+    xTaskCreate(datalink_usb_rx_task, "dl_usb_rx", 1024, &g_usb, 5, NULL);
 }
 
 datalink_status_t datalink_request_response(
@@ -108,4 +119,49 @@ void datalink_send(
                       (uint8_t *)payload,
                       len);
     xSemaphoreGive(g_bus_mutex);
+}
+
+void datalink_sendLog(uint8_t log_level, const char *format, ...) {
+
+    bool send_allowed = false;
+
+    EventLogConfig_t config;
+    norb_subscribe_poll(TOPIC_OBC_LOG_LEVEL, &config);
+
+    switch (log_level) {
+        case LOG_LEVEL_ERROR: send_allowed = config.error; break;
+        case LOG_LEVEL_WARN:  send_allowed = config.warn;  break;
+        case LOG_LEVEL_INFO: send_allowed = config.info;  break;
+        case LOG_LEVEL_DEBUG: send_allowed = config.debug; break;
+        default: return;
+    }
+
+    if(!send_allowed) {
+        return;
+    }
+
+    // 2. Format the string (Convert numbers to ASCII)
+    char buffer[DBG_BUFFER_SIZE];
+    va_list args;
+
+    va_start(args, format);
+    // vsnprintf protects against buffer overflow
+    int len = vsnprintf(buffer, DBG_BUFFER_SIZE, format, args);
+    va_end(args);
+
+    // If formatting failed or resulted in empty string, do nothing
+    if (len <= 0) {
+        return;
+    }
+
+    // 3. Send via RS485
+    // Cast buffer to uint8_t* as required by your driver
+    tctlm_send_event(
+        &g_usb,             // Use USB instance for logging
+        0xF0,               // Target: Broadcast
+        EVENT_COMMON_LOG,   // Msg ID
+        (uint8_t*)buffer,   // Payload (Now ASCII)
+        (uint8_t)len        // Length calculated by vsnprintf
+    );
+
 }

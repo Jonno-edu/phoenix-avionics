@@ -4,13 +4,27 @@
         {
             "label": "Deploy GSU to Rockchip",
             "type": "shell",
-            "command": "bash tools/deploy_rockchip.sh",
             "group": "build",
             "presentation": {
                 "reveal": "always",
                 "panel": "shared"
             },
-            "problemMatcher": []
+            "problemMatcher": [],
+            "osx": {
+                "command": "bash tools/deploy_rockchip.sh"
+            },
+            "linux": {
+                "command": "bash tools/deploy_rockchip.sh"
+            },
+            "windows": {
+                "command": "tools/deploy_rockchip.sh",
+                "options": {
+                    "shell": {
+                        "executable": "C:\\Program Files\\Git\\bin\\bash.exe",
+                        "args": ["-c"]
+                    }
+                }
+            }
         }
     ]
 }
