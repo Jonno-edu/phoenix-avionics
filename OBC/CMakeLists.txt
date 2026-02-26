@@ -79,7 +79,7 @@ endif()
 # nORB Topic Code Generation
 ###########################################
 
-set(NORB_MSG_DIR ${CMAKE_SOURCE_DIR}/src/norb/msg)
+set(NORB_MSG_DIR ${CMAKE_SOURCE_DIR}/msg)
 set(NORB_GEN_DIR ${CMAKE_BINARY_DIR}/norb_generated)
 
 # Glob .msg files. CONFIGURE_DEPENDS: CMake re-runs configure when files are
@@ -240,9 +240,35 @@ target_sources(${TARGET_NAME} PRIVATE
 )
 
 # Preserve FreeRTOS symbols for debugger awareness and force debug optimization
-target_compile_options(${TARGET_NAME} PRIVATE 
+target_compile_options(${TARGET_NAME} PRIVATE
     $<$<CONFIG:Debug>:-O0 -fno-lto -fno-optimize-sibling-calls>
+
+    # # ── NASA Power of Ten / DO-178C strict auditing ────────────────────────
+    # # Applied to project sources only (not FreeRTOS/Pico SDK) via PRIVATE.
+
+    # # Rule 10: Zero Warnings — treat every warning as a hard error
+    # -Wall               # Standard warning set
+    # -Wextra             # Extra warnings (sign comparisons, unused params, etc.)
+    # -Wpedantic          # Enforce ISO C; reject non-portable GNU extensions
+    # -Werror             # Warnings are build failures
+
+    # # Rule 7: Check all return values
+    # -Werror=unused-result   # Ignoring a return value is a build error
+
+    # # Rule 6: Smallest possible scope — catch name shadowing
+    # -Wshadow            # Local variable shadows a global/outer-scope variable
+
+    # # Rules 3 & 9: Memory and pointer safety
+    # -Wcast-qual         # Casting away const is forbidden
+    # -Wconversion        # Implicit narrowing conversions (e.g. uint32_t → int16_t)
+    # -Wnull-dereference  # Statically detectable null-pointer dereferences
+
+    # # DO-178C: No hidden dynamic stack allocation
+    # -Wvla               # Variable Length Arrays are forbidden
+    # -Walloca            # alloca() is forbidden
 )
+
+
 
 target_link_options(${TARGET_NAME} PRIVATE
     -Wl,--undefined=pxCurrentTCB
@@ -303,17 +329,11 @@ if(BUILD_FOR_HOST)
         -pthread
     )
     
-    add_library(FreeRTOS-Kernel-Heap3 STATIC
-        ${FREERTOS_KERNEL_PATH}/portable/MemMang/heap_3.c
-    )
-    
-    target_link_libraries(FreeRTOS-Kernel-Heap3 PUBLIC FreeRTOS-Kernel)
     target_link_libraries(FreeRTOS-Kernel PUBLIC pthread)
 
     target_link_libraries(${TARGET_NAME} PRIVATE
         freertos_config
         FreeRTOS-Kernel
-        FreeRTOS-Kernel-Heap3
     )
 else()
     # For Pico builds
@@ -327,7 +347,6 @@ else()
 
         freertos_config
         FreeRTOS-Kernel
-        FreeRTOS-Kernel-Heap3
     )
 
     pico_add_extra_outputs(${TARGET_NAME})

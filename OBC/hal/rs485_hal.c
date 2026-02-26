@@ -10,6 +10,7 @@ static const char *TAG = "RS485_HAL";
 
 static volatile bool g_raw_debug_enabled = false;
 static SemaphoreHandle_t g_rx_sem = NULL;
+static StaticSemaphore_t g_rx_sem_buf;
 
 void rs485_hal_set_raw_debug(bool enabled) {
     g_raw_debug_enabled = enabled;
@@ -75,7 +76,7 @@ bool rs485_hal_raw_debug_enabled(void) {
 
     void rs485_hal_init(void) {
         if (!g_rx_sem) {
-            g_rx_sem = xSemaphoreCreateBinary();
+            g_rx_sem = xSemaphoreCreateBinaryStatic(&g_rx_sem_buf);
         }
 
         uart_init(RS485_UART_ID, RS485_BAUD_RATE);

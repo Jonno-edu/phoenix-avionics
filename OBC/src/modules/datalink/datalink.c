@@ -23,6 +23,20 @@ static SemaphoreHandle_t g_bus_mutex = NULL;
 static SemaphoreHandle_t g_usb_mutex = NULL;
 static bool g_initialised = false;
 
+/* Static memory for FreeRTOS objects (no dynamic allocation) */
+static StaticQueue_t     g_rs485_queue_buf;
+static uint8_t           g_rs485_queue_storage[1 * sizeof(RS485_packet_t)];
+static StaticSemaphore_t g_bus_mutex_buf;
+
+static StaticQueue_t     g_usb_queue_buf;
+static uint8_t           g_usb_queue_storage[1 * sizeof(RS485_packet_t)];
+static StaticSemaphore_t g_usb_mutex_buf;
+
+static StaticTask_t dl_rs485_tcb;
+static StackType_t  dl_rs485_stack[1024];
+static StaticTask_t dl_usb_tcb;
+static StackType_t  dl_usb_stack[1024];
+
 static void rs485_tx_callback(const uint8_t *data, uint16_t len) {
     platform_send_mux(data, len);
 }
@@ -41,13 +55,15 @@ void datalink_init(void) {
     
     // Init RS485
     rs485_init(&g_rs485, rs485_tx_callback, ADDR_OBC);
-    g_rs485.resp_queue = xQueueCreate(1, sizeof(RS485_packet_t));
-    g_bus_mutex = xSemaphoreCreateMutex();
+    g_rs485.resp_queue = xQueueCreateStatic(1, sizeof(RS485_packet_t),
+                                            g_rs485_queue_storage, &g_rs485_queue_buf);
+    g_bus_mutex = xSemaphoreCreateMutexStatic(&g_bus_mutex_buf);
     
     // Init USB
     rs485_init(&g_usb, usb_tx_callback, ADDR_OBC);
-    g_usb.resp_queue = xQueueCreate(1, sizeof(RS485_packet_t));
-    g_usb_mutex = xSemaphoreCreateMutex();
+    g_usb.resp_queue = xQueueCreateStatic(1, sizeof(RS485_packet_t),
+                                          g_usb_queue_storage, &g_usb_queue_buf);
+    g_usb_mutex = xSemaphoreCreateMutexStatic(&g_usb_mutex_buf);
     
     g_initialised = true;
 
@@ -59,8 +75,10 @@ void datalink_init(void) {
     norb_publish(TOPIC_OBC_LOG_LEVEL, &config);
 
     // Spawn the RX tasks
-    xTaskCreate(datalink_rs485_rx_task, "dl_rs485_rx", 1024, &g_rs485, 5, NULL);
-    xTaskCreate(datalink_usb_rx_task, "dl_usb_rx", 1024, &g_usb, 5, NULL);
+    xTaskCreateStatic(datalink_rs485_rx_task, "dl_rs485_rx", 1024, &g_rs485, 5,
+                      dl_rs485_stack, &dl_rs485_tcb);
+    xTaskCreateStatic(datalink_usb_rx_task, "dl_usb_rx", 1024, &g_usb, 5,
+                      dl_usb_stack, &dl_usb_tcb);
 }
 
 datalink_status_t datalink_request_response(

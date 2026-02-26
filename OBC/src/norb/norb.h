@@ -18,7 +18,7 @@
  * Inspired by PX4's uORB (micro Object Request Broker).
  *
  * ── Adding a new topic ────────────────────────────────────────────────────
- *   1. Create src/norb/msg/<your_topic>.msg  (see existing files for format)
+ *   1. Create msg/<your_topic>.msg  (see existing files for format)
  *   2. Build — the generator runs automatically and produces:
  *        norb/topic_defs/<your_topic>.h   (struct typedef)
  *        norb/topics.h                    (updated enum)

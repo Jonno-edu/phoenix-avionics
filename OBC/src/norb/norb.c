@@ -24,9 +24,9 @@
 #include <queue.h>
 
 /* norb_autogen_init_queues() is defined in norb_autogen.c (generated from
- * the .msg files in src/norb/msg/ by tools/generate_norb_topics.py).
+ * the .msg files in msg/ by tools/generate_norb_topics.py).
  * It populates the queue array with one depth-1 queue per topic.
- * To add a topic: create a .msg file in src/norb/msg/ and rebuild. */
+ * To add a topic: create a .msg file in msg/ and rebuild. */
 extern void norb_autogen_init_queues(QueueHandle_t *queues);
 
 static QueueHandle_t topic_queues[TOPIC_COUNT];

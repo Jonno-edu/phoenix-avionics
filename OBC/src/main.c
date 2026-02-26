@@ -17,6 +17,13 @@
 #include "modules/datalink/datalink.h"
 #include "phoenix_icd.h"
 
+/* Static memory for all application tasks */
+static StaticTask_t heartbeat_tcb;
+static StackType_t  heartbeat_stack[512];
+
+static StaticTask_t housekeeping_tcb;
+static StackType_t  housekeeping_stack[2048];
+
 static void heartbeat_task(void *pvParameters) {
     (void)pvParameters;
     while (1) {
@@ -55,19 +62,21 @@ int main(void) {
     norb_init();
 
     // 2. Create the heartbeat task
-    xTaskCreate(heartbeat_task, "heartbeat", 512, NULL, 1, NULL);
+    xTaskCreateStatic(heartbeat_task, "heartbeat", 512, NULL, 1,
+                      heartbeat_stack, &heartbeat_tcb);
 
     // 3. Initialize modules
     sensors_init();
     estimator_init();
 
     // 4. Create the housekeeping task (Step 3: datalink_init)
-    xTaskCreate(housekeeping_task,
-            "housekeeping",
-            2048,          // stack words — rs485_send_packet needs ~1200 bytes alone
-            NULL,
-            2,             // priority
-            NULL);
+    xTaskCreateStatic(housekeeping_task,
+                      "housekeeping",
+                      2048,   // stack words — rs485_send_packet needs ~1200 bytes alone
+                      NULL,
+                      2,      // priority
+                      housekeeping_stack,
+                      &housekeeping_tcb);
 
     // 5. Hand control over to FreeRTOS
     vTaskStartScheduler();
@@ -77,3 +86,34 @@ int main(void) {
     }
     return 0;
 }
+
+/* ----------------------------------------------------------------
+ * FreeRTOS static-allocation callbacks
+ * Required when configSUPPORT_STATIC_ALLOCATION = 1 and
+ * configSUPPORT_DYNAMIC_ALLOCATION = 0.
+ * ---------------------------------------------------------------- */
+void vApplicationGetIdleTaskMemory( StaticTask_t **ppxIdleTaskTCBBuffer,
+                                    StackType_t  **ppxIdleTaskStackBuffer,
+                                    uint32_t      *pulIdleTaskStackSize )
+{
+    static StaticTask_t xIdleTaskTCB;
+    static StackType_t  uxIdleTaskStack[ configMINIMAL_STACK_SIZE ];
+
+    *ppxIdleTaskTCBBuffer   = &xIdleTaskTCB;
+    *ppxIdleTaskStackBuffer = uxIdleTaskStack;
+    *pulIdleTaskStackSize   = configMINIMAL_STACK_SIZE;
+}
+
+void vApplicationGetTimerTaskMemory( StaticTask_t **ppxTimerTaskTCBBuffer,
+                                     StackType_t  **ppxTimerTaskStackBuffer,
+                                     uint32_t      *pulTimerTaskStackSize )
+{
+    static StaticTask_t xTimerTaskTCB;
+    static StackType_t  uxTimerTaskStack[ configTIMER_TASK_STACK_DEPTH ];
+
+    *ppxTimerTaskTCBBuffer   = &xTimerTaskTCB;
+    *ppxTimerTaskStackBuffer = uxTimerTaskStack;
+    *pulTimerTaskStackSize   = configTIMER_TASK_STACK_DEPTH;
+}
+
+

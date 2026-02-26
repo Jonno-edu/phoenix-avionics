@@ -26,6 +26,10 @@ void ekf_task(void *params) {
     }
 }
 
+static StaticTask_t ekf_tcb;
+static StackType_t  ekf_stack[2048];
+
 void estimator_init(void) {
-    xTaskCreate(ekf_task, "EKF", 2048, NULL, configMAX_PRIORITIES - 2, NULL);
+    xTaskCreateStatic(ekf_task, "EKF", 2048, NULL, configMAX_PRIORITIES - 2,
+                      ekf_stack, &ekf_tcb);
 }
