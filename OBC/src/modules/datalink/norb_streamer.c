@@ -28,6 +28,7 @@
 #include "norb/topic_defs/obc_log_level.h"
 #include "norb/topic_defs/sensor_imu.h"
 #include "norb/topic_defs/tracking_radio_ident.h"
+#include "norb/topic_defs/vehicle_imu.h"
 #include "norb/topic_defs/vehicle_state.h"
 
 #include "FreeRTOS.h"
@@ -54,6 +55,7 @@ static const uint8_t k_topic_sizes[TOPIC_COUNT] = {
     [TOPIC_OBC_LOG_LEVEL]        = (uint8_t)sizeof(obc_log_level_t),          /*  1 B */
     [TOPIC_SENSOR_IMU]           = (uint8_t)sizeof(sensor_imu_t),             /* 36 B */
     [TOPIC_TRACKING_RADIO_IDENT] = (uint8_t)sizeof(tracking_radio_ident_t),   /*  8 B */
+    [TOPIC_VEHICLE_IMU]          = (uint8_t)sizeof(vehicle_imu_t),            /* 28 B */
     [TOPIC_VEHICLE_STATE]        = (uint8_t)sizeof(vehicle_state_t),          /* 76 B */
 };
 

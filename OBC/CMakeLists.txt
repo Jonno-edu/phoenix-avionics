@@ -182,20 +182,20 @@ set(HAL_SOURCES
 #     ${CMAKE_SOURCE_DIR}/lib/esl-comms/src/rs485_protocol.c
 # )
 
-# set(MATH_LIB_SOURCES
-#     ${CMAKE_SOURCE_DIR}/lib/esl-math/src/dcm.c
-#     ${CMAKE_SOURCE_DIR}/lib/esl-math/src/matrix.c
-#     ${CMAKE_SOURCE_DIR}/lib/esl-math/src/quaternion.c
-#     ${CMAKE_SOURCE_DIR}/lib/esl-math/src/vector2.c
-#     ${CMAKE_SOURCE_DIR}/lib/esl-math/src/vector3.c
-# )
+set(MATH_LIB_SOURCES
+    ${CMAKE_SOURCE_DIR}/lib/esl-math/src/dcm.c
+    ${CMAKE_SOURCE_DIR}/lib/esl-math/src/matrix.c
+    ${CMAKE_SOURCE_DIR}/lib/esl-math/src/quaternion.c
+    ${CMAKE_SOURCE_DIR}/lib/esl-math/src/vector2.c
+    ${CMAKE_SOURCE_DIR}/lib/esl-math/src/vector3.c
+)
 
 # Hardware-specific sources (only for Pico builds)
 set(HARDWARE_SOURCES
     hal/rs485_hal.c
-#     ${CMAKE_SOURCE_DIR}/lib/esl-sensors/src/baroMS5607.c
-#     ${CMAKE_SOURCE_DIR}/lib/esl-sensors/src/tempTMP117.c
-#     ${CMAKE_SOURCE_DIR}/lib/esl-sensors/src/i2c.c
+    ${CMAKE_SOURCE_DIR}/lib/esl-sensors/src/baroMS5607.c
+    ${CMAKE_SOURCE_DIR}/lib/esl-sensors/src/tempTMP117.c
+    ${CMAKE_SOURCE_DIR}/lib/esl-sensors/src/i2c.c
 )
 
 # Combine common sources
@@ -205,6 +205,8 @@ set(COMMON_SOURCES
     ${NORB_GEN_DIR}/norb_autogen.c   # generated — populated by norb_generate
     src/modules/sensors/sensors.c
     src/modules/sensors/imu.c
+    src/modules/sensors/integrator.c
+    src/modules/sensors/sim/sim_imu.c
     src/modules/estimator/ekf.c
     src/modules/datalink/datalink.c
     src/modules/datalink/receiver.c
@@ -223,7 +225,7 @@ set(COMMON_SOURCES
     # ${SUBSYSTEMS_SOURCES}
     # ${UTIL_SOURCES}
     # ${COMMS_LIB_SOURCES}
-    # ${MATH_LIB_SOURCES}
+    ${MATH_LIB_SOURCES}
 )
 
 ###########################################

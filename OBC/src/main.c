@@ -66,6 +66,7 @@ int main(void) {
                       heartbeat_stack, &heartbeat_tcb);
 
     // 3. Initialize modules
+    bsp_peripheral_init();
     sensors_init();
     estimator_init();
 
