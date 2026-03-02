@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>nORB Listener</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root { --bg-color: #121212; --card-bg: #1e1e1e; --accent-color: #0dcaf0; --text-muted: #8b949e; --border-color: #30363d; }
+        body { background-color: var(--bg-color); height: 100vh; overflow: hidden; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #fff; display: flex; flex-direction: column; }
+        
+        .header { background-color: #161b22; border-bottom: 1px solid var(--border-color); padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; }
+        .header h4 { margin: 0; }
+        
+        .main-container { display: flex; flex: 1; overflow: hidden; }
+        
+        .sidebar { width: 250px; background-color: #161b22; border-right: 1px solid var(--border-color); padding: 15px; overflow-y: auto; }
+        .topic-list { list-style: none; padding: 0; margin: 0; }
+        .topic-item { padding: 8px 12px; border-radius: 6px; cursor: pointer; margin-bottom: 5px; transition: background-color 0.2s; display: flex; justify-content: space-between; align-items: center; }
+        .topic-item:hover { background-color: #21262d; }
+        .topic-item.active { background-color: #238636; color: #fff; }
+        
+        .terminal-area { flex: 1; display: flex; flex-direction: column; padding: 20px; background-color: var(--bg-color); }
+        .terminal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .terminal-window { flex: 1; background-color: #0d1117; border: 1px solid var(--border-color); border-radius: 8px; padding: 15px; font-family: 'Consolas', 'Courier New', monospace; font-size: 0.85rem; color: #e6edf3; overflow-y: auto; white-space: pre-wrap; }
+        
+        .log-entry { margin-bottom: 5px; border-bottom: 1px solid #30363d; padding-bottom: 5px; }
+        .log-time { color: #8b949e; margin-right: 10px; }
+        .log-key { color: #79c0ff; }
+        .log-value { color: #a5d6ff; }
+        .log-value.number { color: #d2a8ff; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div>
+        <h4><i class="fas fa-satellite-dish text-info"></i> nORB Listener</h4>
+        <div class="small text-muted">Live Telemetry Stream Monitor</div>
+    </div>
+    <div>
+        <a href="/" class="btn btn-outline-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+    </div>
+</div>
+
+<div class="main-container">
+    <div class="sidebar">
+        <h6 class="text-muted mb-3 text-uppercase" style="font-size: 0.75rem; letter-spacing: 1px;">Available Topics</h6>
+        <ul class="topic-list" id="topic-list">
+            <!-- Populated dynamically from /api/config on page load -->
+        </ul>
+    </div>
+    
+    <div class="terminal-area">
+        <div class="terminal-header">
+            <h5 id="current-topic-title" class="mb-0 text-info">Select a topic to listen</h5>
+            <div class="btn-group">
+                <button class="btn btn-sm btn-outline-secondary" id="btn-pause" onclick="togglePause()"><i class="fas fa-pause"></i> Pause</button>
+                <button class="btn btn-sm btn-outline-danger" onclick="clearTerminal()"><i class="fas fa-trash"></i> Clear</button>
+            </div>
+        </div>
+        <div class="terminal-window" id="terminal">
+            <div class="text-muted text-center mt-5">Waiting for data...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // -----------------------------------------------------------------------
+    // State
+    // -----------------------------------------------------------------------
+    let topics         = [];      // [{id, name}, ...] from /api/config
+    let currentTopicId = null;    // numeric topic_id currently streaming
+    let eventSource    = null;    // active EventSource connection
+    let isPaused       = false;
+    const msgCounts    = {};      // topicId -> count
+
+    // -----------------------------------------------------------------------
+    // Boot: load topics from config, build sidebar
+    // -----------------------------------------------------------------------
+    async function initPage() {
+        try {
+            const res    = await fetch('/api/config');
+            const config = await res.json();
+            topics = config.norb_topics || [];
+
+            const list = document.getElementById('topic-list');
+            if (topics.length === 0) {
+                list.innerHTML = '<li class="p-2 text-muted small">No nORB topics registered.<br>Add add_norb_topic() calls to obc_monitor.py</li>';
+                return;
+            }
+
+            topics.forEach((t, idx) => {
+                msgCounts[t.id] = 0;
+                const li = document.createElement('li');
+                li.className = 'topic-item' + (idx === 0 ? ' active' : '');
+                li.id = `topic-item-${t.id}`;
+                li.innerHTML = `<span><i class="fas fa-satellite-dish me-2"></i> ${t.name}</span>
+                                <span class="badge bg-secondary rounded-pill" id="badge-${t.id}">0</span>`;
+                li.onclick = () => selectTopic(t.id, t.name, li);
+                list.appendChild(li);
+            });
+
+            // Auto-select the first topic
+            const first = topics[0];
+            const firstEl = document.getElementById(`topic-item-${first.id}`);
+            selectTopic(first.id, first.name, firstEl);
+        } catch (e) {
+            console.error('Failed to load config:', e);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Topic selection: subscribe on OBC + open SSE stream
+    // -----------------------------------------------------------------------
+    async function selectTopic(topicId, topicName, listEl) {
+        // --- Tear down previous stream ---
+        if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+        }
+        // Unsubscribe previous topic (rate_ms=0)
+        if (currentTopicId !== null && currentTopicId !== topicId) {
+            await fetch('/api/norb/subscribe', {
+                method:  'POST',
+                headers: {'Content-Type': 'application/json'},
+                body:    JSON.stringify({ topic_id: currentTopicId, rate_ms: 0 }),
+            }).catch(() => {});
+        }
+
+        // --- Update UI ---
+        document.querySelectorAll('.topic-item').forEach(el => el.classList.remove('active'));
+        if (listEl) listEl.classList.add('active');
+        currentTopicId = topicId;
+        document.getElementById('current-topic-title').innerText = `Listening: ${topicName}`;
+        clearTerminal();
+
+        // --- Subscribe on OBC ---
+        const subRes = await fetch('/api/norb/subscribe', {
+            method:  'POST',
+            headers: {'Content-Type': 'application/json'},
+            body:    JSON.stringify({ topic_id: topicId, rate_ms: 100 }),
+        });
+        const sub = await subRes.json();
+        if (!sub.success) {
+            appendRaw(`<span class="text-warning">[WARN] Subscribe failed: ${sub.error || 'unknown'}</span>`);
+            return;
+        }
+
+        // --- Open SSE stream ---
+        eventSource = new EventSource(`/api/norb/stream?topic_id=${topicId}`);
+        eventSource.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            msgCounts[topicId] = (msgCounts[topicId] || 0) + 1;
+            const badge = document.getElementById(`badge-${topicId}`);
+            if (badge) badge.innerText = msgCounts[topicId];
+            appendLog(data);
+        };
+        eventSource.onerror = () => {
+            appendRaw('<span class="text-danger">[ERROR] SSE stream disconnected.</span>');
+        };
+    }
+
+    // -----------------------------------------------------------------------
+    // Terminal helpers
+    // -----------------------------------------------------------------------
+    function togglePause() {
+        isPaused = !isPaused;
+        const btn = document.getElementById('btn-pause');
+        if (isPaused) {
+            btn.innerHTML = '<i class="fas fa-play"></i> Resume';
+            btn.classList.replace('btn-outline-secondary', 'btn-outline-success');
+        } else {
+            btn.innerHTML = '<i class="fas fa-pause"></i> Pause';
+            btn.classList.replace('btn-outline-success', 'btn-outline-secondary');
+        }
+    }
+
+    function clearTerminal() {
+        document.getElementById('terminal').innerHTML = '';
+    }
+
+    function appendRaw(html) {
+        if (isPaused) return;
+        const term = document.getElementById('terminal');
+        const div  = document.createElement('div');
+        div.className = 'log-entry';
+        div.innerHTML = html;
+        term.appendChild(div);
+        term.scrollTop = term.scrollHeight;
+    }
+
+    function appendLog(data) {
+        if (isPaused) return;
+        const term = document.getElementById('terminal');
+        const time = data._time || new Date().toISOString().split('T')[1].slice(0, -1);
+
+        const skipKeys = new Set(['_topic', '_time']);
+        const keys = Object.keys(data).filter(k => !skipKeys.has(k));
+
+        let inner = `<span class="log-time">[${time}]</span> { `;
+        keys.forEach((k, i) => {
+            const val = data[k];
+            const formatted = typeof val === 'number'
+                ? `<span class="log-value number">${Number.isInteger(val) ? val : val.toFixed(4)}</span>`
+                : `<span class="log-value">"${val}"</span>`;
+            inner += `<span class="log-key">${k}</span>: ${formatted}`;
+            if (i < keys.length - 1) inner += ', ';
+        });
+        inner += ' }';
+
+        appendRaw(inner);
+
+        // Keep at most 200 entries
+        while (term.children.length > 200) {
+            term.removeChild(term.firstChild);
+        }
+    }
+
+    // Start on load
+    initPage();
+</script>
+</body>
+</html>

@@ -1,6 +1,7 @@
 #include "datalink.h"
 #include "rs485_protocol.h"
 #include "tctlm.h"
+#include "norb_streamer.h"
 #include "hal/platform_hal.h"
 #include "hal/rs485_hal.h"
 #include "phoenix_icd.h"
@@ -66,6 +67,9 @@ void datalink_init(void) {
     g_usb_mutex = xSemaphoreCreateMutexStatic(&g_usb_mutex_buf);
     
     g_initialised = true;
+
+    /* Start the nORB topic streamer task */
+    norb_streamer_init();
 
     EventLogConfig_t config;
     config.error = CONFIG_LOG_ERROR;

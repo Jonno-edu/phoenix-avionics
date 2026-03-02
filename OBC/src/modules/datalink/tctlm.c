@@ -1,5 +1,6 @@
 #include "tctlm.h"
 #include "datalink.h"
+#include "norb_streamer.h"
 #include <stddef.h>
 #include "FreeRTOS.h"
 #include "queue.h"
@@ -97,7 +98,13 @@ void TCTLM_processEvent(RS485_packet_t *pkt) {
 }
 
 void TCTLM_processTelecommand(RS485_packet_t *pkt) {
-    (void)pkt;
+    switch (pkt->msg_desc.id) {
+        case TC_OBC_NORB_SUBSCRIBE:
+            norb_streamer_handle_tc(pkt);
+            break;
+        default:
+            break;
+    }
 }
 
 void TCTLM_processTelecommandAck(RS485_packet_t *pkt) {

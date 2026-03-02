@@ -42,6 +42,61 @@ mc.add_telemetry(
 )
 
 # ============================================================================
+# nORB TOPIC STREAMING
+# Register topics that the GSU can subscribe to via the nORB Listener page.
+# topic_id values match the topic_id_t enum in build/norb_generated/norb/topics.h
+# struct_fmt is Python struct format (little-endian '<', matching OBC layout).
+# ============================================================================
+
+# TOPIC_OBC_IDENT = 4  —  TlmIdentificationPayload_t: uint8×4 + uint16×2 = 8 B
+mc.add_norb_topic(
+    topic_id=4,
+    name="obc_ident",
+    struct_fmt='<BBBBHH',
+    struct_fields=['node_type', 'interface_version', 'firmware_major', 'firmware_minor', 'uptime_seconds', 'uptime_ms'],
+)
+
+# TOPIC_BAROMETER = 0  —  barometer_t: uint64 + float×3 = 20 B
+mc.add_norb_topic(
+    topic_id=0,
+    name="barometer",
+    struct_fmt='<Qfff',
+    struct_fields=['timestamp_us', 'pressure_pa', 'temperature_c', 'altitude_m'],
+)
+
+# TOPIC_SENSOR_IMU = 6  —  sensor_imu_t: uint64 + float×7 = 36 B
+mc.add_norb_topic(
+    topic_id=6,
+    name="sensor_imu",
+    struct_fmt='<Qfffffff',
+    struct_fields=['timestamp_us', 'accel_x', 'accel_y', 'accel_z', 'gyro_x', 'gyro_y', 'gyro_z', 'temperature_c'],
+)
+
+# TOPIC_VEHICLE_STATE = 8  —  vehicle_state_t: uint64 + float×17 = 76 B
+mc.add_norb_topic(
+    topic_id=8,
+    name="vehicle_state",
+    struct_fmt='<Qfffffffffffffffff',
+    struct_fields=[
+        'timestamp_us',
+        'qw', 'qx', 'qy', 'qz',
+        'vel_n', 'vel_e', 'vel_d',
+        'pos_n', 'pos_e', 'pos_d',
+        'acc_bias_x', 'acc_bias_y', 'acc_bias_z',
+        'gyro_bias_x', 'gyro_bias_y', 'gyro_bias_z',
+        'altitude_m',
+    ],
+)
+
+# TOPIC_EPS_MEASUREMENTS = 2  —  EpsMeasurements_t: uint16×5 = 10 B
+mc.add_norb_topic(
+    topic_id=2,
+    name="eps_measurements",
+    struct_fmt='<HHHHH',
+    struct_fields=['batt_voltage_mv', 'batt_current_ma', 'current_3v3_1_ma', 'current_5v_1_ma', 'current_12v_ma'],
+)
+
+# ============================================================================
 # EXECUTION
 # ============================================================================
 

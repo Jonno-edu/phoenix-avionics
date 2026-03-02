@@ -53,11 +53,18 @@
 #define TC_OBC_AVIONICS_MODE    0x09
 #define TC_OBC_ENABLE_TUNNEL    0x0A
 #define TC_OBC_FLIGHT_STATE     0x0B
+#define TC_OBC_NORB_SUBSCRIBE   0x0C  // Payload: NorbSubscribePayload_t
 
 #define TLM_OBC_SENSOR_DATA        0x02
 #define TLM_OBC_HIGH_SPEED_STREAM  0x0B
+#define TLM_OBC_NORB_STREAM        0x0C  // Payload: [uint8_t topic_id][raw struct bytes]
 
 // TELEMETRY PAYLOAD STRUCTURES
+typedef struct {
+    uint8_t  topic_id;   // topic_id_t value (0..TOPIC_COUNT-1)
+    uint16_t rate_ms;    // streaming interval in ms; 0 = unsubscribe
+} PACKED_STRUCT NorbSubscribePayload_t;
+
 typedef struct {
     uint8_t  node_type;
     uint8_t  interface_version;

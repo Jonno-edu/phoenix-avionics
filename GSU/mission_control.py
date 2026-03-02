@@ -1,11 +1,17 @@
 import struct
 import threading
+import json
 import io
 import csv
 from datetime import datetime
 from collections import deque
+from queue import Queue, Empty
 from flask import Flask, render_template, jsonify, request, Response
 import rs485_app_lib as lib
+
+# ICD constant mirrored from phoenix_icd.h
+_TC_OBC_NORB_SUBSCRIBE = 0x0C
+_TLM_OBC_NORB_STREAM   = 0x0C
 
 class MissionControlApp:
     def __init__(self, title="Mission Control Dashboard", host_addr=240, broadcast_addr=0, target_addr=2, port="/dev/ttyACM0", baud=115200):
@@ -26,15 +32,21 @@ class MissionControlApp:
         # Definitions
         self.tm_defs = {}   
         self.tc_defs = {}   
+
+        # nORB streaming — keyed by numeric topic_id
+        self.norb_defs = {}           # topic_id -> {name, fmt, fields}
+        self.norb_stream_clients = {} # topic_id -> list[Queue]
+
         self.ui_config = {
             "title": self.title,
-            "target_addr": target_addr, # Added
-            "port": port,               # Added
-            "baud": baud,               # Added
+            "target_addr": target_addr,
+            "port": port,
+            "baud": baud,
             "tm_requests": [],
             "display_cards": [],
             "command_cards": [],
-            "plots": []
+            "plots": [],
+            "norb_topics": [],         # populated by add_norb_topic()
         }
 
         self._setup_routes()
@@ -59,6 +71,33 @@ class MissionControlApp:
                 self.history[plot["id"]] = deque(maxlen=5000)
                 self.tm_defs[tm_id].setdefault("plots", []).append(plot["id"])
 
+    def add_norb_topic(self, topic_id, name, struct_fmt, struct_fields):
+        """
+        Register a nORB topic for streaming via the nORB Listener page.
+
+        topic_id     : Numeric value of topic_id_t enum on the OBC
+                       (TOPIC_BAROMETER=0, TOPIC_SENSOR_IMU=6, etc.)
+        name         : Human-readable topic name (e.g. 'barometer').
+        struct_fmt   : Python struct format string, little-endian.
+                       e.g. '<Qfff' for barometer_t (uint64 + 3 floats).
+        struct_fields: List of field name strings matching struct_fmt.
+
+        Example:
+            mc.add_norb_topic(
+                topic_id=0,
+                name='barometer',
+                struct_fmt='<Qfff',
+                struct_fields=['timestamp_us', 'pressure_pa', 'temperature_c', 'altitude_m']
+            )
+        """
+        self.norb_defs[topic_id] = {
+            "name":   name,
+            "fmt":    struct_fmt,
+            "fields": struct_fields,
+        }
+        self.norb_stream_clients[topic_id] = []
+        self.ui_config["norb_topics"].append({"id": topic_id, "name": name})
+
     def add_telecommand(self, tc_id, name, group="General", fields=None, packer=None):
         """
         Register a Telecommand.
@@ -75,9 +114,36 @@ class MissionControlApp:
         group_card["commands"].append({"id": tc_id, "name": name, "fields": fields or []})
 
     def run(self, host='0.0.0.0', port=5000, debug=True):
-        self.app.run(host=host, port=port, debug=debug, use_reloader=False)
+        # threaded=True is required for Server-Sent Events (SSE) to work;
+        # each SSE client holds a long-lived response in its own thread.
+        self.app.run(host=host, port=port, debug=debug, use_reloader=False, threaded=True)
 
     # --- INTERNAL ENGINE ---
+
+    def _update_norb_stream(self, pkt):
+        """Called when a TLM_OBC_NORB_STREAM packet arrives from the OBC."""
+        raw = pkt["data"]
+        if len(raw) < 1:
+            return
+        topic_id = raw[0]
+        if topic_id not in self.norb_defs:
+            return
+        defn = self.norb_defs[topic_id]
+        payload = raw[1:]
+        try:
+            values = struct.unpack(defn["fmt"], payload)
+            data = dict(zip(defn["fields"], values))
+            data["_topic"] = defn["name"]
+            data["_time"]  = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+            # Push to all SSE clients listening on this topic
+            clients = self.norb_stream_clients.get(topic_id, [])
+            for q in list(clients):
+                try:
+                    q.put_nowait(data)
+                except Exception:
+                    pass  # drop if client queue is full
+        except Exception as e:
+            print(f"nORB stream parse error topic {topic_id}: {e}")
 
     def _update(self, tm_id, pkt):
         ts_rcv = datetime.now().strftime("%H:%M:%S.%f")[:-3]
@@ -104,6 +170,60 @@ class MissionControlApp:
 
         @self.app.route('/api/config', methods=['GET'])
         def get_config(): return jsonify(self.ui_config)
+
+        @self.app.route('/norb_listener')
+        def norb_listener(): return render_template('norb_listener.html')
+
+        @self.app.route('/api/norb/subscribe', methods=['POST'])
+        def norb_subscribe():
+            if not self.connected:
+                return jsonify(success=False, error="Not connected")
+            data = request.json
+            topic_id = int(data.get('topic_id'))
+            rate_ms  = int(data.get('rate_ms', 100))
+            target   = int(data.get('target', self.ui_config['target_addr']))
+            if topic_id not in self.norb_defs:
+                return jsonify(success=False, error="Unknown topic")
+            # NorbSubscribePayload_t: uint8 topic_id, uint16 rate_ms (little-endian)
+            payload = struct.pack('<BH', topic_id, rate_ms)
+            self.link.send_telecommand(target, _TC_OBC_NORB_SUBSCRIBE, payload)
+            return jsonify(success=True)
+
+        @self.app.route('/api/norb/stream')
+        def norb_stream():
+            topic_id = int(request.args.get('topic_id', -1))
+            if topic_id not in self.norb_defs:
+                return jsonify(error="Unknown topic"), 400
+
+            client_queue = Queue(maxsize=200)
+            with self.lock:
+                self.norb_stream_clients[topic_id].append(client_queue)
+
+            def generate():
+                try:
+                    while True:
+                        try:
+                            item = client_queue.get(timeout=1.0)
+                            yield f"data: {json.dumps(item)}\n\n"
+                        except Empty:
+                            yield ": keepalive\n\n"  # prevent proxy timeouts
+                except GeneratorExit:
+                    pass
+                finally:
+                    with self.lock:
+                        try:
+                            self.norb_stream_clients[topic_id].remove(client_queue)
+                        except ValueError:
+                            pass
+
+            return Response(
+                generate(),
+                mimetype='text/event-stream',
+                headers={
+                    'Cache-Control':    'no-cache',
+                    'X-Accel-Buffering': 'no',
+                }
+            )
 
         @self.app.route('/api/status', methods=['GET'])
         def get_status():
@@ -167,6 +287,9 @@ class MissionControlApp:
                     for tm_id in self.tm_defs:
                         self.link.on_tm_report(tm_id, lambda p, id=tm_id: self._update(id, p))
                     
+                    # Register nORB stream handler (TLM_OBC_NORB_STREAM = 0x0C)
+                    self.link.on_tm_report(_TLM_OBC_NORB_STREAM, lambda p: self._update_norb_stream(p))
+
                     self.link.on_event(1, lambda p: self.raw_log.appendleft({"Time": datetime.now().strftime("%H:%M:%S.%f")[:-3], "Dir": "RX", "Type": "EVENT", "ID": 1, "Hex": f"[ASCII] {p['data'].decode('ascii','replace')}"}))
                     for i in range(1, 32): 
                         self.link.on_tc_ack(i, lambda p: self.raw_log.appendleft({"Time": datetime.now().strftime("%H:%M:%S.%f")[:-3], "Dir": "RX", "Type": "ACK", "ID": p['desc']&0x1F, "Hex": "OK"}))

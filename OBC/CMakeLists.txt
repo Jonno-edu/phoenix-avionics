@@ -209,6 +209,7 @@ set(COMMON_SOURCES
     src/modules/datalink/datalink.c
     src/modules/datalink/receiver.c
     src/modules/datalink/tctlm.c
+    src/modules/datalink/norb_streamer.c
     src/modules/nodes/tracking_radio/tracking_radio.c
     src/modules/nodes/eps/eps.c
     src/modules/housekeeping/housekeeping.c
