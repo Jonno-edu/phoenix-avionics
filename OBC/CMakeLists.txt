@@ -208,6 +208,10 @@ set(COMMON_SOURCES
     src/modules/sensors/integrator.c
     src/modules/sensors/sim/sim_imu.c
     src/modules/estimator/ekf.c
+    src/modules/estimator/ekf_core.c
+    src/modules/estimator/fusion/imu_predictor.c
+    src/modules/estimator/ekf_math/symforce_wrapper.cpp
+    gen/cpp/symforce/sym/predict_covariance.cc
     src/modules/datalink/datalink.c
     src/modules/datalink/receiver.c
     src/modules/datalink/tctlm.c
@@ -283,6 +287,31 @@ target_link_options(${TARGET_NAME} PRIVATE
 # Include Directories (NEW MODULE STRUCTURE)
 ###########################################
 
+set(GEN_DIR ${CMAKE_SOURCE_DIR}/gen)
+set(EKF_GEN_SCRIPT ${CMAKE_SOURCE_DIR}/src/modules/estimator/ekf_math/generate_eskf_math.py)
+set(EKF_GEN_FILES 
+    ${GEN_DIR}/cpp/symforce/sym/predict_covariance.h
+    ${GEN_DIR}/cpp/symforce/sym/predict_covariance.cc
+)
+
+# Use the workspace-local virtual environment for SymForce generation
+set(VENV_PYTHON ${CMAKE_SOURCE_DIR}/.venv/bin/python3)
+
+add_custom_command(
+    OUTPUT ${EKF_GEN_FILES}
+    COMMAND ${VENV_PYTHON} ${EKF_GEN_SCRIPT}
+    DEPENDS ${EKF_GEN_SCRIPT}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Generating ESKF math equations via SymForce (using venv)..."
+    VERBATIM
+)
+
+# Create a target for the math generation so other things can depend on it
+add_custom_target(generate_ekf_math DEPENDS ${EKF_GEN_FILES})
+
+# Ensure the main executable waits for the math to be generated
+add_dependencies(${TARGET_NAME} generate_ekf_math)
+
 target_include_directories(${TARGET_NAME} PRIVATE
     ${NORB_GEN_DIR}                          # Generated: norb/topics.h, norb/topic_defs/*.h
     .                                        # For FreeRTOSConfig.h at root
@@ -292,6 +321,10 @@ target_include_directories(${TARGET_NAME} PRIVATE
     hal                                      # HAL headers
     ${CMAKE_SOURCE_DIR}/lib/esl-comms/include # RS485 protocol
     ${CMAKE_SOURCE_DIR}/lib/esl-math/include  # Math utilities
+    ${CMAKE_SOURCE_DIR}/gen/cpp/symforce      # SymForce generated math
+    src/modules/estimator/fusion             # Local EKF headers
+    src/modules/estimator/ekf_math           # Local EKF math headers
+    /opt/homebrew/include/eigen3             # Eigen headers (Homebrew)
 )
 
 if(NOT BUILD_FOR_HOST)

@@ -20,69 +20,56 @@ Raw IMU (TOPIC_SENSOR_IMU, 250 Hz)
             └──→ TOPIC_VEHICLE_ANGULAR_VELOCITY (250 Hz) ──→ Rate Controller (future)
 ```
 
-The EKF uses an **Error-State Kalman Filter (ESKF)** formulation:
+The EKF uses an **Error-State Kalman Filter (ESKF)** formulation derived from Joan Solà's *"Quaternion kinematics for the error-state Kalman filter"*.
 - The **nominal state** (`q`, `v_ned`, `p_ned`, `bg`, `ba`) is propagated deterministically via non-linear kinematics using IMU delta angles and delta velocities.
-- The **15-element error state** (`δθ[3]`, `δv[3]`, `δp[3]`, `δbg[3]`, `δba[3]`) is maintained as a Gaussian distribution `N(0, P)`.
+- The **15-element error state** (`δθ`, `δv`, `δp`, `δbg`, `δba`) is maintained as a Gaussian distribution `N(0, P)`.
 - Measurement corrections update the error state via the standard linear Kalman update, then the correction is injected back into the nominal state and the error state is reset to zero.
 - This avoids the quaternion unit-norm constraint problem and gives significantly better linearisation accuracy than a direct quaternion EKF.
 
----
+***
 
-## Phase 1 — Foundation: Topics, Build, and BSP Plumbing
+## Phase 1 — Foundation: Topics, Build, and BSP Plumbing (✅ Complete)
 
 **Goal:** Establish every structural pre-requisite. Nothing else can start without this phase.
+*Status: `.msg` files created, nORB topics generated, esl-math enabled, and build succeeds.*
 
-### Steps
+***
 
-1. **Define five new `.msg` files** in `msg/`:
-
-   | File | Key Fields | Purpose |
-   |---|---|---|
-   | `vehicle_imu.msg` | `timestamp_us uint64_t`, `delta_angle float[3]`, `delta_velocity float[3]`, `dt_s float` | Integrator → EKF input |
-   | `estimator_sensor_bias.msg` | `timestamp_us uint64_t`, `gyro_bias_rads float[3]`, `accel_bias_ms2 float[3]`, `gyro_bias_valid bool`, `accel_bias_valid bool` | EKF bias → Rate Conditioner feedback |
-   | `vehicle_angular_velocity.msg` | `timestamp_us uint64_t`, `xyz_rads float[3]` | Rate Conditioner → future Rate Controller |
-   | `estimator_status.msg` | `timestamp_us uint64_t`, `pos_test_ratio float`, `vel_test_ratio float`, `gyro_bias_converged bool`, `pos_valid bool`, `vel_valid bool` | EKF health → Commander arming gate |
-   | `gps.msg` | `timestamp_us uint64_t`, `pos_ned_m float[3]`, `vel_ned_ms float[3]`, `fix_type uint8_t`, `accuracy_m float` | GPS driver → EKF measurement update |
-   | `vehicle_status.msg` | `timestamp_us uint64_t`, `arming_state uint8_t`, `ekf_healthy bool` | Commander state machine output |
-
-2. **Enable `esl-math` in `CMakeLists.txt`**: uncomment `${MATH_LIB_SOURCES}` and add `lib/esl-math/include` to `target_include_directories`. The quaternion, DCM, and matrix primitives are required by the ESKF.
-
-3. **Wire `bsp_peripheral_init()` into the boot sequence** in `src/main.c` (before `sensors_init()`). This initialises the I2C bus that all physical sensor drivers depend on.
-
-4. **Regenerate nORB**: run CMake (the Python generator runs automatically on configure). Verify all new `TOPIC_*` enum values appear in `build/norb_generated/norb/topics.h`.
-
-### Verification
-Clean CMake build succeeds. All new topic enums are visible. No linker errors from esl-math.
-
----
-
-## Phase 2 — Simulated IMU Driver + Integrator
+## Phase 2 — Simulated IMU Driver + Integrator (✅ Complete)
 
 **Goal:** Continuous, physically plausible data flowing through `TOPIC_SENSOR_IMU` → `TOPIC_VEHICLE_IMU` at 250 Hz.
+*Status: 1kHz sim driver functional with gravity + DC bias on Z-axis. Integrator task accurately accumulating 4x1ms windows into 250Hz outputs.*
 
-### Steps
+***
 
-1. **Improve the simulated IMU driver** in `src/modules/sensors/imu.c` (currently stubs `accel_ms2[2] = 9.81f`):
-   - Output gravity-aligned accelerometer: `accel = {0, 0, 9.80665}` (NED convention, Z-down) plus configurable Gaussian white noise terms.
-   - Output zero mean angular rate plus a configurable **simulated DC gyro bias** (e.g. `0.01 rad/s` on Z). This gives the ESKF something real to identify during testing.
-   - The existing 250 Hz loop at `configMAX_PRIORITIES - 1` is correct — no task changes needed.
+## Phase 3 — Error-State EKF Core: IMU Propagation (✅ Complete)
 
-2. **Implement `src/modules/sensors/integrator.c`** (currently an empty file):
-   - `integrator_init()` creates a task or runs inline within the IMU task after publish.
-   - Each 4 ms IMU cycle: `norb_subscribe_poll(TOPIC_SENSOR_IMU, &imu)`, accumulate `delta_angle[i] += gyro_rads[i] * dt` and `delta_velocity[i] += accel_ms2[i] * dt`.
-   - Publish `TOPIC_VEHICLE_IMU`, then reset accumulators.
-   - Wire `integrator_init()` into `sensors_init()` in `src/modules/sensors/sensors.c`.
+**Goal:** A running ESKF that performs static alignment, propagates the nominal state, updates the 15×15 error-state covariance using SymPy-generated C math, and begins converging on gyro and accel bias estimates.
 
-### Verification
-USB serial logging shows `vehicle_imu` delta-velocity ~`0.0393 m/s` per cycle (= 9.80665 × 0.004 s). Delta-angle magnitude matches the simulated bias rate × dt.
+*Status: Implemented a production-grade modular EKF architecture. The filter runs at 250Hz, integrating `TOPIC_VEHICLE_IMU` delta-angles/velocities into a 15-state ESKF. High-performance SymForce C++ math is successfully bridged to the C firmware via a zero-copy Eigen wrapper.*
 
----
+### Module Implementation Details
 
-## Phase 3 — Error-State EKF Core (IMU Propagation Only)
+The estimator module follows a strict separation of concerns:
 
-**Goal:** A running ESKF that propagates both the nominal state and the 15×15 error-state covariance from IMU data, and begins converging on gyro and accel bias estimates — without any measurement updates yet.
+- **OS Layer ([src/modules/estimator/ekf.c](src/modules/estimator/ekf.c))**: 
+    - Handles the 250Hz FreeRTOS task and nORB messaging. 
+    - Subscribes to integrated IMU data and eventually publishes state estimates.
+- **Filter Core ([src/modules/estimator/ekf_core.c](src/modules/estimator/ekf_core.c))**: 
+    - Owns the 15-state memory (`q`, `v`, `p`, `bg`, `ba`) and the 15x15 covariance matrix.
+    - Manages lifecycle (init/reset).
+- **Fusion Layer ([src/modules/estimator/fusion/imu_predictor.c](src/modules/estimator/fusion/imu_predictor.c))**: 
+    - Implements non-linear kinematics for nominal state propagation.
+    - Orchestrates the covariance update call.
+- **Math Bridge ([src/modules/estimator/ekf_math/symforce_wrapper.cpp](src/modules/estimator/ekf_math/symforce_wrapper.cpp))**: 
+    - A C++ "bridge" that uses `Eigen::Map` to cast raw C arrays into Eigen types.
+    - Calls the highly-optimized SymForce symbolic math templates.
+- **Generation Logic ([src/modules/estimator/ekf_math/generate_eskf_math.py](src/modules/estimator/ekf_math/generate_eskf_math.py))**: 
+    - SymForce Python script that derives the ESKF Jacobians and unrolls the $F P F^T$ math into pure C++.
+    - **Build Integration**: CMake automatically runs this script using the project `.venv` whenever the script changes.
 
 ### ESKF State Definition
+We implement a **15-state ESKF** (omitting the wind and magnetic field states from the full 24-state PX4 filter).
 
 | Symbol | Dimension | Description |
 |---|---|---|
@@ -91,174 +78,88 @@ USB serial logging shows `vehicle_imu` delta-velocity ~`0.0393 m/s` per cycle (=
 | `p_ned` | 3 | Nominal NED position (m) |
 | `bg` | 3 | Nominal gyro bias estimate (rad/s) |
 | `ba` | 3 | Nominal accel bias estimate (m/s²) |
-| `P[15][15]` | 15×15 | Error-state covariance |
+| `P[15][15]` | 15×15 | Error-state covariance (Single-precision float array) |
 
 Error state ordering: `[δθ, δv, δp, δbg, δba]`.
 
 ### Steps
 
-1. **Define the nominal state struct and `P[15][15]`** at the top of `src/modules/estimator/ekf.c`. Use `Quaternion_t`, `Matrix_t`, `Vector3_t` from `lib/esl-math/include/` throughout.
+1. **Create the SymForce Code Generator:** (✅ Done)
+   - Created `src/modules/estimator/ekf_math/generate_eskf_math.py`.
+   - SymForce generates optimized C++ headers in `gen/cpp/symforce/sym/`.
 
-2. **Implement the ESKF predict step** (runs at 250 Hz, triggered by `norb_subscribe_poll(TOPIC_VEHICLE_IMU)`):
+2. **Implement the Math Bridge:** (✅ Done)
+   - Created `symforce_wrapper.cpp` (C++) and `symforce_wrapper.h` (C/C++ bridge).
+   - Uses `Eigen::Map` to bridge raw C float arrays to SymForce's Eigen-based math templates.
 
-   - **Bias-corrected inputs:**
-     ```
-     da = delta_angle  - bg * dt
-     dv = delta_velocity - ba * dt
-     ```
-   - **Nominal state propagation (non-linear, no Jacobians here):**
-     ```
-     q    ← q ⊗ exp(da/2)          [quaternion kinematic integration]
-     q    ← normalize(q)
-     dv_n ← R(q_prev) * dv         [rotate delta-velocity to NED]
-     v_ned ← v_ned + dv_n - g * dt [subtract gravity in NED]
-     p_ned ← p_ned + v_ned * dt
-     bg, ba unchanged (random walk, driven by Q)
-     ```
-   - **Error-state covariance propagation:**
-     ```
-     P ← F * P * Fᵀ + Q
-     ```
-     where `F` is the 15×15 Jacobian of the error dynamics (derived analytically from the process model) and `Q` is the process noise matrix. Both `F` and `Q` are defined as named `#define` or `static const` constants in `ekf.c` to make tuning accessible.
+3. **Implement EKF Core & IMU Propagation:** (✅ Done)
+   - `ekf_core.c`: Manages the 11-state nominal vector + 15x15 covariance memory.
+   - `imu_predictor.c`: Implements the 250Hz nominal kinematics (quaternion integration + rotation) and calls the covariance bridge.
 
-3. **Publish after each predict step:**
-   - `TOPIC_VEHICLE_STATE`: fill quaternion, velocity, position, and the current `bg` / `ba` nominal state.
-   - `TOPIC_ESTIMATOR_SENSOR_BIAS`: `gyro_bias_rads = bg`, `accel_bias_ms2 = ba`. Set `gyro_bias_valid = true` once the diagonal variance `P[9][9]` (the bias variance) drops below a configurable threshold `GYRO_BIAS_CONVERGENCE_VAR`.
-
-4. **Set initial P conservatively large** (high uncertainty allows convergence from any start). All tuning constants (`Q_GYRO`, `Q_ACCEL`, `Q_GBIAS`, `Q_ABIAS`, `P0_*`) are defined as named constants at the top of `ekf.c`.
-
-### Note on Yaw Observability
-Without a magnetometer or dual-antenna GPS, yaw rotation about the gravity vector is **unobservable while stationary**. The yaw component of `P` will not decrease. This is an accepted limitation for Phase 3. Yaw can be initialised from the BMM350 magnetometer (driver already exists in `lib/esl-sensors/`) as a future extension without modifying Phase 3 code.
+4. **Publish Outputs:** (⏳ Pending)
+   - Publish `TOPIC_VEHICLE_STATE` (nominal state).
+   - Publish `TOPIC_ESTIMATOR_SENSOR_BIAS`.
 
 ### Verification
-Log `vehicle_state.quaternion` and `estimator_sensor_bias.gyro_bias_rads` over USB CDC. Quaternion should remain near `{1, 0, 0, 0}`. The Z-axis gyro bias estimate should converge toward the simulated `0.01 rad/s` offset within 10–60 seconds (depends on `Q_GBIAS` and `P0_GBIAS` tuning).
+Log `vehicle_state.quaternion` and `estimator_sensor_bias.gyro_bias_rads`. During the alignment phase, `q` should correctly initialize pitch/roll. During the predict loop, `q` should remain stable, and the Z-axis gyro bias should converge toward the simulated `0.01 rad/s` offset.
 
----
+***
 
-## Phase 4 — Rate Conditioner Module
+## Phase 4 — Rate Conditioner Module (🔄 Next)
 
-**Goal:** Close the EKF bias feedback loop. The Rate Conditioner applies the ESKF's live bias estimate to produce perfectly zeroed, filtered angular rates for the future rate controller.
+**Goal:** Close the EKF bias feedback loop. Produce perfectly zeroed, filtered angular rates for the future rate controller.
 
 ### Steps
-
-1. **Create `src/modules/sensors/angvel.c`** (or add `angvel_task` inline in `sensors.c`):
-   - Task priority: `configMAX_PRIORITIES - 1` (same as IMU task — runs immediately after each IMU publish).
-   - Loop at 250 Hz using `vTaskDelayUntil`:
-     1. `norb_subscribe_poll(TOPIC_SENSOR_IMU, &raw)`
-     2. `norb_subscribe_poll(TOPIC_ESTIMATOR_SENSOR_BIAS, &bias)`
-     3. `corrected[i] = raw.gyro_rads[i] - (bias.gyro_bias_valid ? bias.gyro_bias_rads[i] : 0.0f)`
-     4. Apply a 1st-order IIR low-pass filter: `alpha = dt / (dt + 1/(2π * f_cutoff))`, `y[i] = alpha * corrected[i] + (1 - alpha) * y_prev[i]`. Default cutoff `f_cutoff = 30 Hz` (configurable `#define`).
-     5. `norb_publish(TOPIC_VEHICLE_ANGULAR_VELOCITY, &angvel)`
-
-2. **Wire `angvel_task` creation** into `sensors_init()` in `sensors.c` using `xTaskCreateStatic()` with a pre-declared static stack array (required — no dynamic allocation).
-
-3. **Add `angvel.c` to `CMakeLists.txt`** source list.
+1. **Implement `src/modules/sensors/angvel.c`** at 250 Hz.
+2. Subscribe to `TOPIC_SENSOR_IMU` and `TOPIC_ESTIMATOR_SENSOR_BIAS`.
+3. Subtract the live bias: `corrected = raw_gyro - (bias.valid ? bias.gyro_bias : 0.0f)`.
+4. Apply a 1st-order IIR low-pass filter (e.g., $f_{cutoff}$ = 30 Hz).
+5. Publish to `TOPIC_VEHICLE_ANGULAR_VELOCITY`.
 
 ### Verification
-Without bias correction active (pre-convergence), `vehicle_angular_velocity.xyz[2]` should show the simulated `0.01 rad/s` DC offset plus noise. After ESKF gyro bias converges (Phase 3), the DC offset should disappear from the published rate.
+Once the ESKF gyro bias converges in Phase 3, the DC offset in `vehicle_angular_velocity` should smoothly drop to zero.
 
----
+***
 
-## Phase 5 — GPS Plumbing + ESKF Measurement Update
+## Phase 5 — GPS Plumbing + ESKF Measurement Update (⏳ Pending)
 
-**Goal:** Real (or simulated) GPS position and velocity corrections closing the ESKF loop.
+**Goal:** Real (or simulated) GPS position and velocity corrections using SymPy-generated Kalman updates.
 
 ### Steps
-
-1. **Implement `src/modules/sensors/gps.c`**:
-   - Call `GPSNEOM9N_init(i2c_port, I2C_GPS_ADDRESS)` from the existing driver at `lib/esl-sensors/src/gpsNEOM9N.c`.
-   - Create `gps_task` at 5 Hz (200 ms period), priority 10, using `xTaskCreateStatic()`.
-   - `GPSNEOM9N_readNavPVT(&pvt)` → convert geodetic lat/lon/alt to local NED (using the first valid fix as the origin) → publish `TOPIC_GPS`.
-   - **Simulation fallback:** when the physical GPS driver is not yet available, the task publishes a static `{0, 0, 0}` position fix with high `accuracy_m` — sufficient to exercise the measurement update code path.
-
-2. **Implement the ESKF GPS measurement update step** in `ekf.c` (runs at 5 Hz on each `TOPIC_GPS` message):
-   - Innovation: `y = [gps.pos_ned_m; gps.vel_ned_ms] - H * x_nominal` (H selects `p_ned` and `v_ned`, 6×15)
-   - Innovation covariance: `S = H * P * Hᵀ + R_gps` (R_gps diagonal, tuned from GPS `accuracy_m`)
-   - **Innovation gate:** compute `χ² = yᵀ * S⁻¹ * y`; reject the measurement and log a warning if `χ² > GATE_THRESHOLD` (prevents corrupted GPS from corrupting the filter). Publish `pos_test_ratio = χ² / GATE_THRESHOLD` to `TOPIC_ESTIMATOR_STATUS`.
-   - Kalman gain: `K = P * Hᵀ * S⁻¹`
-   - Error-state update: `δx = K * y`
-   - **Inject error into nominal state:**
-     ```
-     p_ned ← p_ned + δp
-     v_ned ← v_ned + δv
-     q     ← q ⊗ exp(δθ/2)
-     bg    ← bg + δbg
-     ba    ← ba + δba
-     ```
-   - Reset error state to zero, update covariance: `P ← (I - K*H) * P`
-
-3. **Wire `gps_init()` / `gps_task` creation** into `sensors_init()`.
-
-4. **Add `gps.c` to `CMakeLists.txt`** source list.
+1. **Implement `src/modules/sensors/gps.c`** utilizing the `GPSNEOM9N` driver to publish `TOPIC_GPS` at 5 Hz.
+2. **SymPy Code Generation:** Use the Python script to symbolically evaluate the Kalman Gain $K = P H^T (H P H^T + R)^{-1}$ and state update $\delta x = K y$.
+3. **Implement ESKF Measurement Update in `ekf.c`**:
+   - Compute Innovation $y$ and Innovation Covariance $S$.
+   - Perform Innovation gate check ($\chi^2$).
+   - Run generated Kalman Gain and Error-State update equations.
+   - Inject error state into the nominal state ($p = p + \delta p$, $q = q \otimes \exp(\delta \theta/2)$, etc.)
+   - Update covariance $P = (I - KH)P$.
 
 ### Verification
-With the simulated static GPS at origin, `vehicle_state.position_m` should converge to and hold near `{0, 0, 0}`. `pos_test_ratio` and `vel_test_ratio` in `estimator_status` should remain well below `1.0`.
+`vehicle_state.position_m` should hold tightly at `{0,0,0}` using simulated GPS data. Test-ratios should remain below 1.0.
 
----
+***
 
-## Phase 6 — Commander Arming Gate
+## Phase 6 — Commander Arming Gate (⏳ Pending)
 
-**Goal:** Prevent downstream modules (beacon sender, future flight controller) from acting on invalid estimates. Mirrors PX4's `ARMING_STATE_INIT → STANDBY` transition.
+**Goal:** Prevent flight on invalid estimates (Mirrors PX4's `ARMING_STATE_INIT` → `STANDBY` logic).
 
 ### Steps
-
-1. **Implement `src/modules/commander/commander.c`**:
-   - Create `commander_task` at 10 Hz (100 ms period), priority 3 (above housekeeping at 2, below datalink at 5), using `xTaskCreateStatic()`.
-   - State machine with three states (using the `arming_state` field from `vehicle_status.msg`):
-
-   | State | Value | Transition Condition |
-   |---|---|---|
-   | `ARMING_STATE_INIT` | 0 | (start state) |
-   | `ARMING_STATE_STANDBY` | 1 | `gyro_bias_converged == true` AND `pos_valid == true` AND `pos_test_ratio < 1.0` AND `vel_test_ratio < 1.0` |
-   | `ARMING_STATE_ARMED` | 2 | Future — manual arm command via TC |
-
-   - Subscribe to `TOPIC_ESTIMATOR_STATUS` on each cycle to drive transitions.
-   - Publish `TOPIC_VEHICLE_STATUS` on every state change (and on first cycle).
-   - Add a `commander_init()` declaration to a new `src/modules/commander/commander.h`.
-
-2. **Wire `commander_init()` into `src/main.c`** after `estimator_init()` in the boot sequence.
-
-3. **Update the tracking radio beacon** in `src/modules/nodes/tracking_radio/tracking_radio.c`:
-   - Subscribe to `TOPIC_VEHICLE_STATE` and `TOPIC_GPS` at 1 Hz.
-   - Replace the hardcoded test lat/lon/alt/vel values in `tracking_radio_send_beacon()` with real nORB data.
-   - Only transmit the beacon if `TOPIC_VEHICLE_STATUS.arming_state >= ARMING_STATE_STANDBY` (gating on valid estimator output).
+1. **Implement `src/modules/commander/commander.c`** (10 Hz state machine).
+2. Gate the transition from `INIT` to `STANDBY` on `gyro_bias_converged == true` AND `pos_valid == true` from `TOPIC_ESTIMATOR_STATUS`.
+3. Publish `TOPIC_VEHICLE_STATUS` changes.
+4. **Update Tracking Radio:** Only transmit beacon if `arming_state >= STANDBY`.
 
 ### Verification
-On USB CDC monitor, confirm Commander stays in `ARMING_STATE_INIT` for the full gyro bias convergence window (~10–60 s). After transition to `STANDBY`, confirm beacon fields reflect real `vehicle_state` data instead of hardcoded test values. Simulate a GPS glitch that pushes `pos_test_ratio > 1.0` and confirm the Commander does not transition to `STANDBY` (or drops back from it).
+Commander holds in `INIT` for the ~10–60s bias convergence window, then transitions to `STANDBY` and tracking beacon begins transmitting valid EKF data.
 
----
+***
 
-## Design Decisions
+## Design & Academic References
 
-| Decision | Choice | Rationale |
-|---|---|---|
-| **EKF formulation** | Error-State Kalman Filter (ESKF) | Better linearisation accuracy; avoids quaternion unit-norm constraint; standard approach in aerospace GNSS/INS fusion |
-| **Nominal state propagation** | Non-linear kinematics (no Jacobians in predict nominal) | Accurate propagation; Jacobians only needed for error-state covariance `F * P * Fᵀ` |
-| **EKF math library** | Written from scratch in C using `esl-math` quaternion/DCM/matrix primitives | Full control; stays within the existing toolchain; no porting overhead |
-| **Sensor redundancy** | Single IMU; no voting in this plan | Reduces complexity; `TOPIC_ESTIMATOR_STATUS` design allows a future multi-EKF selector module to be added without modifying existing code |
-| **Yaw** | Unobservable without magnetometer; accepted limitation | BMM350 driver exists in `lib/esl-sensors/`; adding a mag measurement update is a self-contained future extension |
-| **Barometer** | Excluded from EKF for now | `TOPIC_BAROMETER` already exists; MS5607 and BMP581 drivers are ready; adding baro altitude measurement update is self-contained |
-| **FreeRTOS allocation** | All tasks use `xTaskCreateStatic()` | `configSUPPORT_DYNAMIC_ALLOCATION = 0` throughout the codebase |
-| **IMU driver** | Simulated driver for now | Real hardware driver to be implemented separately when chip selection is finalised |
-
----
-
-## Module Status Reference
-
-| Module | File | Status |
-|---|---|---|
-| nORB bus | `src/norb/norb.c` | ✅ Complete |
-| FreeRTOS integration | `FreeRTOSConfig.h` / `src/main.c` | ✅ Complete |
-| Datalink / RS485 | `src/modules/datalink/` | ✅ Functional |
-| EPS node | `src/modules/nodes/eps/eps.c` | ✅ Functional |
-| Tracking radio | `src/modules/nodes/tracking_radio/` | ⚠️ Partial (hardcoded beacon data) |
-| Housekeeping task | `src/modules/housekeeping/` | ⚠️ Partial (no sensor telemetry streams) |
-| IMU task | `src/modules/sensors/imu.c` | ⚠️ Stub (fakes gravity, no hardware) |
-| Integrator | `src/modules/sensors/integrator.c` | ❌ Empty |
-| Rate Conditioner | `src/modules/sensors/angvel.c` | ❌ Not yet created |
-| Barometer | `lib/esl-sensors/src/baroMS5607.c` | ❌ Driver ready; not wired in |
-| GPS | `src/modules/sensors/gps.c` + `lib/esl-sensors/src/gpsNEOM9N.c` | ❌ Driver ready; task empty |
-| Magnetometer | `lib/esl-sensors/src/magBMM350.c` | ❌ Driver ready; not wired in |
-| ESKF / Estimator | `src/modules/estimator/ekf.c` | ❌ Stub (loop only) |
-| Commander | `src/modules/commander/commander.c` | ❌ Empty file |
-| Datalink streams | `src/modules/datalink/streams/` | ❌ Framework stub |
+| Element | Reference / Rationale |
+|---|---|
+| **EKF formulation** | Error-State Kalman Filter (ESKF). Based on Joan Solà's *"Quaternion kinematics for the error-state Kalman filter"* (2017). |
+| **Covariance Math** | Derived symbolically via SymPy and exported as unrolled C, matching the architecture of PX4 ECL. Guarantees real-time execution on Cortex-M33 single-precision FPU. |
+| **Sensor redundancy** | Single IMU; single GPS. |
+| **Yaw Observability** | Unobservable without magnetometer; accepted limitation. BMM350 integration is a modular future addition. |

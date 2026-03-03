@@ -3,26 +3,37 @@
 #include <stdio.h>
 #include "pico/time.h"
 #include "norb/norb.h"
-#include "norb/topic_defs/sensor_imu.h"
+#include "norb/topic_defs/vehicle_imu.h"
+#include "ekf_core.h"
+#include "fusion/imu_predictor.h"
+
+static ekf_core_t ekf;
 
 void ekf_task(void *params) {
     TickType_t xLastWake = xTaskGetTickCount();
-    sensor_imu_t imu;
+    vehicle_imu_t imu_data;
+
+    ekf_core_init(&ekf);
 
     while (1) {
         vTaskDelayUntil(&xLastWake, pdMS_TO_TICKS(4)); // 250 Hz
 
-        // Peek at the absolute newest IMU snapshot
-        // if (norb_subscribe(TOPIC_SENSOR_IMU, &imu)) {
+        // Subscribe to TOPIC_VEHICLE_IMU (Integrated data from integrator module)
+        if (norb_subscribe(TOPIC_VEHICLE_IMU, &imu_data, 10)) {
             
-        //     // Print it out to test!
-        //     uint64_t current_time_us = time_us_64();
-        //     printf("[EKF] Got IMU Data at %llu us (now: %llu us) | Z-Accel: %.2f\n", 
-        //            imu.timestamp_us, current_time_us, imu.accel_ms2[2]);
-                   
-        // } else {
-        //     printf("[EKF] Waiting for IMU data...\n");
-        // }
+            // Phase 3: Run Prediction Loop
+            imu_predict(&ekf, &imu_data);
+
+            // Debug: Print every ~1 second (250 samples)
+            static int count = 0;
+            if (++count >= 250) {
+                count = 0;
+                printf("[EKF] Pos: [%.2f, %.2f, %.2f] | Vel: [%.2f, %.2f, %.2f] | BiasG: [%.4f, %.4f, %.4f]\n",
+                       ekf.state.p_ned[0], ekf.state.p_ned[1], ekf.state.p_ned[2],
+                       ekf.state.v_ned[0], ekf.state.v_ned[1], ekf.state.v_ned[2],
+                       ekf.state.gyro_bias[0], ekf.state.gyro_bias[1], ekf.state.gyro_bias[2]);
+            }
+        }
     }
 }
 
