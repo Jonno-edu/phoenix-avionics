@@ -213,7 +213,7 @@
         {
             "label": "Test: Run EKF Suite",
             "type": "shell",
-            "command": "cd build_host && rm -f CMakeCache.txt && cmake -DPICO_PLATFORM=host -DPICO_BOARD=none .. && cmake --build . --target run_ekf_tests",
+            "command": "cmake --preset mac-host-tests && cmake --build build_host --target run_ekf_tests",
             "group": {
                 "kind": "test",
                 "isDefault": true
@@ -226,6 +226,20 @@
                 "clear": true
             },
             "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "EKF: Regenerate SymForce Math",
+            "type": "shell",
+            "command": ".venv/bin/python3 src/modules/estimator/ekf_math/generate_eskf_math.py",
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "clear": true
+            },
+            "problemMatcher": []
         }
     ]
 }

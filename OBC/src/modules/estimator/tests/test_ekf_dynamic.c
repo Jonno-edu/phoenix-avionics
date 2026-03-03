@@ -1,0 +1,204 @@
+/**
+ * @file test_ekf_dynamic.c
+ * @brief Adversarial dynamic-flight tests.
+ *
+ * These tests call imu_predict(vehicle_imu_t*) for a genuine end-to-end
+ * integration test that exercises the same code path used during flight.
+ *
+ * Ground-truth model uses NED convention (Z+ down).
+ * Specific force convention: what the accelerometer measures in body frame
+ *   sf = a_true_body - g_body
+ * imu_predict() receives delta_velocity = sf * dt and compensates gravity
+ * internally.
+ */
+
+#include "test_utils.h"
+
+/* ── Test: 1D Launch Profile ─────────────────────────────────────────────────
+ *
+ * Simulates a complete suborbital flight:
+ *   Phase 1 – 3 s pad idle       (specific force = -g,  no acceleration)
+ *   Phase 2 – 5 s motor burn     (~3g net upward accel, high VRM vibration)
+ *   Phase 3 – 12 s coast to peak (freefall, specific force ≈ 0)
+ *
+ * Goal: prove the ESKF tracks a parabolic trajectory without the covariance
+ * blowing up or the innovation gates falsely rejecting valid measurements.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+static void test_launch_profile(void)
+{
+    printf("  test_launch_profile ...\n");
+
+    ekf_core_t ekf;
+    ekf_core_init(&ekf);
+
+    /* ── Ground truth ── */
+    float true_pos[3] = {0.0f, 0.0f, 0.0f};  /* NED, metres */
+    float true_vel[3] = {0.0f, 0.0f, 0.0f};  /* NED, m/s    */
+
+    /* Hidden sensor biases */
+    const float hidden_gyro_bias[3]  = { 0.005f, -0.002f,  0.000f};
+    const float hidden_accel_bias[3] = { 0.02f,  -0.05f,   0.15f };
+
+    const float dt          = 0.004f;   /* 250 Hz */
+    const int idle_steps    = 250 *  3; /* 3 s */
+    const int burn_steps    = 250 *  5; /* 5 s */
+    const int coast_steps   = 250 * 12; /* 12 s */
+    const int total_steps   = idle_steps + burn_steps + coast_steps;
+
+    for (int step = 0; step < total_steps; step++) {
+
+        /* ── Flight model: derive specific force and true NED acceleration ── */
+        float true_accel_ned_z;     /* NED Z acceleration (m/s²) */
+        float specific_force_z;     /* body-frame Z specific force (m/s²) */
+        float vib_noise;            /* std-dev of body-frame accel noise (m/s²) */
+
+        if (step < idle_steps) {
+            /* Pad idle: sitting still, no net acceleration */
+            true_accel_ned_z  =  0.0f;
+            specific_force_z  = -9.80665f; /* upward ground reaction */
+            vib_noise         =  0.05f;
+        } else if (step < idle_steps + burn_steps) {
+            /* Motor burn: ~3g net upward = NED Z = -29.42 m/s² */
+            true_accel_ned_z  = -29.42f;
+            specific_force_z  = -39.2266f; /* total thrust force / mass */
+            vib_noise         =  2.50f;     /* solid rocket motor vibration */
+        } else {
+            /* Coast / freefall: gravity only, specific force ≈ 0 */
+            true_accel_ned_z  =  9.80665f;
+            specific_force_z  =  0.0f;
+            vib_noise         =  0.10f;
+        }
+
+        /* ── 1. Advance ground truth ── */
+        true_vel[2] += true_accel_ned_z * dt;
+        true_pos[2] += true_vel[2] * dt;
+
+        /* ── 2. Generate noisy IMU measurement ── */
+        vehicle_imu_t imu;
+        imu.timestamp_us = (uint64_t)(step * (uint64_t)(dt * 1e6f));
+        imu.dt_s         = dt;
+
+        for (int i = 0; i < 3; i++) {
+            float gyro_rate  = hidden_gyro_bias[i]
+                               + generate_gaussian_noise(0.0f, 0.001f);
+            float accel_body = (i == 2 ? specific_force_z : 0.0f)
+                               + hidden_accel_bias[i]
+                               + generate_gaussian_noise(0.0f, vib_noise);
+
+            imu.delta_angle[i]    = gyro_rate  * dt;
+            imu.delta_velocity[i] = accel_body * dt;
+        }
+
+        /* ── 3. EKF predict via the real integration path ── */
+        imu_predict(&ekf, &imu);
+
+        /* ── 4. Barometer update at 50 Hz (every 5 steps) ── */
+        if (step % 5 == 0) {
+            baro_measurement_t b = {
+                .altitude_m = -true_pos[2] + generate_gaussian_noise(0.0f, 0.5f)
+            };
+            baro_fuse(&ekf, &b);
+        }
+
+        /* ── 5. GPS update at 10 Hz (every 25 steps) ── */
+        if (step % 25 == 0) {
+            gps_measurement_t g;
+            for (int i = 0; i < 3; i++) {
+                g.pos_ned[i] = true_pos[i] + generate_gaussian_noise(0.0f, 1.5f);
+                g.vel_ned[i] = true_vel[i] + generate_gaussian_noise(0.0f, 0.1f);
+            }
+            gps_fuse(&ekf, &g);
+        }
+    }
+
+    printf("    True  p_ned[2]: %8.3f m   |  EKF: %8.3f m\n",
+           (double)true_pos[2], (double)ekf.state.p_ned[2]);
+    printf("    True  v_ned[2]: %8.3f m/s |  EKF: %8.3f m/s\n",
+           (double)true_vel[2], (double)ekf.state.v_ned[2]);
+    printf("    EKF   accel_bias[2]: %.4f  (truth: %.4f)\n",
+           (double)ekf.state.accel_bias[2], (double)hidden_accel_bias[2]);
+
+    /* Covariance must remain finite — highest-priority assertion */
+    ASSERT_TRUE(all_finite(ekf.P, 225));
+
+    /* Quaternion must remain unit-norm */
+    ASSERT_NEAR(quat_norm(ekf.state.q), 1.0f, 1e-4f);
+
+    /* Vertical position: within 5 m (GPS+Baro fused across all phases) */
+    ASSERT_NEAR(ekf.state.p_ned[2], true_pos[2], 5.0f);
+
+    /* Vertical velocity: within 2 m/s */
+    ASSERT_NEAR(ekf.state.v_ned[2], true_vel[2], 2.0f);
+
+    printf("  OK\n");
+}
+
+/* ── Test: High-Frequency Motor Vibration ────────────────────────────────────
+ *
+ * Injects ±50 m/s² zero-mean noise into all IMU axes for 2 simulated seconds
+ * to mimic solid-rocket motor vibration.
+ *
+ * Goal: prove the quaternion stays unit-norm and the covariance matrix does
+ * not diverge or produce NaNs — neither the state vector nor P blow up.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+static void test_motor_vibration(void)
+{
+    printf("  test_motor_vibration ...\n");
+
+    ekf_core_t ekf;
+    ekf_core_init(&ekf);
+
+    /* Constant-velocity flight so the ground truth is trivial */
+    const float true_pos[3]  = {0.0f, 0.0f,  0.0f};
+    const float true_vel[3]  = {0.0f, 0.0f, -5.0f};
+    const float sf_nominal_z = -9.80665f; /* steady level flight specific force */
+
+    const float dt          = 0.004f;
+    const float vib_std     = 50.0f;    /* ±50 m/s² std-dev — extreme SRM noise */
+    const int   total_steps = 250 * 2;  /* 2 simulated seconds */
+
+    for (int step = 0; step < total_steps; step++) {
+
+        vehicle_imu_t imu;
+        imu.timestamp_us = (uint64_t)(step * (uint64_t)(dt * 1e6f));
+        imu.dt_s         = dt;
+
+        for (int i = 0; i < 3; i++) {
+            float sf = (i == 2 ? sf_nominal_z : 0.0f)
+                       + generate_gaussian_noise(0.0f, vib_std);
+            imu.delta_velocity[i] = sf * dt;
+            imu.delta_angle[i]    = generate_gaussian_noise(0.0f, 0.001f) * dt;
+        }
+
+        imu_predict(&ekf, &imu);
+
+        /* Barometer at 50 Hz keeps the filter anchored so we can test gating */
+        if (step % 5 == 0) {
+            baro_measurement_t b = {
+                .altitude_m = -true_pos[2] + generate_gaussian_noise(0.0f, 0.5f)
+            };
+            baro_fuse(&ekf, &b);
+        }
+    }
+
+    printf("    P trace after vibration: %.4f\n",
+           (double)matrix_trace(ekf.P, 15));
+    printf("    |q| = %.8f\n", (double)quat_norm(ekf.state.q));
+
+    /* These are the only invariants that must always hold under vibration */
+    ASSERT_TRUE(all_finite(ekf.P, 225));
+    ASSERT_NEAR(quat_norm(ekf.state.q), 1.0f, 1e-4f);
+
+    printf("  OK\n");
+}
+
+/* ── Suite runner ───────────────────────────────────────────────────────────── */
+
+void run_dynamic_tests(void)
+{
+    printf("\n=== EKF Dynamic Flight Suite (launch profile / vibration) ===\n");
+    test_launch_profile();
+    test_motor_vibration();
+}

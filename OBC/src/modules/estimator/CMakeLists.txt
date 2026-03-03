@@ -108,19 +108,32 @@ target_include_directories(estimator_lib
 
 # --- Unit Tests (HOST builds only) ---
 if(BUILD_FOR_HOST)
-    add_executable(test_ekf_predict
-        tests/test_ekf_predict.c
+    add_executable(run_ekf_tests_bin
+        tests/test_main.c
+        tests/test_utils.c
+        tests/test_ekf_core.c
+        tests/test_ekf_fusion.c
+        tests/test_ekf_dynamic.c
+        tests/test_ekf_faults.c
     )
 
-    target_link_libraries(test_ekf_predict PRIVATE estimator_lib m)
+    target_include_directories(run_ekf_tests_bin PRIVATE
+        ${ESTIMATOR_DIR}
+        ${ESTIMATOR_DIR}/fusion
+        ${ESTIMATOR_DIR}/ekf_math
+        ${EKF_GEN_DIR}/cpp/symforce
+        ${CMAKE_BINARY_DIR}/norb_generated
+    )
 
-    # Convenience target: cmake --build build --target run_ekf_tests
+    target_link_libraries(run_ekf_tests_bin PRIVATE estimator_lib m)
+
+    # Convenience target: cmake --build build_host --target run_ekf_tests
     add_custom_target(run_ekf_tests
-        COMMAND test_ekf_predict
-        DEPENDS test_ekf_predict
+        COMMAND run_ekf_tests_bin
+        DEPENDS run_ekf_tests_bin
         COMMENT "[estimator] Running EKF unit tests..."
         USES_TERMINAL
     )
 
-    message(STATUS "[estimator] HOST build: test_ekf_predict and run_ekf_tests targets registered.")
+    message(STATUS "[estimator] HOST build: run_ekf_tests_bin and run_ekf_tests targets registered.")
 endif()
