@@ -54,6 +54,28 @@ void symforce_update_stationary(
     const float* gyro_raw, const float* vel_var, const float* gyro_var
 );
 
+/**
+ * Barometric altitude update.
+ * baro_alt  : measured altitude in metres (positive up, i.e. -p_ned_z).
+ * baro_var  : altitude measurement noise variance (m²).
+ */
+void symforce_update_baro(
+    float* P, float* q, float* vel, float* pos, float* gyro_bias, float* accel_bias,
+    float baro_alt, float baro_var, float epsilon
+);
+
+/**
+ * 6-DOF GPS position + velocity update.
+ * gps_pos / gps_vel : NED frame, metres / m·s⁻¹.
+ * pos_var / vel_var  : per-axis measurement noise variances.
+ */
+void symforce_update_gps(
+    float* P, float* q, float* vel, float* pos, float* gyro_bias, float* accel_bias,
+    const float* gps_pos, const float* gps_vel,
+    const float* pos_var, const float* vel_var,
+    float epsilon
+);
+
 #ifdef __cplusplus
 }
 #endif

@@ -198,6 +198,95 @@ def update_stationary(
 
     return q_new, vel_new, pos_new, bg_new, ba_new, P_new
 
+
+def update_baro(
+    q: sf.V4, vel: sf.V3, pos: sf.V3,
+    gyro_bias: sf.V3, accel_bias: sf.V3,
+    P: MTangent,
+    baro_alt: sf.Scalar, baro_var: sf.Scalar,
+    epsilon: sf.Scalar
+) -> T.Tuple[sf.V4, sf.V3, sf.V3, sf.V3, sf.V3, MTangent]:
+    """
+    Barometric altitude update: observes altitude = -pos[2] (NED, down-positive).
+    Innovation: y = baro_alt - predicted_alt = baro_alt - (-pos[2])
+    H is [1x15] with H[0,8] = -1  (d(-p_z)/d(delta_p_z) = -1)
+    """
+    quat = sf.Rot3(sf.Quaternion(xyz=sf.V3(q[1], q[2], q[3]), w=q[0]))
+
+    # innovation: measured altitude minus predicted altitude (-pos_z)
+    y = sf.V1(baro_alt - (-pos[2]))
+
+    H = sf.Matrix.zeros(1, 15)
+    H[0, 8] = -1  # altitude = -p_z  =>  d(alt)/d(delta_p_z) = -1
+
+    R = sf.Matrix([[baro_var]])
+    S = H * P * H.T + R
+    K = P * H.T * S.inv()
+    dx = K * y
+    I = sf.Matrix.eye(15)
+    P_new = (I - K * H) * P
+
+    d_theta = sf.V3(dx[0], dx[1], dx[2])
+    q_new_rot     = quat * sf.Rot3.from_tangent(d_theta, epsilon=epsilon)
+    q_new_storage = q_new_rot.to_storage()
+    q_new = sf.V4(q_new_storage[3], q_new_storage[0], q_new_storage[1], q_new_storage[2])
+
+    vel_new = vel + sf.V3(dx[3], dx[4], dx[5])
+    pos_new = pos + sf.V3(dx[6], dx[7], dx[8])
+    bg_new  = gyro_bias  + sf.V3(dx[9],  dx[10], dx[11])
+    ba_new  = accel_bias + sf.V3(dx[12], dx[13], dx[14])
+
+    return q_new, vel_new, pos_new, bg_new, ba_new, P_new
+
+
+def update_gps(
+    q: sf.V4, vel: sf.V3, pos: sf.V3,
+    gyro_bias: sf.V3, accel_bias: sf.V3,
+    P: MTangent,
+    gps_pos: sf.V3, gps_vel: sf.V3,
+    pos_var: sf.V3, vel_var: sf.V3,
+    epsilon: sf.Scalar
+) -> T.Tuple[sf.V4, sf.V3, sf.V3, sf.V3, sf.V3, MTangent]:
+    """
+    6-DOF GPS update: observes [pos_ned (3D), vel_ned (3D)].
+    H is [6x15]:
+      rows 0-2  →  pos_ned (state cols 6-8)
+      rows 3-5  →  vel_ned (state cols 3-5)
+    """
+    quat = sf.Rot3(sf.Quaternion(xyz=sf.V3(q[1], q[2], q[3]), w=q[0]))
+
+    y = sf.V6(
+        gps_pos[0] - pos[0], gps_pos[1] - pos[1], gps_pos[2] - pos[2],
+        gps_vel[0] - vel[0], gps_vel[1] - vel[1], gps_vel[2] - vel[2]
+    )
+
+    H = sf.Matrix.zeros(6, 15)
+    # GPS pos observes p_ned (state indices 6-8)
+    H[0, 6] = 1; H[1, 7] = 1; H[2, 8] = 1
+    # GPS vel observes v_ned (state indices 3-5)
+    H[3, 3] = 1; H[4, 4] = 1; H[5, 5] = 1
+
+    R = sf.Matrix.diag([pos_var[0], pos_var[1], pos_var[2],
+                        vel_var[0], vel_var[1], vel_var[2]])
+    S = H * P * H.T + R
+    K = P * H.T * S.inv()
+    dx = K * y
+    I = sf.Matrix.eye(15)
+    P_new = (I - K * H) * P
+
+    d_theta = sf.V3(dx[0], dx[1], dx[2])
+    q_new_rot     = quat * sf.Rot3.from_tangent(d_theta, epsilon=epsilon)
+    q_new_storage = q_new_rot.to_storage()
+    q_new = sf.V4(q_new_storage[3], q_new_storage[0], q_new_storage[1], q_new_storage[2])
+
+    vel_new = vel + sf.V3(dx[3], dx[4], dx[5])
+    pos_new = pos + sf.V3(dx[6], dx[7], dx[8])
+    bg_new  = gyro_bias  + sf.V3(dx[9],  dx[10], dx[11])
+    ba_new  = accel_bias + sf.V3(dx[12], dx[13], dx[14])
+
+    return q_new, vel_new, pos_new, bg_new, ba_new, P_new
+
+
 if __name__ == "__main__":
     print("Deriving 15-state ESKF covariance equations...")
 
@@ -208,13 +297,19 @@ if __name__ == "__main__":
 
     config = CppConfig(
         use_eigen_types=True,
-        explicit_template_instantiation_types=["float"] 
+        explicit_template_instantiation_types=["float"]
     )
-    
+
     codegen = Codegen.function(predict_covariance, config=config)
     codegen_data = codegen.generate_function(output_dir=output_dir)
-    
+
     codegen_update = Codegen.function(update_stationary, config=config)
     codegen_update.generate_function(output_dir=output_dir)
-    
+
+    codegen_baro = Codegen.function(update_baro, config=config)
+    codegen_baro.generate_function(output_dir=output_dir)
+
+    codegen_gps = Codegen.function(update_gps, config=config)
+    codegen_gps.generate_function(output_dir=output_dir)
+
     print(f"Generated C++ equations in {codegen_data.generated_files[0]}")
