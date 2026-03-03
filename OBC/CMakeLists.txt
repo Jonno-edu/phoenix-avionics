@@ -75,6 +75,37 @@ else()
     FetchContent_MakeAvailable(freertos_kernel)
 endif()
 
+# --- Eigen3 setup ---
+# Resolution order: 1) system-installed (any platform), 2) local lib/eigen3 cache,
+# 3) FetchContent download (populates lib/eigen3 for future builds).
+find_package(Eigen3 3.4 QUIET NO_MODULE)
+if(Eigen3_FOUND)
+    message(STATUS "Found system Eigen3: ${EIGEN3_INCLUDE_DIR}")
+else()
+    set(EIGEN3_LOCAL_PATH ${CMAKE_SOURCE_DIR}/lib/eigen3)
+    if(EXISTS "${EIGEN3_LOCAL_PATH}/Eigen/Core")
+        message(STATUS "Using local Eigen3 at: ${EIGEN3_LOCAL_PATH}")
+        set(EIGEN3_INCLUDE_DIR ${EIGEN3_LOCAL_PATH})
+    else()
+        if(EXISTS "${EIGEN3_LOCAL_PATH}")
+            file(REMOVE_RECURSE "${EIGEN3_LOCAL_PATH}")
+        endif()
+        message(STATUS "Eigen3 not found locally or system-wide. Downloading from GitLab...")
+        include(FetchContent)
+        FetchContent_Declare(eigen
+            GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
+            GIT_TAG 3.4.0
+            GIT_SHALLOW TRUE
+            SOURCE_DIR ${EIGEN3_LOCAL_PATH}
+        )
+        set(EIGEN_BUILD_DOC     OFF CACHE BOOL "" FORCE)
+        set(BUILD_TESTING       OFF CACHE BOOL "" FORCE)
+        set(EIGEN_BUILD_PKGCONFIG OFF CACHE BOOL "" FORCE)
+        FetchContent_MakeAvailable(eigen)
+        set(EIGEN3_INCLUDE_DIR ${EIGEN3_LOCAL_PATH})
+    endif()
+endif()
+
 ###########################################
 # nORB Topic Code Generation
 ###########################################
@@ -324,7 +355,7 @@ target_include_directories(${TARGET_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/gen/cpp/symforce      # SymForce generated math
     src/modules/estimator/fusion             # Local EKF headers
     src/modules/estimator/ekf_math           # Local EKF math headers
-    /opt/homebrew/include/eigen3             # Eigen headers (Homebrew)
+    ${EIGEN3_INCLUDE_DIR}                    # Eigen headers (portable)
 )
 
 if(NOT BUILD_FOR_HOST)

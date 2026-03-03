@@ -144,7 +144,7 @@ if __name__ == "__main__":
     
     # Configure code generator to output pure scalar flat arrays, avoiding Eigen objects
     config = CppConfig(
-        use_eigen_types=False,
+        use_eigen_types=True,
         explicit_template_instantiation_types=["float"] 
     )
     
