@@ -139,6 +139,65 @@ def predict_covariance(
 
     return P_new
 
+def update_stationary(
+    q: sf.V4,       # [w, x, y, z]
+    vel: sf.V3,
+    pos: sf.V3,
+    gyro_bias: sf.V3,
+    accel_bias: sf.V3,
+    P: MTangent,
+    gyro_raw: sf.V3,
+    vel_var: sf.V3,
+    gyro_var: sf.V3,
+    epsilon: sf.Scalar
+) -> T.Tuple[sf.V4, sf.V3, sf.V3, sf.V3, sf.V3, MTangent]:
+    """
+    Zero-Velocity and Zero-Rotation Measurement Update.
+    """
+    quat = sf.Rot3(sf.Quaternion(xyz=sf.V3(q[1], q[2], q[3]), w=q[0]))
+
+    # 1. Innovation (y = z_meas - z_pred)
+    # The pad is stationary, so true velocity is 0 and true rotation is 0.
+    # z_pred_vel = vel, so y_vel = 0 - vel
+    # z_pred_gyro = gyro_raw - gyro_bias (since gyro_raw = true_gyro + bias + noise)
+    y = sf.V6(
+        0 - vel[0], 0 - vel[1], 0 - vel[2],
+        gyro_raw[0] - gyro_bias[0], gyro_raw[1] - gyro_bias[1], gyro_raw[2] - gyro_bias[2]
+    )
+
+    # 2. Measurement Jacobian (H) [6x15 matrix]
+    # Maps how changes in the 15D error state affect our 6D measurement prediction
+    H = sf.Matrix.zeros(6, 15)
+    H[0, 3] = 1; H[1, 4] = 1; H[2, 5] = 1   # velocity error impacts velocity measurement
+    H[3, 9] = 1; H[4, 10] = 1; H[5, 11] = 1 # gyro bias error impacts gyro measurement
+
+    # 3. Measurement Noise Matrix (R)
+    R = sf.Matrix.diag([vel_var[0], vel_var[1], vel_var[2], gyro_var[0], gyro_var[1], gyro_var[2]])
+
+    # 4. Kalman Gain (K = P * H^T * (H * P * H^T + R)^-1)
+    S = H * P * H.T + R
+    K = P * H.T * S.inv()
+
+    # 5. Compute Error State (dx = K * y)
+    dx = K * y
+
+    # 6. Update Covariance (P_new = (I - K * H) * P)
+    I = sf.Matrix.eye(15)
+    P_new = (I - K * H) * P
+
+    # 7. Inject Error State into Nominal State
+    d_theta = sf.V3(dx[0], dx[1], dx[2])
+    q_new_rot = quat * sf.Rot3.from_tangent(d_theta, epsilon=epsilon)
+    q_new_storage = q_new_rot.to_storage()
+    q_new = sf.V4(q_new_storage[3], q_new_storage[0], q_new_storage[1], q_new_storage[2])
+
+    vel_new = vel + sf.V3(dx[3], dx[4], dx[5])
+    pos_new = pos + sf.V3(dx[6], dx[7], dx[8])
+    bg_new = gyro_bias + sf.V3(dx[9], dx[10], dx[11])
+    ba_new = accel_bias + sf.V3(dx[12], dx[13], dx[14])
+
+    return q_new, vel_new, pos_new, bg_new, ba_new, P_new
+
 if __name__ == "__main__":
     print("Deriving 15-state ESKF covariance equations...")
 
@@ -154,5 +213,8 @@ if __name__ == "__main__":
     
     codegen = Codegen.function(predict_covariance, config=config)
     codegen_data = codegen.generate_function(output_dir=output_dir)
+    
+    codegen_update = Codegen.function(update_stationary, config=config)
+    codegen_update.generate_function(output_dir=output_dir)
     
     print(f"Generated C++ equations in {codegen_data.generated_files[0]}")

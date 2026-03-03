@@ -11,7 +11,7 @@ __pycache__/
 *$py.class
 
 # IDE settings
-.vscode/
+# .vscode/
 .idea/
 *.swp
 *.swo

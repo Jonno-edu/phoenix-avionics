@@ -213,7 +213,7 @@
         {
             "label": "Test: Run EKF Suite",
             "type": "shell",
-            "command": "cmake --build build_host --target run_ekf_tests",
+            "command": "cd build_host && rm -f CMakeCache.txt && cmake -DPICO_PLATFORM=host -DPICO_BOARD=none .. && cmake --build . --target run_ekf_tests",
             "group": {
                 "kind": "test",
                 "isDefault": true

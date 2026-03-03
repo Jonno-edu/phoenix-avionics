@@ -54,6 +54,8 @@ set(EKF_GEN_SCRIPT  ${ESTIMATOR_DIR}/ekf_math/generate_eskf_math.py)
 set(EKF_GEN_FILES
     ${EKF_GEN_DIR}/cpp/symforce/sym/predict_covariance.h
     ${EKF_GEN_DIR}/cpp/symforce/sym/predict_covariance.cc
+    ${EKF_GEN_DIR}/cpp/symforce/sym/update_stationary.h
+    ${EKF_GEN_DIR}/cpp/symforce/sym/update_stationary.cc
 )
 
 set(VENV_PYTHON ${CMAKE_SOURCE_DIR}/.venv/bin/python3)
@@ -75,6 +77,7 @@ add_library(estimator_lib STATIC
     fusion/imu_predictor.c
     ekf_math/symforce_wrapper.cpp
     ${EKF_GEN_DIR}/cpp/symforce/sym/predict_covariance.cc
+    ${EKF_GEN_DIR}/cpp/symforce/sym/update_stationary.cc
 )
 
 add_dependencies(estimator_lib generate_ekf_math)

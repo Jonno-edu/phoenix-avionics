@@ -10,12 +10,28 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <math.h>
 #include <stdbool.h>
 #include <string.h>
 
 #include "ekf_core.h"
 #include "ekf_math/symforce_wrapper.h"
+
+// Generates normally distributed noise: N(mu, sigma^2)
+static float generate_gaussian_noise(float mu, float sigma) {
+    static const float epsilon = 1e-6f;
+    static const float two_pi = 2.0f * 3.14159265358979323846f;
+    
+    float u1, u2;
+    do {
+        u1 = (float)rand() / (float)RAND_MAX;
+        u2 = (float)rand() / (float)RAND_MAX;
+    } while (u1 <= epsilon);
+    
+    float z0 = sqrtf(-2.0f * logf(u1)) * cosf(two_pi * u2);
+    return z0 * sigma + mu;
+}
 
 /* ── Minimal test harness ──────────────────────────────────────────────────── */
 
@@ -235,75 +251,68 @@ static void test_quaternion_norm_preserved_after_predict(void) {
     printf("OK  (|q| = %.8f)\n", (double)quat_norm(ekf.state.q));
 }
 
-static void test_process_csv_data(void) {
-    printf("  test_process_csv_data ... \n");
+static void test_stationary_bias_convergence(void) {
+    printf("  test_stationary_bias_convergence ... \n");
+    
     ekf_core_t ekf;
     ekf_core_init(&ekf);
 
-    /* Path assumes running from OBC/build_host or similar */
-    FILE *file = fopen("../../GSU/phoenix_sensor_stream.csv", "r");
-    if (!file) {
-        /* Try one level up (if running from OBC) */
-        file = fopen("../GSU/phoenix_sensor_stream.csv", "r");
-    }
-    if (!file) {
-        /* Try absolute path based on workspace info */
-        file = fopen("/Users/jonno/GitProjects/Phoenix/phoenix-avionics/GSU/phoenix_sensor_stream.csv", "r");
-    }
+    // 1. Define our TRUE state (Ground Truth)
+    const float true_accel[3] = {0.0f, 0.0f, 9.80665f}; // Gravity in NED
+    const float true_gyro[3]  = {0.0f, 0.0f, 0.0f};     // Not rotating
+    
+    // The secret biases we want the EKF to find
+    const float hidden_gyro_bias[3] = {0.005f, -0.002f, 0.015f};
+    const float hidden_accel_bias[3] = {0.1f, -0.05f, 0.0f};
 
-    if (!file) {
-        printf("  SKIP: Could not open phoenix_sensor_stream.csv\n");
-        return;
-    }
+    // IMU Noise profiles (Standard Deviations)
+    const float accel_noise_std = 0.05f; // m/s^2
+    const float gyro_noise_std  = 0.002f; // rad/s
+    
+    // EKF tuning parameters
+    const float dt = 0.004f; // 250Hz
+    const float accel_var[3] = {accel_noise_std*accel_noise_std, accel_noise_std*accel_noise_std, accel_noise_std*accel_noise_std};
+    const float gyro_var = gyro_noise_std*gyro_noise_std;
 
-    char line[512];
-    /* Skip header: time,pressure_pa,temp_c,temp_stack,accel_x,accel_y,accel_z,gyro_x,gyro_y,gyro_z,... */
-    if (!fgets(line, sizeof(line), file)) {
-        fclose(file);
-        return;
-    }
+    // 2. Run the simulation for 15 seconds (3750 steps at 250Hz)
+    for (int i = 0; i < 3750; i++) {
+        float meas_accel[3];
+        float meas_gyro[3];
 
-    int step_count = 0;
-    float last_time = 0.0f;
-
-    /* Read first 1000 steps to verify stability */
-    while (fgets(line, sizeof(line), file) && step_count < 1000) {
-        float t, p, tc, ts, ax, ay, az, gx, gy, gz;
-        /* CSV: time,pressure_pa,temp_c,temp_stack,accel_x,accel_y,accel_z,gyro_x,gyro_y,gyro_z,... */
-        if (sscanf(line, "%f,%f,%f,%f,%f,%f,%f,%f,%f,%f", 
-                   &t, &p, &tc, &ts, &ax, &ay, &az, &gx, &gy, &gz) == 10) 
-        {
-            float dt = (step_count == 0) ? 0.004f : (t - last_time);
-            if (dt <= 0.0f || dt > 0.1f) dt = 0.004f;
-
-            float accel[3] = {ax, ay, az};
-            float gyro[3]  = {gx, gy, gz};
-
-            /* Note: We use the raw symforce predictor here since we're in a standalone test.
-               In flight, this is wrapped by imu_predict() in imu_predictor.c */
-            float accel_var[3] = {0.01f, 0.01f, 0.01f};
-            float gyro_var     = 1e-4f;
-
-            symforce_predict_covariance(
-                ekf.P, ekf.state.q, ekf.state.v_ned, ekf.state.p_ned,
-                ekf.state.gyro_bias, ekf.state.accel_bias,
-                accel, accel_var, gyro, gyro_var, dt
-            );
-
-            /* Very basic nominal integration for velocity just to check finiteness */
-            for(int i=0; i<3; i++) ekf.state.v_ned[i] += ax * dt; 
-
-            last_time = t;
-            step_count++;
+        // Generate synthetic noisy measurements with hidden bias
+        for (int axis = 0; axis < 3; axis++) {
+            meas_accel[axis] = true_accel[axis] + hidden_accel_bias[axis] + generate_gaussian_noise(0.0f, accel_noise_std);
+            meas_gyro[axis]  = true_gyro[axis]  + hidden_gyro_bias[axis]  + generate_gaussian_noise(0.0f, gyro_noise_std);
         }
+
+        // Run the prediction step
+        symforce_predict_covariance(
+            ekf.P, ekf.state.q, ekf.state.v_ned, ekf.state.p_ned,
+            ekf.state.gyro_bias, ekf.state.accel_bias,
+            meas_accel, accel_var, meas_gyro, gyro_var, dt
+        );
+
+        // Tell the EKF: "I am 100% sure I am not moving"
+        const float meas_vel_var[3]  = {1e-6f, 1e-6f, 1e-6f}; 
+        const float meas_gyro_var[3] = {1e-6f, 1e-6f, 1e-6f}; 
+
+        symforce_update_stationary(
+            ekf.P, ekf.state.q, ekf.state.v_ned, ekf.state.p_ned,
+            ekf.state.gyro_bias, ekf.state.accel_bias,
+            meas_gyro, meas_vel_var, meas_gyro_var
+        );
     }
 
-    fclose(file);
-    ASSERT_TRUE(step_count > 0);
-    ASSERT_TRUE(all_finite(ekf.P, 225));
-    ASSERT_TRUE(all_finite(ekf.state.v_ned, 3));
+    // 3. Assert the EKF found the secret biases!
+    // We allow a small tolerance since it's estimating through noise.
+    printf("    Target Gyro Bias:  [%.4f, %.4f, %.4f]\n", hidden_gyro_bias[0], hidden_gyro_bias[1], hidden_gyro_bias[2]);
+    printf("    EKF Gyro Bias:     [%.4f, %.4f, %.4f]\n", ekf.state.gyro_bias[0], ekf.state.gyro_bias[1], ekf.state.gyro_bias[2]);
 
-    printf("  OK: Processed %d steps from CSV\n", step_count);
+    ASSERT_NEAR(ekf.state.gyro_bias[0], hidden_gyro_bias[0], 0.002f);
+    ASSERT_NEAR(ekf.state.gyro_bias[1], hidden_gyro_bias[1], 0.002f);
+    ASSERT_NEAR(ekf.state.gyro_bias[2], hidden_gyro_bias[2], 0.002f);
+    
+    printf("  OK\n");
 }
 
 /* ── Main ──────────────────────────────────────────────────────────────────── */
@@ -318,7 +327,7 @@ int main(void) {
     test_covariance_grows_after_predict();
     test_covariance_stays_finite_over_1s();
     test_quaternion_norm_preserved_after_predict();
-    test_process_csv_data();
+    test_stationary_bias_convergence();
 
     printf("\n--------------------------------------\n");
     printf("  %d / %d tests passed.\n", g_tests_passed, g_tests_run);

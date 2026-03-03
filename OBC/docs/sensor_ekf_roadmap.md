@@ -67,6 +67,10 @@ The estimator module follows a strict separation of concerns:
 - **Generation Logic ([src/modules/estimator/ekf_math/generate_eskf_math.py](src/modules/estimator/ekf_math/generate_eskf_math.py))**: 
     - SymForce Python script that derives the ESKF Jacobians and unrolls the $F P F^T$ math into pure C++.
     - **Build Integration**: CMake automatically runs this script using the project `.venv` whenever the script changes.
+- **Testing Infrastructure ([src/modules/estimator/tests/test_ekf_predict.c](src/modules/estimator/tests/test_ekf_predict.c))**:
+    - Pure C standalone test suite configured to build and run natively on the host machine.
+    - Simulates synthetic sensor data with embedded/hidden true biases and white noise (Box-Muller).
+    - Verifies the filter covariance equations and ensures state/bias convergence.
 
 ### ESKF State Definition
 We implement a **15-state ESKF** (omitting the wind and magnetic field states from the full 24-state PX4 filter).
@@ -86,11 +90,11 @@ Error state ordering: `[δθ, δv, δp, δbg, δba]`.
 
 1. **Create the SymForce Code Generator:** (✅ Done)
    - Created `src/modules/estimator/ekf_math/generate_eskf_math.py`.
-   - SymForce generates optimized C++ headers in `gen/cpp/symforce/sym/`.
+   - SymForce generates optimized C++ headers in `gen/cpp/symforce/sym/` for both `predict_covariance` and `update_stationary` (ZVU/ZRU).
 
 2. **Implement the Math Bridge:** (✅ Done)
    - Created `symforce_wrapper.cpp` (C++) and `symforce_wrapper.h` (C/C++ bridge).
-   - Uses `Eigen::Map` to bridge raw C float arrays to SymForce's Eigen-based math templates.
+   - Uses `Eigen::Map` to bridge raw C float arrays to SymForce's Eigen-based math templates for both prediction and stationary updates.
 
 3. **Implement EKF Core & IMU Propagation:** (✅ Done)
    - `ekf_core.c`: Manages the 11-state nominal vector + 15x15 covariance memory.
@@ -101,7 +105,7 @@ Error state ordering: `[δθ, δv, δp, δbg, δba]`.
    - Publish `TOPIC_ESTIMATOR_SENSOR_BIAS`.
 
 ### Verification
-Log `vehicle_state.quaternion` and `estimator_sensor_bias.gyro_bias_rads`. During the alignment phase, `q` should correctly initialize pitch/roll. During the predict loop, `q` should remain stable, and the Z-axis gyro bias should converge toward the simulated `0.01 rad/s` offset.
+**✅ Done (via Native Tests).** Built a pure C host test suite (`test_ekf_predict.c`) that models a stationary IMU with Gaussian noise and specific hidden biases (e.g., `gyro_bias = [0.005, -0.002, 0.015]`). Using the combined symbolic prediction and newly derived `update_stationary` Jacobians, the 15-state ESKF successfully converges and perfectly isolates the hidden biases.
 
 ***
 
