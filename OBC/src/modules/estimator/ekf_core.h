@@ -1,6 +1,10 @@
 #ifndef EKF_CORE_H
 #define EKF_CORE_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -37,5 +41,9 @@ void ekf_core_init(ekf_core_t* ekf);
  * @param ekf Pointer to the EKF core structure
  */
 void ekf_core_reset(ekf_core_t* ekf);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // EKF_CORE_H

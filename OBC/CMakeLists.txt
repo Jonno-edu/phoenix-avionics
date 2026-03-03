@@ -17,8 +17,12 @@ cmake_minimum_required(VERSION 3.13)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Default board (can be overridden via -DPICO_BOARD=...)
-set(PICO_BOARD pico2 CACHE STRING "Board type")
+# Default board (can be overridden via -DPICO_BOARD=...).
+# Do NOT set a default when targeting the host platform — the Pico SDK does not
+# need a board definition in that case and will error if given a hardware board.
+if(NOT PICO_PLATFORM STREQUAL "host")
+    set(PICO_BOARD pico2 CACHE STRING "Board type")
+endif()
 
 include(pico_sdk_import.cmake)
 project(phoenix_avionics_monorepo)
@@ -75,36 +79,8 @@ else()
     FetchContent_MakeAvailable(freertos_kernel)
 endif()
 
-# --- Eigen3 setup ---
-# Resolution order: 1) system-installed (any platform), 2) local lib/eigen3 cache,
-# 3) FetchContent download (populates lib/eigen3 for future builds).
-find_package(Eigen3 3.4 QUIET NO_MODULE)
-if(Eigen3_FOUND)
-    message(STATUS "Found system Eigen3: ${EIGEN3_INCLUDE_DIR}")
-else()
-    set(EIGEN3_LOCAL_PATH ${CMAKE_SOURCE_DIR}/lib/eigen3)
-    if(EXISTS "${EIGEN3_LOCAL_PATH}/Eigen/Core")
-        message(STATUS "Using local Eigen3 at: ${EIGEN3_LOCAL_PATH}")
-        set(EIGEN3_INCLUDE_DIR ${EIGEN3_LOCAL_PATH})
-    else()
-        if(EXISTS "${EIGEN3_LOCAL_PATH}")
-            file(REMOVE_RECURSE "${EIGEN3_LOCAL_PATH}")
-        endif()
-        message(STATUS "Eigen3 not found locally or system-wide. Downloading from GitLab...")
-        include(FetchContent)
-        FetchContent_Declare(eigen
-            GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
-            GIT_TAG 3.4.0
-            GIT_SHALLOW TRUE
-            SOURCE_DIR ${EIGEN3_LOCAL_PATH}
-        )
-        set(EIGEN_BUILD_DOC     OFF CACHE BOOL "" FORCE)
-        set(BUILD_TESTING       OFF CACHE BOOL "" FORCE)
-        set(EIGEN_BUILD_PKGCONFIG OFF CACHE BOOL "" FORCE)
-        FetchContent_MakeAvailable(eigen)
-        set(EIGEN3_INCLUDE_DIR ${EIGEN3_LOCAL_PATH})
-    endif()
-endif()
+# --- Estimator module (owns Eigen3, SymForce gen, estimator_lib, and unit tests) ---
+add_subdirectory(src/modules/estimator)
 
 ###########################################
 # nORB Topic Code Generation
@@ -143,6 +119,10 @@ add_custom_command(
 
 # Convenience target so IDEs can trigger generation without a full build.
 add_custom_target(norb_generate DEPENDS ${NORB_GEN_OUTPUTS})
+
+# estimator_lib compiles imu_predictor.c which includes vehicle_imu.h.
+# Ensure the nORB headers are generated first.
+add_dependencies(estimator_lib norb_generate)
 
 # The application target
 set(TARGET_NAME phoenix_avionics_monorepo)
@@ -239,10 +219,6 @@ set(COMMON_SOURCES
     src/modules/sensors/integrator.c
     src/modules/sensors/sim/sim_imu.c
     src/modules/estimator/ekf.c
-    src/modules/estimator/ekf_core.c
-    src/modules/estimator/fusion/imu_predictor.c
-    src/modules/estimator/ekf_math/symforce_wrapper.cpp
-    gen/cpp/symforce/sym/predict_covariance.cc
     src/modules/datalink/datalink.c
     src/modules/datalink/receiver.c
     src/modules/datalink/tctlm.c
@@ -315,33 +291,8 @@ target_link_options(${TARGET_NAME} PRIVATE
 )
 
 ###########################################
-# Include Directories (NEW MODULE STRUCTURE)
+# Include Directories
 ###########################################
-
-set(GEN_DIR ${CMAKE_SOURCE_DIR}/gen)
-set(EKF_GEN_SCRIPT ${CMAKE_SOURCE_DIR}/src/modules/estimator/ekf_math/generate_eskf_math.py)
-set(EKF_GEN_FILES 
-    ${GEN_DIR}/cpp/symforce/sym/predict_covariance.h
-    ${GEN_DIR}/cpp/symforce/sym/predict_covariance.cc
-)
-
-# Use the workspace-local virtual environment for SymForce generation
-set(VENV_PYTHON ${CMAKE_SOURCE_DIR}/.venv/bin/python3)
-
-add_custom_command(
-    OUTPUT ${EKF_GEN_FILES}
-    COMMAND ${VENV_PYTHON} ${EKF_GEN_SCRIPT}
-    DEPENDS ${EKF_GEN_SCRIPT}
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    COMMENT "Generating ESKF math equations via SymForce (using venv)..."
-    VERBATIM
-)
-
-# Create a target for the math generation so other things can depend on it
-add_custom_target(generate_ekf_math DEPENDS ${EKF_GEN_FILES})
-
-# Ensure the main executable waits for the math to be generated
-add_dependencies(${TARGET_NAME} generate_ekf_math)
 
 target_include_directories(${TARGET_NAME} PRIVATE
     ${NORB_GEN_DIR}                          # Generated: norb/topics.h, norb/topic_defs/*.h
@@ -352,10 +303,6 @@ target_include_directories(${TARGET_NAME} PRIVATE
     hal                                      # HAL headers
     ${CMAKE_SOURCE_DIR}/lib/esl-comms/include # RS485 protocol
     ${CMAKE_SOURCE_DIR}/lib/esl-math/include  # Math utilities
-    ${CMAKE_SOURCE_DIR}/gen/cpp/symforce      # SymForce generated math
-    src/modules/estimator/fusion             # Local EKF headers
-    src/modules/estimator/ekf_math           # Local EKF math headers
-    ${EIGEN3_INCLUDE_DIR}                    # Eigen headers (portable)
 )
 
 if(NOT BUILD_FOR_HOST)
@@ -401,6 +348,7 @@ if(BUILD_FOR_HOST)
     target_link_libraries(${TARGET_NAME} PRIVATE
         freertos_config
         FreeRTOS-Kernel
+        estimator_lib
     )
 else()
     # For Pico builds
@@ -414,6 +362,7 @@ else()
 
         freertos_config
         FreeRTOS-Kernel
+        estimator_lib
     )
 
     pico_add_extra_outputs(${TARGET_NAME})

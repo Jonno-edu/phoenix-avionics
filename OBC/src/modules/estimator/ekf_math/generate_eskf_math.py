@@ -141,14 +141,18 @@ def predict_covariance(
 
 if __name__ == "__main__":
     print("Deriving 15-state ESKF covariance equations...")
-    
-    # Configure code generator to output pure scalar flat arrays, avoiding Eigen objects
+
+    # Output directory is always estimator/gen/ regardless of where the script
+    # is invoked from (CMake, terminal, CI).
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    output_dir = os.path.abspath(os.path.join(script_dir, "../gen"))
+
     config = CppConfig(
         use_eigen_types=True,
         explicit_template_instantiation_types=["float"] 
     )
     
     codegen = Codegen.function(predict_covariance, config=config)
-    codegen_data = codegen.generate_function(output_dir="gen")
+    codegen_data = codegen.generate_function(output_dir=output_dir)
     
     print(f"Generated C++ equations in {codegen_data.generated_files[0]}")
