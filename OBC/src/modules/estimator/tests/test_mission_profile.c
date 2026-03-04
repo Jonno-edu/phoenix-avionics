@@ -60,9 +60,19 @@ static void test_full_mission_60s(void)
     ekf_core_init(&ekf);
     ekf_state_init(&ctx, SB_MAG_NED, 0.004f);
 
+    /* Bypass LEVELING and HEADING_ALIGN by injecting the known launch-rail
+     * orientation directly.  elevation=0 (level body) matches the test physics
+     * which use specific_force=[0,0,-g] on the pad.  On the real flight
+     * computer use LAUNCH_RAIL_ELEVATION_RAD / LAUNCH_RAIL_AZIMUTH_RAD from
+     * sensor_config.h instead. */
+    ekf_state_set_launch_rail(&ctx, &ekf, 0.0f, 0.0f);
+
     const float dt = 0.004f;   /* 250 Hz */
 
-    /* Hidden biases (what the real sensor has on top of true physics) */
+    /* Residual turn-on biases that remain *after* factory bench calibration.
+     * These are deliberately small — the factory NVM constants (sensor_config.h)
+     * would have already removed the large, static portion.  The ZVU phase
+     * estimates and corrects for these small run-to-run offsets. */
     const float gyro_bias_true[3]  = { 0.003f, -0.001f,  0.005f };  /* rad/s */
     const float accel_bias_true[3] = { 0.02f,  -0.03f,   0.08f  };  /* m/s² */
 

@@ -146,6 +146,27 @@ ekf_flight_mode_t ekf_state_get_mode(const ekf_state_ctx_t *ctx);
  */
 bool ekf_state_is_flight_ready(const ekf_state_ctx_t *ctx);
 
+/**
+ * @brief Hard-initialise attitude from known launch-rail geometry.
+ *
+ * Converts the given Z-Y-X Euler angles (azimuth/elevation/zero-roll) directly
+ * into the EKF attitude quaternion and fast-forwards the state machine into
+ * EKF_MODE_ZVU_CALIBRATING, bypassing the LEVELING and HEADING_ALIGN phases.
+ *
+ * Call this immediately after ekf_state_init() when the vehicle is known to be
+ * fixed to a launch rail (GSE constraint), or in unit tests to skip the gravity
+ * leveling checks.
+ *
+ * @param ctx           State machine context (mode will be overwritten).
+ * @param ekf           EKF core state (q and flight_mode are modified in-place).
+ * @param elevation_rad Launch rail elevation: 0 = horizontal, π/2 = vertical nose-up.
+ * @param azimuth_rad   Launch rail azimuth from True North (0 = North, π/2 = East).
+ */
+void ekf_state_set_launch_rail(ekf_state_ctx_t *ctx,
+                               ekf_core_t      *ekf,
+                               float            elevation_rad,
+                               float            azimuth_rad);
+
 #ifdef __cplusplus
 }
 #endif

@@ -301,6 +301,45 @@ void ekf_state_update(ekf_state_ctx_t *ctx,
     }
 }
 
+void ekf_state_set_launch_rail(ekf_state_ctx_t *ctx,
+                               ekf_core_t      *ekf,
+                               float            elevation_rad,
+                               float            azimuth_rad)
+{
+    /* Assume zero roll while locked to the launch rail. */
+    float roll_rad = 0.0f;
+
+    float cy = cosf(azimuth_rad   * 0.5f);
+    float sy = sinf(azimuth_rad   * 0.5f);
+    float cp = cosf(elevation_rad * 0.5f);
+    float sp = sinf(elevation_rad * 0.5f);
+    float cr = cosf(roll_rad      * 0.5f);
+    float sr = sinf(roll_rad      * 0.5f);
+
+    /* Standard Z-Y-X Euler → quaternion conversion. */
+    float qw = cy * cp * cr + sy * sp * sr;
+    float qx = cy * sp * cr - sy * cp * sr;
+    float qy = cy * cp * sr + sy * sp * cr;
+    float qz = sy * cp * cr - cy * sp * sr;
+
+    float n = sqrtf(qw*qw + qx*qx + qy*qy + qz*qz);
+    if (n > 1e-6f) {
+        ekf->state.q[0] = qw / n;
+        ekf->state.q[1] = qx / n;
+        ekf->state.q[2] = qy / n;
+        ekf->state.q[3] = qz / n;
+    }
+
+    /* Seed previous-bias snapshot so ZVU convergence monitor starts cleanly. */
+    for (int i = 0; i < 3; i++) {
+        ctx->bg_prev[i] = ekf->state.gyro_bias[i];
+    }
+
+    /* Fast-forward: skip LEVELING and HEADING_ALIGN. */
+    ctx->mode        = EKF_MODE_ZVU_CALIBRATING;
+    ekf->flight_mode = EKF_MODE_ZVU_CALIBRATING;
+}
+
 ekf_flight_mode_t ekf_state_get_mode(const ekf_state_ctx_t *ctx)
 {
     return ctx->mode;
