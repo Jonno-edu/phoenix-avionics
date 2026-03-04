@@ -35,6 +35,7 @@ typedef struct {
     float p_ned[3];      // Position [x, y, z] (m)
     float gyro_bias[3];  // Gyro bias [wx, wy, wz] (rad/s)
     float accel_bias[3]; // Accel bias [ax, ay, az] (m/s^2)
+    float prev_gyro[3];  // Previous un-biased gyro rate [wx, wy, wz] (rad/s) — bookkeeping for angular accel (NOT a filter state)
 } ekf_state_t;
 
 /**

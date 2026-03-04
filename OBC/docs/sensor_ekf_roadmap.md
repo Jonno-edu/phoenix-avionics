@@ -41,9 +41,10 @@ The EKF uses an **Error-State Kalman Filter (ESKF)** formulation derived from Jo
 | 2 | Simulated IMU Driver + Integrator | ✅ Complete |
 | 3 | ESKF Core: IMU Propagation | ✅ Complete |
 | 4 | ESKF Fusion Math & Adversarial Test Suite | ✅ Complete |
-| 5 | Sensor Plumbing & Voting | ⏳ Pending |
-| 6 | Launchpad Alignment & Flight State Machine | ⏳ Pending |
-| 7 | Commander Arming Gate | ⏳ Pending |
+| 5 | Kinematic Lever Arm Compensation & Attitude Tests | ✅ Complete |
+| 6 | Sensor Plumbing & Voting | ⏳ Pending |
+| 7 | Launchpad Alignment & Flight State Machine | ⏳ Pending |
+| 8 | Commander Arming Gate | ⏳ Pending |
 | — | Rate Conditioner (`angvel.c`) | 🔁 Deferred (no consumer yet) |
 
 ---
@@ -114,7 +115,7 @@ Error-state ordering: `[δθ, δv, δp, δbg, δba]`.
 
 **Goal:** Expand the SymForce mathematical foundation to include measurement updates for GPS and Barometer. Prove the filter is correct under both ideal and adversarial conditions using a rigorous host-compiled test suite before touching FreeRTOS or hardware drivers.
 
-*Status: All fusion math generated, bridged, and verified. 59/59 host tests pass across 4 domain-separated test files covering: unit math, 60 s bias-convergence fusion, 1D launch profile, ±50 m/s² motor vibration, outlier rejection gates, GPS dropout dead-reckoning, and NaN guard probing.*
+*Status: All fusion math generated, bridged, and verified. 96/96 host tests pass across 6 domain-separated test files covering: unit math, 60 s bias-convergence fusion, 1D launch profile, high-rate attitude test, ±50 m/s² motor vibration, outlier rejection gates, GPS dropout dead-reckoning, and 60 s mission-profile timelines.*
 
 ### Fusion Implementation Details
 
@@ -142,19 +143,18 @@ Error-state ordering: `[δθ, δv, δp, δbg, δba]`.
 
 #### Observability Notes
 
-| State | Observable via GPS+Baro? | Notes |
-|-------|--------------------------|-------|
-| `p_ned` | ✅ Yes | Both sensors directly constrain position |
+| State | Observable via GPS+Baro+Mag? | Notes |
+|-------|------------------------------|-------|
+| `p_ned` | ✅ Yes | All axes constrained via GPS and Barometer |
 | `v_ned` | ✅ Yes | GPS velocity directly constrains `v_ned` |
-| `gyro_bias[0,1]` | ✅ Yes (indirect) | Tilt error from roll/pitch torques creates observable signal |
-| `gyro_bias[2]` | ❌ No | Yaw axis unobservable without magnetometer or rotation excitation |
-| `accel_bias` | ⚠️ Partial | Z-axis converges slowly via baro; X/Y require lateral dynamics |
+| `gyro_bias` | ✅ Yes | **Fully observable**. Roll/Pitch converge via gravity (accelerometer); Yaw converges via 3D Magnetometer fusion. |
+| `accel_bias` | ⚠️ Partial | Z-axis converges slowly via baro; X/Y require translational dynamics |
 
 ---
 
-### Test Suite — Full Results (3 March 2026)
+### Test Suite — Full Results (4 March 2026)
 
-The monolithic `test_ekf_predict.c` was replaced with a domain-separated multi-file suite. The old file has been deleted. All 59 tests pass.
+The monolithic `test_ekf_predict.c` was replaced with a domain-separated multi-file suite. All 96 tests pass.
 
 **Build command:** `cmake --build build_host --target run_ekf_tests`
 
@@ -177,14 +177,13 @@ The monolithic `test_ekf_predict.c` was replaced with a domain-separated multi-f
 
   test_stationary_bias_convergence ...
     Target Gyro Bias:  [0.0050, -0.0020, 0.0150]
-    EKF Gyro Bias:     [0.0050, -0.0020, 0.0150]   ← exact convergence
+    EKF Gyro Bias:     [0.0050, -0.0020, 0.0150]   ← exact convergence (all 3 axes)
     OK
 
-  test_gps_baro_fusion ...
-    True  p_ned[2]: -120.019 m   |  EKF: -120.030 m   (error: 0.011 m)
-    True  v_ned[2]:   -2.000 m/s |  EKF:   -2.001 m/s (error: 0.001 m/s)
-    True  gyro_bias: [0.0100, -0.0050, 0.0020]
-    EKF   gyro_bias: [0.0100, -0.0050, 0.0004]   ← Z unobservable, as expected
+  test_mag_fusion ...
+    [Warmed with 3D Magnetometer fusion]
+    After 30s ZVU+Mag: Gyro Bias [0.0050, -0.0020, 0.0150]
+    ← Yaw bias verified observable via Mag
     OK
 
 === EKF Dynamic Flight Suite (launch profile / vibration) ===  [test_ekf_dynamic.c]
@@ -200,6 +199,12 @@ The monolithic `test_ekf_predict.c` was replaced with a domain-separated multi-f
     [2 s at ±50 m/s² zero-mean IMU noise — extreme solid rocket motor vibration]
     P trace after vibration: 1243.0861   ← finite, bounded
     |q| = 1.00000000                     ← quaternion numerically stable
+    OK
+
+  test_high_roll_rate ...
+    [5 s @ 10 rad/s pitch with 10 cm X-axis lever arm]
+    |q| = 1.00000000                     ← stable at high angular rates
+    v_ned[0] = 0.009 m/s                 ← lever arm centripetal term stripped
     OK
 
 === EKF Fault Injection Suite (gating / dropouts / NaN) ===  [test_ekf_faults.c]
@@ -234,7 +239,7 @@ The monolithic `test_ekf_predict.c` was replaced with a domain-separated multi-f
     OK (documented)
 
 ══════════════════════════════════════════════════════
-  59 / 59 tests passed.
+  96 / 96 tests passed.
 ══════════════════════════════════════════════════════
 ```
 
@@ -249,6 +254,8 @@ The monolithic `test_ekf_predict.c` was replaced with a domain-separated multi-f
 | Gyro-Z bias does not converge (0.0020 → 0.0004) | Expected and correct — yaw is unobservable without magnetometer |
 | Launch profile: 20 s / 1427 m trajectory, error 0.168 m | Filter survives 3g ignition and freefall transition |
 | Motor vibration: P trace 1243 after ±50 m/s² noise | Covariance bounded; no divergence under extreme SRM noise |
+| High rate pitch: |q| = 1.00000000 at 10 rad/s | Quaternion integration remains stable at high rotation rates |
+| High rate pitch: v_ned error < 0.01 m/s | Lever arm centripetal compensation verified to remove massive spurious acceleration |
 | Baro −200 m spike: Δp = 0.000 m | Innovation gate working perfectly |
 | GPS +50 m/s spike: Δv = 0.000 m/s | Innovation gate working perfectly |
 | GPS dropout: Z error 0.025 m after 30 s | Baro anchors Z independently; dead-reckoning is clean |
@@ -259,30 +266,41 @@ The monolithic `test_ekf_predict.c` was replaced with a domain-separated multi-f
 
 ```
 src/modules/estimator/tests/
-├── test_utils.h          — shared macros (ASSERT_NEAR, ASSERT_TRUE), mock types,
-│                           declarations for all shared helpers
-├── test_utils.c          — Box-Muller noise generator, propagate_nominal_state,
-│                           mock baro/GPS generators, matrix/quat math helpers
-├── test_ekf_core.c       — 7 tests: init, reset, covariance propagation math
-├── test_ekf_fusion.c     — 2 tests: stationary ZVU bias convergence, 60 s GPS+Baro
-├── test_ekf_dynamic.c    — 2 tests: 1D launch profile, ±50 m/s² motor vibration
-├── test_ekf_faults.c     — 4 tests: baro outlier, GPS glitch, GPS dropout, NaN guard
-└── test_main.c           — master runner with suite banners and pass/fail exit code
+├── test_utils.h          — shared macros (ASSERT_NEAR, ASSERT_TRUE), mock types
+├── test_utils.c          — Box-Muller generator, mock sensors, quat math
+├── test_ekf_core.c       — init, reset, covariance propagation math
+├── test_ekf_fusion.c     — stationary ZVU convergence, 60 s GPS+Baro+Mag
+├── test_ekf_dynamic.c    — 1D launch profile, ±50 m/s² vibration, high-rate spin
+├── test_ekf_faults.c     — baro outlier, GPS glitch, GPS dropout, NaN guard
+├── test_ekf_state.c      — 5-stage warmup state machine transitions
+├── test_mission_profile.c — 60-second pad-to-apogee mission timeline
+└── test_main.c           — master runner with suite banners
 ```
 
 #### Known Limitations & Open Items
 
 | Item | Severity | Notes |
 |------|----------|-------|
-| Gyro-Z bias not observable | By design | Requires magnetometer; will be addressed in Phase 6 |
-| Accel-Z bias partial convergence (0.1289 vs 0.1500 @ 20 s) | Low | Expected behaviour; convergence continues slowly after burn. Baro noise limits final resolution |
+| Gyro-Z bias not observable | By design | Requires magnetometer; will be addressed in Phase 7 |
 | Horizontal dead-reckoning drift 2.3 m/s over 30 s | Acceptable | Bounded by calibrated biases. GPS dropout > 30 s should trigger a flight-mode warning in the commander |
-| No attitude-mode tests (rapid roll/pitch) | Gap | A 360°/s roll test would prove quaternion stability at high angular rates |
 | Baro gate hardcoded at ±5 m | Review needed | During apogee approach (near Mach 1) a tighter or dynamic gate may be warranted |
 
 ---
 
-## Phase 5 — Sensor Plumbing & Voting (⏳ Pending)
+## Phase 5 — Kinematic Lever Arm Compensation & Attitude Tests (✅ Complete)
+
+**Goal:** Allow the IMU to be mounted off-axis from the vehicle CG without rotational kinematics corrupting the velocity and position state. Resolve the "attitude-mode" test gap.
+
+### Accomplishments
+
+1. **Lever Arm Math:** Implemented $\omega \times (\omega \times r)$ (centripetal) and $\alpha \times r$ (tangential) acceleration compensation inside `imu_predict()`.
+2. **`prev_gyro` bookkeeping field:** Added `prev_gyro[3]` to `ekf_state_t` to enable angular-acceleration estimation.
+3. **Attitude Test Suite:** Added a high-rate pitch test to `test_ekf_dynamic.c` verifying the centripetal term is stripped correctly at 10 rad/s.
+4. **Verification:** Proved that the quaternion stays strictly normalised (|q|=1.000) and NED velocity does not diverge due to lever-arm induced acceleration.
+
+---
+
+## Phase 6 — Sensor Plumbing & Voting (⏳ Pending)
 
 **Goal:** Establish the pre-EKF FreeRTOS sensor pipeline for Magnetometer, GPS, and dual Barometers.
 
@@ -301,7 +319,7 @@ src/modules/estimator/tests/
 
 ---
 
-## Phase 6 — Launchpad Alignment & Flight State Machine (⏳ Pending)
+## Phase 7 — Launchpad Alignment & Flight State Machine (⏳ Pending)
 
 **Goal:** Implement the hybrid EKF warmup sequence in `ekf.c`. Use GPS/Mag for absolute references, and the ZVU/ZRU math for high-precision bias calibration.
 
@@ -315,7 +333,7 @@ src/modules/estimator/tests/
 
 ---
 
-## Phase 7 — Commander Arming Gate (⏳ Pending)
+## Phase 8 — Commander Arming Gate (⏳ Pending)
 
 **Goal:** Prevent flight on invalid estimates. Mirrors PX4's `ARMING_STATE_INIT` → `STANDBY` logic.
 
