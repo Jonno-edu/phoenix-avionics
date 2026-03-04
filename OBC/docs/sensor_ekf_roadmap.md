@@ -1,6 +1,6 @@
 # Sensor + EKF Implementation Roadmap
 
-*Last updated: 3 March 2026*
+*Last updated: 4 March 2026*
 
 ---
 
@@ -45,6 +45,7 @@ The EKF uses an **Error-State Kalman Filter (ESKF)** formulation derived from Jo
 | 6 | Sensor Plumbing & Voting | ⏳ Pending |
 | 7 | Launchpad Alignment & Flight State Machine | ⏳ Pending |
 | 8 | Commander Arming Gate | ⏳ Pending |
+| 9 | EKF Structural Hardening & Configuration | ⏳ Pending |
 | — | Rate Conditioner (`angvel.c`) | 🔁 Deferred (no consumer yet) |
 
 ---
@@ -343,6 +344,154 @@ src/modules/estimator/tests/
 2. Gate `INIT` → `STANDBY` on `gyro_bias_converged == true` AND `pos_valid == true` from `TOPIC_ESTIMATOR_STATUS`.
 3. Publish `TOPIC_VEHICLE_STATUS` changes.
 4. Update tracking radio: only transmit beacon if `arming_state >= STANDBY`.
+
+---
+
+## Phase 9 — EKF Structural Hardening & Configuration (⏳ Pending)
+
+**Goal:** Eliminate all hardcoded physical constants, magic numbers, and inline math utilities from the sensor fusion pipeline. Replace them with a nORB-published parameter message and shared math helpers, mirroring the separation of concerns used in PX4 ECL.
+
+*Prerequisite: Can be tackled in parallel with Phase 6, but must be complete before Phase 7 (launchpad alignment) to avoid configuration ambiguity at bring-up.*
+
+---
+
+### Step 1 — Centralise Inline Math into `ekf_math_utils.h`
+
+**Problem:** Shared mathematical primitives are duplicated across fusion files:
+- `imu_predictor.c` defines its own `cross_product()` and builds a rotation matrix `R` from a quaternion inline.
+- `mag_fuse.c` defines its own `_rotate_ned_to_body()` function.
+
+This is a maintenance and correctness risk — a bug fixed in one copy will not propagate to the other.
+
+**PX4 parallel:** PX4 ECL uses the `matrix` library for all vector, quaternion, and DCM operations. No fusion file re-implements rotation math.
+
+**Solution:**
+1. Create `src/modules/estimator/ekf_math_utils.h` (and an optional `.c` for non-trivial implementations).
+2. Move `cross_product()`, quaternion-to-rotation-matrix, and `rotate_ned_to_body()` into this shared header.
+3. Replace all inline duplicates in `imu_predictor.c` and `mag_fuse.c` with calls to the shared utilities.
+4. **Future extension:** SymForce can generate the nominal quaternion integration step (`q ⊗ exp(δθ/2)`) as a symbolic expression — consider generating `ekf_quat_integrate()` from SymForce to remove manual small-angle-approximation code.
+
+---
+
+### Step 2 — IMU Lever Arm from `TOPIC_EKF_PARAMS`
+
+**Problem:** `imu_predictor.c` hardcodes:
+```c
+const float imu_lever_arm[3] = {0.1f, 0.0f, 0.0f}; // TODO: pull from a param/config struct
+```
+This assumes the IMU-to-CG offset is fixed at compile time and fails silently if the physical hardware changes between builds.
+
+**PX4 parallel:** PX4 uses runtime parameters `EKF2_IMU_POS_X/Y/Z`. At boot, the EKF subscribes to the parameter server, reads the geometry, and populates its internal configuration.
+
+**Solution:**
+1. Add `imu_lever_arm_body` to `msg/ekf_params.msg` (see Step 4).
+2. In `ekf.c`, subscribe to `TOPIC_EKF_PARAMS` and copy the received message into the `ekf_core_t` context so all fusion modules can read it.
+3. Pass `const ekf_params_t *params` into `imu_predict()` and read `params->imu_lever_arm_body` instead of the local constant.
+4. Default value at startup: `{0.0f, 0.0f, 0.0f}` (zero offset — safe for a vehicle whose IMU is at the CG).
+5. The actual value is populated by a configuration publisher that reads from non-volatile storage at boot (to be wired up during Phase 7 initialisation).
+
+---
+
+### Step 3 — Dynamic Altitude-Dependent Gravity
+
+**Problem:** `imu_predictor.c` adds a fixed gravity constant:
+```c
+acc_n[2] += 9.80665f; // add gravity in NED down direction
+```
+This is acceptably accurate at sea level but introduces a growing bias at altitude. At 100 km, gravity is approximately 3% weaker ($g \approx 9.51\ \text{m/s}^2$). For a rocket reaching apogee in the tens of km this error, while small, is systematic and accumulates into the accelerometer-bias estimate.
+
+**PX4 parallel:** PX4 ECL computes local gravity internally at every prediction step using the WGS84 ellipsoid model, taking the EKF's current latitude and altitude estimate.
+
+**Solution:** Add `get_local_gravity()` as a static helper inside `imu_predictor.c` — no nORB topic needed since the EKF already tracks its own altitude as `-p_ned[2]`:
+
+```c
+/**
+ * @brief Calculate local gravity based on altitude using the inverse-square law.
+ *
+ * @param altitude_m Altitude above sea level (m).
+ *                   Note: In NED, altitude is -p_ned[2].
+ * @return float Local gravitational acceleration (m/s²).
+ */
+static float get_local_gravity(float altitude_m)
+{
+    const float G0      = 9.80665f;     // Standard gravity at sea level
+    const float R_EARTH = 6371000.0f;   // Mean radius of Earth in metres
+
+    // Safety clamp for extreme altitudes or uninitialised states
+    if (altitude_m < -1000.0f || altitude_m > 100000.0f) {
+        return G0;
+    }
+
+    // g = g0 * (Re / (Re + h))^2
+    float ratio = R_EARTH / (R_EARTH + altitude_m);
+    return G0 * ratio * ratio;
+}
+```
+
+Usage in the prediction step:
+```c
+float altitude_m = -state->p_ned[2]; // NED: down is positive
+float g_local    = get_local_gravity(altitude_m);
+acc_n[2] += g_local;
+```
+
+The safety clamp returns $g_0$ for any altitude below −1 000 m (erroneous early-init state) or above 100 km (above the Kármán line). At 30 km the correction is ~0.9%; at 10 km it is ~0.3%. This removes a systematic downward error that would otherwise be (incorrectly) absorbed into `ba[2]`.
+
+---
+
+### Step 4 — `ekf_params.msg` nORB Topic for All Variances & Gates
+
+**Problem:** Every fusion file hardcodes its own tuning constants:
+
+| File | Hardcoded constants |
+|------|--------------------|
+| `imu_predictor.c` | `ACCEL_NOISE_VAR`, `GYRO_NOISE_VAR` |
+| `baro_fuse.c` | `BARO_NOISE_VAR` (0.25 m²), `BARO_INNOV_GATE` (±5 m) |
+| `gps_fuse.c` | `GPS_POS_VAR` ({2.25, 2.25, 2.25} m²), `GPS_VEL_VAR` ({0.01, 0.01, 0.01} (m/s)²), position gate (±20 m), velocity gate (±5 m/s), kinematic limits (500 m/s, 80000 m) |
+
+Different IMU and GPS hardware variants have fundamentally different noise characteristics. Recompiling to retune is not acceptable for a flight stack that should support multiple hardware configurations.
+
+**PX4 parallel:** PX4 ECL exposes every variance and gate as a named parameter (e.g. `EKF2_ACC_NOISE`, `EKF2_GPS_P_NOISE`). These are loaded from the parameter server at startup and can be modified pre-flight via QGroundControl.
+
+**Solution:** Create `msg/ekf_params.msg` and generate a `TOPIC_EKF_PARAMS` nORB topic from it, consistent with every other message in the system:
+
+```
+# EKF Configuration Parameters
+
+# --- Physical Geometry ---
+float[3] imu_lever_arm_body      # IMU offset from CG (m)
+
+# --- Process Noise (Prediction) ---
+float[3] accel_noise_var         # Accelerometer process noise (m/s^2)^2
+float[3] gyro_noise_var          # Gyroscope process noise (rad/s)^2
+float[3] gyro_bias_noise_var     # Gyro bias stability noise
+float[3] accel_bias_noise_var    # Accel bias stability noise
+
+# --- Barometer Fusion ---
+float    baro_noise_var          # Measurement variance (m^2)
+float    baro_innov_gate         # Innovation rejection threshold (m)
+
+# --- GPS Fusion ---
+float[3] gps_pos_var             # Position measurement variance (m^2)
+float[3] gps_vel_var             # Velocity measurement variance (m/s)^2
+float    gps_pos_gate            # Position innovation gate (m)
+float    gps_vel_gate            # Velocity innovation gate (m/s)
+
+# --- Magnetometer Fusion ---
+float    mag_noise_var           # Measurement variance (Gauss^2)
+float    mag_gate_cos            # Angular innovation gate (cosine of angle)
+```
+
+**Initialisation & wiring:**
+1. A new `ekf_params_defaults()` publisher in `ekf.c` publishes `TOPIC_EKF_PARAMS` at startup with values that replicate the current hardcoded constants — **zero functional change** on first merge.
+2. `ekf.c` subscribes to `TOPIC_EKF_PARAMS`; when a message is received it copies the values into the `ekf_core_t` context, making them available to all fusion modules.
+3. Update each fusion function signature to accept `const ekf_params_t *params`:
+   - `imu_predict(..., const ekf_params_t *params)` — reads `accel_noise_var`, `gyro_noise_var`, `imu_lever_arm_body`.
+   - `baro_fuse(..., const ekf_params_t *params)` — reads `baro_noise_var`, `baro_innov_gate`.
+   - `gps_fuse(..., const ekf_params_t *params)` — reads `gps_pos_var`, `gps_vel_var`, `gps_pos_gate`, `gps_vel_gate`.
+4. Wire up a non-volatile storage publisher that overwrites `TOPIC_EKF_PARAMS` defaults at boot, completing the parameter chain for Phase 7 initialisation.
+
+This architecture allows sensor noise models and physical geometry to be changed by editing a configuration file on the SD card, with no firmware reflash required.
 
 ---
 
