@@ -252,7 +252,7 @@
     let appConfig = {};
     let charts = {};
     let cursors = {};
-    let lastLogTimestamp = 0;
+    let lastLogTimestamp = "";
     let telemetryWorker = null;
 
     // IMU Variables
@@ -579,7 +579,13 @@
         imuSSE = new EventSource(`/api/norb/stream?topic_id=${IMU_TOPIC_ID}`);
         imuSSE.onmessage = (e) => {
             const d = JSON.parse(e.data); const t = Date.now() / 1000;
-            const a = Array.isArray(d.accel_ms2) ? d.accel_ms2 : [0, 0, 0]; const g = Array.isArray(d.gyro_rads) ? d.gyro_rads : [0, 0, 0];
+            
+            // --- FIX: Look inside d.payload ---
+            const payload = d.payload || d; 
+            
+            const a = Array.isArray(payload.accel_ms2) ? payload.accel_ms2 : [0, 0, 0]; 
+            const g = Array.isArray(payload.gyro_rads) ? payload.gyro_rads : [0, 0, 0];
+            // ----------------------------------
             imuBuf[0].push(t); imuBuf[1].push(a[0]); imuBuf[2].push(a[1]); imuBuf[3].push(a[2]); imuBuf[4].push(g[0]); imuBuf[5].push(g[1]); imuBuf[6].push(g[2]);
             if (imuBuf[0].length > IMU_BUF_SIZE) imuBuf = imuBuf.map(arr => arr.slice(-IMU_BUF_SIZE));
             if (uAccel && !document.getElementById('page-graphs').classList.contains('d-none')) { uAccel.setData([imuBuf[0], imuBuf[1], imuBuf[2], imuBuf[3]]); uGyro.setData( [imuBuf[0], imuBuf[4], imuBuf[5], imuBuf[6]]); }
