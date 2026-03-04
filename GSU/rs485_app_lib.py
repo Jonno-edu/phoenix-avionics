@@ -27,6 +27,10 @@ MSG_TC_ACK  = 0b011  # Telecommand Acknowledge (Restored)
 MSG_TM_REQ  = 0b100  # Telemetry Request
 MSG_TM_RPT  = 0b101  # Telemetry Report
 
+# Event IDs (msg_id values used with MSG_EVT) — must match phoenix_icd.h
+EVENT_COMMON_LOG      = 0x01
+EVENT_OBC_NORB_STREAM = 0x02  # Auto-generated nORB topic stream
+
 def make_desc(msg_type: int, msg_id: int) -> int:
     return ((msg_type & 0x07) << 5) | (msg_id & 0x1F)
 
@@ -112,12 +116,14 @@ class RS485Interface:
         self.log_cb = log_cb
         self.ser = None
         self.connected = False
+        self.rx_buffer = bytearray()  # Persistent buffer for chunked reading
 
     def connect(self) -> bool:
         try:
             if serial is None: raise RuntimeError("pyserial not available")
-            self.ser = serial.Serial(self.port, self.baudrate, timeout=1)
+            self.ser = serial.Serial(self.port, self.baudrate, timeout=0.1)
             self.connected = True
+            self.rx_buffer.clear()
             return True
         except Exception as e:
             if self.log_cb: self.log_cb("ERROR", f"Connect failed: {e}")
@@ -138,30 +144,75 @@ class RS485Interface:
         except: return False
 
     def receive_once(self) -> Optional[bytes]:
+        """Reads chunks of data efficiently and extracts one valid frame if available."""
         if not self.connected: return None
-        buf = bytearray()
+        
         try:
-            # 1. Hunt for the start sequence (1F 7F)
-            while True:
+            # 1. Slurp all waiting bytes from the OS buffer in one fast operation
+            waiting = self.ser.in_waiting
+            if waiting > 0:
+                self.rx_buffer.extend(self.ser.read(waiting))
+            elif not self.rx_buffer:
+                # If nothing is waiting and buffer is empty, do a brief blocking read
                 b = self.ser.read(1)
-                if not b: return None # Timeout
-                if b[0] == ESC_CHAR:
-                    next_b = self.ser.read(1)
-                    if next_b and next_b[0] == SOM_CHAR:
-                        buf.extend([ESC_CHAR, SOM_CHAR])
-                        break
+                if b: self.rx_buffer.extend(b)
+        except Exception:
+            return None
             
-            # 2. Now collect until the end sequence (1F FF)
-            while True:
-                b = self.ser.read(1)
-                if not b: break
-                buf += b
-                if len(buf) >= 2 and buf[-2:] == bytes([ESC_CHAR, EOM_CHAR]):
+        # 1. Look for the Start of Message (SOM)
+        som_idx = -1
+        for i in range(len(self.rx_buffer) - 1):
+            if self.rx_buffer[i] == ESC_CHAR and self.rx_buffer[i+1] == SOM_CHAR:
+                som_idx = i
+                break
+                
+        if som_idx == -1:
+            # No SOM found. Keep the last byte just in case it's half of a start sequence
+            if self.rx_buffer and self.rx_buffer[-1] == ESC_CHAR:
+                self.rx_buffer = self.rx_buffer[-1:]
+            else:
+                self.rx_buffer.clear()
+            return None
+            
+        # Discard any garbage before the start of the message
+        if som_idx > 0:
+            self.rx_buffer = self.rx_buffer[som_idx:]
+            
+        # 2. Look for EOM, OR another SOM (which means corruption occurred)
+        eom_idx = -1
+        next_som_idx = -1
+        
+        for i in range(2, len(self.rx_buffer) - 1):
+            if self.rx_buffer[i] == ESC_CHAR:
+                if self.rx_buffer[i+1] == EOM_CHAR:
+                    eom_idx = i
+                    break
+                elif self.rx_buffer[i+1] == SOM_CHAR:
+                    next_som_idx = i
                     break
                     
-            return bytes(buf) if buf else None
-        except:
-            return None
+        # CRITICAL FIX: Did we find another start sequence before the end sequence?
+        if next_som_idx != -1 and (eom_idx == -1 or next_som_idx < eom_idx):
+            # The first packet was corrupted on the wire and missed its EOM. 
+            # Discard only the broken fragment and keep the buffer from the NEW start.
+            self.rx_buffer = self.rx_buffer[next_som_idx:]
+            return None 
+            
+        # 3. Extract the clean packet
+        if eom_idx != -1:
+            # We found a complete frame! Extract it.
+            packet = self.rx_buffer[:eom_idx + 2]
+            
+            # Remove the extracted packet from the persistent buffer
+            self.rx_buffer = self.rx_buffer[eom_idx + 2:]
+            
+            return bytes(packet)
+            
+        # 4. Safety catch: If buffer gets massive (missed EOM), nuke it to prevent memory leaks
+        if len(self.rx_buffer) > 4096:
+            self.rx_buffer.clear()
+            
+        return None
 
 # ===== Dispatcher & Link =====
 class Dispatcher:

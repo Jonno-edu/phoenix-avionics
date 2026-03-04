@@ -1,22 +1,18 @@
-#include <FreeRTOS.h>
-#include <task.h>
-#include "pico/time.h"
-#include "norb/norb.h"
-#include "norb/topic_defs/sensor_imu.h"
+/**
+ * @file imu.c
+ * @brief Hardware IMU driver — placeholder for physical sensor integration.
+ *
+ * This file will contain the real SPI/I2C driver for the flight IMU once
+ * hardware bring-up begins.  For software-in-the-loop testing use the
+ * simulated IMU driver at src/modules/sensors/sim/sim_imu.c instead.
+ *
+ * When implementing:
+ *   1. Initialise the IMU peripheral in imu_init() (SPI/I2C config, FIFO
+ *      setup, interrupt registration).
+ *   2. Replace the stub below with a real 1 kHz read loop that populates
+ *      sensor_imu_t from hardware registers.
+ *   3. Call imu_init() from sensors_init() after bsp_peripheral_init().
+ */
 
-void imu_task(void *params) {
-    TickType_t xLastWake = xTaskGetTickCount();
-    sensor_imu_t imu_data = {0};
+/* TODO: implement hardware driver */
 
-    while (1) {
-        vTaskDelayUntil(&xLastWake, pdMS_TO_TICKS(4)); // 250 Hz (4ms)
-
-        // 1. Fake reading from SPI/I2C hardware for testing
-        // Use true 64-bit microsecond hardware timer
-        imu_data.timestamp_us = time_us_64(); 
-        imu_data.accel_ms2[2] = 9.81f; // Fake 1G on Z-axis
-
-        // 2. Publish to the void!
-        norb_publish(TOPIC_SENSOR_IMU, &imu_data);
-    }
-}

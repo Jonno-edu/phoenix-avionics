@@ -17,8 +17,12 @@ cmake_minimum_required(VERSION 3.13)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Default board (can be overridden via -DPICO_BOARD=...)
-set(PICO_BOARD pico2 CACHE STRING "Board type")
+# Default board (can be overridden via -DPICO_BOARD=...).
+# Do NOT set a default when targeting the host platform — the Pico SDK does not
+# need a board definition in that case and will error if given a hardware board.
+if(NOT PICO_PLATFORM STREQUAL "host")
+    set(PICO_BOARD pico2 CACHE STRING "Board type")
+endif()
 
 include(pico_sdk_import.cmake)
 project(phoenix_avionics_monorepo)
@@ -75,6 +79,9 @@ else()
     FetchContent_MakeAvailable(freertos_kernel)
 endif()
 
+# --- Estimator module (owns Eigen3, SymForce gen, estimator_lib, and unit tests) ---
+add_subdirectory(src/modules/estimator)
+
 ###########################################
 # nORB Topic Code Generation
 ###########################################
@@ -94,24 +101,37 @@ endif()
 set(NORB_GEN_OUTPUTS
     ${NORB_GEN_DIR}/norb/topics.h
     ${NORB_GEN_DIR}/norb_autogen.c
+    ${NORB_GEN_DIR}/gsu_norb_dict.py
 )
 foreach(msg_file ${NORB_MSG_FILES})
     get_filename_component(topic_name ${msg_file} NAME_WE)
     list(APPEND NORB_GEN_OUTPUTS ${NORB_GEN_DIR}/norb/topic_defs/${topic_name}.h)
 endforeach()
 
+# Path to the shared ICD header — passed to the generator for @extern struct parsing
+# and declared as a dependency so CMake rebuilds if the ICD changes.
+set(PHOENIX_ICD_H ${CMAKE_SOURCE_DIR}/lib/phoenix-icd/include/phoenix_icd.h)
+
 add_custom_command(
     OUTPUT  ${NORB_GEN_OUTPUTS}
     COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/generate_norb_topics.py
             --outdir  ${NORB_GEN_DIR}
             --topics  ${NORB_MSG_FILES}
-    DEPENDS ${NORB_MSG_FILES} ${CMAKE_SOURCE_DIR}/tools/generate_norb_topics.py
-    COMMENT "Generating nORB topic headers and init code from .msg files"
+            --icd-include ${PHOENIX_ICD_H}
+            --gsu-outdir  ${CMAKE_SOURCE_DIR}/../GSU
+    DEPENDS ${NORB_MSG_FILES}
+            ${CMAKE_SOURCE_DIR}/tools/generate_norb_topics.py
+            ${PHOENIX_ICD_H}
+    COMMENT "Generating nORB topic headers, init code, and GSU dictionary from .msg files"
     VERBATIM
 )
 
 # Convenience target so IDEs can trigger generation without a full build.
 add_custom_target(norb_generate DEPENDS ${NORB_GEN_OUTPUTS})
+
+# estimator_lib compiles imu_predictor.c which includes vehicle_imu.h.
+# Ensure the nORB headers are generated first.
+add_dependencies(estimator_lib norb_generate)
 
 # The application target
 set(TARGET_NAME phoenix_avionics_monorepo)
@@ -182,20 +202,20 @@ set(HAL_SOURCES
 #     ${CMAKE_SOURCE_DIR}/lib/esl-comms/src/rs485_protocol.c
 # )
 
-# set(MATH_LIB_SOURCES
-#     ${CMAKE_SOURCE_DIR}/lib/esl-math/src/dcm.c
-#     ${CMAKE_SOURCE_DIR}/lib/esl-math/src/matrix.c
-#     ${CMAKE_SOURCE_DIR}/lib/esl-math/src/quaternion.c
-#     ${CMAKE_SOURCE_DIR}/lib/esl-math/src/vector2.c
-#     ${CMAKE_SOURCE_DIR}/lib/esl-math/src/vector3.c
-# )
+set(MATH_LIB_SOURCES
+    ${CMAKE_SOURCE_DIR}/lib/esl-math/src/dcm.c
+    ${CMAKE_SOURCE_DIR}/lib/esl-math/src/matrix.c
+    ${CMAKE_SOURCE_DIR}/lib/esl-math/src/quaternion.c
+    ${CMAKE_SOURCE_DIR}/lib/esl-math/src/vector2.c
+    ${CMAKE_SOURCE_DIR}/lib/esl-math/src/vector3.c
+)
 
 # Hardware-specific sources (only for Pico builds)
 set(HARDWARE_SOURCES
     hal/rs485_hal.c
-#     ${CMAKE_SOURCE_DIR}/lib/esl-sensors/src/baroMS5607.c
-#     ${CMAKE_SOURCE_DIR}/lib/esl-sensors/src/tempTMP117.c
-#     ${CMAKE_SOURCE_DIR}/lib/esl-sensors/src/i2c.c
+    ${CMAKE_SOURCE_DIR}/lib/esl-sensors/src/baroMS5607.c
+    ${CMAKE_SOURCE_DIR}/lib/esl-sensors/src/tempTMP117.c
+    ${CMAKE_SOURCE_DIR}/lib/esl-sensors/src/i2c.c
 )
 
 # Combine common sources
@@ -205,6 +225,8 @@ set(COMMON_SOURCES
     ${NORB_GEN_DIR}/norb_autogen.c   # generated — populated by norb_generate
     src/modules/sensors/sensors.c
     src/modules/sensors/imu.c
+    src/modules/sensors/integrator.c
+    src/modules/sensors/sim/sim_imu.c
     src/modules/estimator/ekf.c
     src/modules/datalink/datalink.c
     src/modules/datalink/receiver.c
@@ -223,7 +245,7 @@ set(COMMON_SOURCES
     # ${SUBSYSTEMS_SOURCES}
     # ${UTIL_SOURCES}
     # ${COMMS_LIB_SOURCES}
-    # ${MATH_LIB_SOURCES}
+    ${MATH_LIB_SOURCES}
 )
 
 ###########################################
@@ -278,7 +300,7 @@ target_link_options(${TARGET_NAME} PRIVATE
 )
 
 ###########################################
-# Include Directories (NEW MODULE STRUCTURE)
+# Include Directories
 ###########################################
 
 target_include_directories(${TARGET_NAME} PRIVATE
@@ -335,6 +357,7 @@ if(BUILD_FOR_HOST)
     target_link_libraries(${TARGET_NAME} PRIVATE
         freertos_config
         FreeRTOS-Kernel
+        estimator_lib
     )
 else()
     # For Pico builds
@@ -348,6 +371,7 @@ else()
 
         freertos_config
         FreeRTOS-Kernel
+        estimator_lib
     )
 
     pico_add_extra_outputs(${TARGET_NAME})

@@ -2,6 +2,19 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "🧪 Debug EKF Tests (Mac LLDB)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build_host/src/modules/estimator/run_ekf_tests_bin",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/build_host",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "lldb"
+    },
+
+    {
       "name": "SSH: Flash",
       "type": "node-terminal",
       "request": "launch",

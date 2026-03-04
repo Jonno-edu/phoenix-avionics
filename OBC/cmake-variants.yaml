@@ -19,10 +19,12 @@ target_platform:
       settings:
         PICO_BOARD: pico2
         PICO_BUILD: 1
+      buildDirectory: "${workspaceFolder}/build"
     local:
       short: Local
       long: Host build for testing
       settings:
         PICO_PLATFORM: host
-        PICO_BOARD: host
+        PICO_BOARD: none
         PICO_BUILD: 0
+      buildDirectory: "${workspaceFolder}/build_host"

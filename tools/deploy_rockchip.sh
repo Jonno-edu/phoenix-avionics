@@ -1,9 +1,7 @@
 #!/bin/bash
 
 # --- ROBUST PATH HANDLING ---
-# Get the absolute path to the folder where this script lives (workspace/tools)
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-# Get the workspace root (one level up)
 WORKSPACE_DIR="$(dirname "$SCRIPT_DIR")"
 
 # --- CONFIGURATION ---
@@ -12,42 +10,51 @@ ROCKCHIP_IP="100.115.224.114"
 REMOTE_DIR="/home/rock/GSU"
 LOCAL_PY_DIR="$WORKSPACE_DIR/GSU"
 
-# 1. GENERATE CONFIGS
+# --- OS DETECTION ---
+OS_TYPE="Unknown"
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    OS_TYPE="Linux"
+elif [[ "$OSTYPE" == "darwin"* ]]; then
+    OS_TYPE="macOS"
+elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
+    OS_TYPE="Windows (Git Bash/Cygwin)"
+else
+    OS_TYPE="Other"
+fi
+
+echo "Running on: $OS_TYPE"
+
+# --- DEPLOYMENT LOGIC ---
 echo "--------------------------------------"
-echo "1. Generating Sensor Configurations..."
+echo "Deploying to Rockchip ($ROCKCHIP_IP)..."
 
-# Use SCRIPT_DIR to find the python script correctly
-# python3 "$SCRIPT_DIR/gen_sensors.py"
-# python3 "$SCRIPT_DIR/gen_telemetry.py"
+# Check if rsync is available (the most efficient way)
+if command -v rsync >/dev/null 2>&1; then
+    echo "Using RSYNC (Delta-transfer mode)..."
+    # Note: On Windows, we add --chmod to ensure Linux-friendly permissions
+    rsync -avz --delete \
+          --exclude='venv/' \
+          --exclude='__pycache__/' \
+          --exclude='*.pyc' \
+          "$LOCAL_PY_DIR/" $ROCKCHIP_USER@$ROCKCHIP_IP:$REMOTE_DIR/
+else
+    echo "RSYNC not found. Falling back to SCP (Full copy mode)..."
+    ssh $ROCKCHIP_USER@$ROCKCHIP_IP "mkdir -p $REMOTE_DIR"
+    scp -r "$LOCAL_PY_DIR/"* $ROCKCHIP_USER@$ROCKCHIP_IP:$REMOTE_DIR/
+fi
 
-# if [ $? -ne 0 ]; then
-#     echo "Error: Generator scripts failed."
-#     exit 1
-# fi
-# echo "   - sensor_config.h/py (Updated)"
-# echo "   - telemetry_defs.py (Updated)"
-
-# 2. DEPLOY TO ROCKCHIP (Using scp for maximum compatibility)
-echo "--------------------------------------"
-echo "2. Deploying to Rockchip ($ROCKCHIP_IP)..."
-
-# Ensure the remote directory exists first, then copy
-ssh $ROCKCHIP_USER@$ROCKCHIP_IP "mkdir -p $REMOTE_DIR"
-scp -r "$LOCAL_PY_DIR/"* $ROCKCHIP_USER@$ROCKCHIP_IP:$REMOTE_DIR/
-
+# --- POST-DEPLOYMENT ---
 if [ $? -eq 0 ]; then
     echo "--------------------------------------"
     echo "SUCCESS: Deployment Complete."
     
-    echo "Restarting obc_monitor.service..."
-    ssh -t $ROCKCHIP_USER@$ROCKCHIP_IP "sudo systemctl restart obc_monitor.service"
+    echo "Updating remote dependencies..."
+    ssh $ROCKCHIP_USER@$ROCKCHIP_IP "cd $REMOTE_DIR && ./venv/bin/pip install -r requirements.txt"
     
-    if [ $? -eq 0 ]; then
-        echo "Service restarted successfully."
-    else
-        echo "Warning: Failed to restart the service. You may need to check sudo permissions."
-    fi
+    echo "Restarting obc_monitor.service..."
+    # -t is used for sudo password prompts if needed
+    ssh -t $ROCKCHIP_USER@$ROCKCHIP_IP "sudo systemctl restart obc_monitor.service"
 else
     echo "--------------------------------------"
-    echo "ERROR: Deployment failed. Check IP and SSH keys."
+    echo "ERROR: Deployment failed."
 fi

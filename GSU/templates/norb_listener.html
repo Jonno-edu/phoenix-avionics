@@ -87,7 +87,7 @@
 
             const list = document.getElementById('topic-list');
             if (topics.length === 0) {
-                list.innerHTML = '<li class="p-2 text-muted small">No nORB topics registered.<br>Add add_norb_topic() calls to obc_monitor.py</li>';
+                list.innerHTML = '<li class="p-2 text-muted small">No nORB topics found.<br>Build OBC firmware to regenerate <code>gsu_norb_dict.py</code>, then restart the GSU.</li>';
                 return;
             }
 

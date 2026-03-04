@@ -1,0 +1,23 @@
+# Compilation outputs
+build/
+build_host/
+bin/
+obj/
+
+# Python environment
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE settings
+# .vscode/
+.idea/
+*.swp
+*.swo
+
+# SymForce / Estimator generated files
+src/modules/estimator/gen/
+
+# Unit test binaries
+test_ekf_predict

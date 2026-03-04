@@ -1,0 +1,28 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "rp2350-firmware",
+      "displayName": "🚀 RP2350 Firmware",
+      "description": "Cross-compile for RP2350. Pico SDK selects the ARM toolchain.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "mac-host-tests",
+      "displayName": "🧪 Mac Host Tests",
+      "description": "Native Mac build for the EKF unit test suite. No cross-compiler required.",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build_host",
+      "cacheVariables": {
+        "PICO_PLATFORM": "host",
+        "PICO_BOARD": "none",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    }
+  ]
+}

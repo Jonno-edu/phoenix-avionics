@@ -4,16 +4,26 @@
  * @file norb_streamer.h
  * @brief nORB Topic Streamer
  *
- * Handles streaming of nORB topics to the GSU over RS485.
+ * Streams subscribed nORB topics to the GSU over RS485 using an event-driven
+ * architecture (FreeRTOS Task Notifications bitmask).
  *
- * The GSU sends TC_OBC_NORB_SUBSCRIBE (payload: NorbSubscribePayload_t) to
- * subscribe to a topic at a given rate. This module maintains a subscription
- * table and periodically sends TLM_OBC_NORB_STREAM packets to the requester's
- * address whenever the topic has been updated.
+ * Subscribe/unsubscribe:
+ *   The GSU sends TC_OBC_NORB_SUBSCRIBE (payload: NorbSubscribePayload_t).
+ *   rate_ms > 0 subscribes at the given throttle cap; rate_ms == 0 unsubscribes.
  *
- * Packet format of TLM_OBC_NORB_STREAM:
- *   byte[0]      = topic_id  (uint8_t, matches topic_id_t enum)
- *   byte[1..N]   = raw topic struct bytes (little-endian, matches generated header)
+ * Event delivery:
+ *   When a subscribed topic is published via norb_publish(), a callback sets a
+ *   bit in the streamer task's notification mask. The task wakes, checks the
+ *   per-topic rate throttle, and sends MSG_TYPE_EVENT to ADDR_GSE.
+ *
+ * Packet format (MSG_TYPE_EVENT / EVENT_OBC_NORB_STREAM = 0x02):
+ *   byte[0]      = topic_id        (uint8_t, matches topic_id_t enum)
+ *   byte[1..4]   = timestamp_ms    (uint32_t little-endian, from xTaskGetTickCount)
+ *   byte[5..N]   = raw topic struct (little-endian, matches generated header layout)
+ *
+ * Adding a new topic requires zero changes to this module:
+ *   1. Create msg/<name>.msg and rebuild.
+ *   The generator updates norb_topic_sizes[] and all generated headers automatically.
  */
 
 #include "rs485_protocol.h"
