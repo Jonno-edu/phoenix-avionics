@@ -149,14 +149,9 @@ class MissionControlApp:
                 # Update global state for System Overview
                 with self.lock:
                     self.latest_data[topic_id] = unpacked_data
-                    # Log activity in the raw packet stream
-                    self.raw_log.appendleft({
-                        "Time": ts_rcv, 
-                        "Dir": "RX", 
-                        "Type": "nORB", 
-                        "ID": topic_id, 
-                        "Hex": f"[{topic_name}] {raw_data.hex(' ')}"
-                    })
+                    
+                    # --- DELETED the self.raw_log.appendleft() call here! ---
+                    # We no longer send nORB packets to the raw terminal log.
                 
                 # Send to SSE clients in expected format
                 sse_message = {
@@ -187,13 +182,9 @@ class MissionControlApp:
                 # Update global state for System Overview
                 with self.lock:
                     self.latest_data[topic_id] = unpacked_data
-                    self.raw_log.appendleft({
-                        "Time": ts_rcv, 
-                        "Dir": "RX", 
-                        "Type": "nORB", 
-                        "ID": topic_id, 
-                        "Hex": f"[{topic_name}] {raw_data.hex(' ')}"
-                    })
+                    
+                    # --- DELETED the self.raw_log.appendleft() call here! ---
+                    # We no longer send nORB packets to the raw terminal log.
                 
                 # Send to SSE clients in expected format
                 sse_message = {

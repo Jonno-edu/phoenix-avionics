@@ -132,7 +132,15 @@
                             <button class="btn btn-xs btn-outline-secondary py-0" onclick="clearLog()"><i class="fas fa-trash"></i></button>
                         </div>
                     </div>
-                    <div id="raw-log" class="log-box border-0"></div>
+                    <div style="position: relative;">
+                        <div id="raw-log" class="log-box border-0"></div>
+                        
+                        <button id="auto-scroll-btn" class="btn btn-info btn-sm rounded-pill shadow" 
+                                style="position: absolute; bottom: 30px; right: 30px; display: none; z-index: 100;" 
+                                onclick="resumeAutoScroll()">
+                            <i class="fas fa-arrow-down me-1"></i> New Logs Paused
+                        </button>
+                    </div>
                 </div>
             </div>
             <div class="col-xl-4">
@@ -147,17 +155,6 @@
     <div id="page-graphs" class="d-none">
         <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
             <div><h4 class="mb-0">Live Telemetry</h4><div class="text-muted small">Time-series sensor visualization</div></div>
-            <div class="card p-2 d-flex flex-row align-items-center gap-3 bg-dark mb-0 border-secondary">
-                <div class="input-group input-group-sm w-auto">
-                    <span class="input-group-text bg-secondary text-white border-0">Rate</span>
-                    <input type="number" id="poll-rate" class="form-control bg-black text-white border-secondary" value="250" style="width: 70px;">
-                </div>
-                <div class="form-check form-switch mb-0">
-                    <input class="form-check-input" type="checkbox" id="pollToggle" checked>
-                    <label class="form-check-label small text-white">LIVE</label>
-                </div>
-                <button class="btn btn-sm btn-outline-danger" onclick="clearPlots()"><i class="fas fa-trash"></i> Reset</button>
-            </div>
         </div>
         <div class="row g-4" id="plots-container"></div>
 
@@ -200,8 +197,14 @@
                 <h6 class="modal-title text-info font-monospace" id="norbModalTitle"><i class="fas fa-terminal"></i> Topic Data</h6>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body p-0">
+            <div class="modal-body p-0" style="position: relative;">
                 <div id="norbModalTerminal" class="terminal-bg"></div>
+                
+                <button id="norb-auto-scroll-btn" class="btn btn-info btn-sm rounded-pill shadow" 
+                        style="position: absolute; bottom: 20px; right: 20px; display: none; z-index: 100;" 
+                        onclick="resumeNorbAutoScroll()">
+                    <i class="fas fa-arrow-down me-1"></i> New Logs Paused
+                </button>
             </div>
             <div class="modal-footer bg-dark p-2">
                 <button type="button" class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('norbModalTerminal').innerHTML=''">Clear</button>
@@ -255,6 +258,8 @@
     let charts = {};
     let cursors = {};
     let lastLogTimestamp = "";
+    let isAutoScrolling = true;
+    let isNorbAutoScrolling = true;
     let telemetryWorker = null;
 
     // IMU Variables
@@ -381,37 +386,106 @@
     }
 
     function openNorbTerminal(topicId) {
+        // FIX: Cast topicId to a Number so the strict equality check works on live updates
+        topicId = Number(topicId); 
+        
         activeNorbModalTopic = topicId;
         const topicData = norbState[topicId];
-        
         document.getElementById('norbModalTitle').innerHTML = `<i class="fas fa-terminal"></i> ${topicData.name} Logger`;
         const terminal = document.getElementById('norbModalTerminal');
-        terminal.innerHTML = ''; // Clear old
+        terminal.innerHTML = ''; 
+        
+        // Reset scroll state when opening a new topic
+        isNorbAutoScrolling = true;
+        document.getElementById('norb-auto-scroll-btn').style.display = 'none';
 
-        // Dump history
-        topicData.history.forEach(entry => {
-            appendNorbModalLog(entry.ts, entry.data, terminal);
-        });
-
+        topicData.history.forEach(entry => appendNorbModalLog(entry.ts, entry.data, terminal));
         norbModalObj.show();
     }
 
     function appendNorbModalLog(timeStr, payload, terminalElement = null) {
         const terminal = terminalElement || document.getElementById('norbModalTerminal');
-        const payloadStr = JSON.stringify(payload).replace(/\"/g, ''); // Clean JSON string
         
+        // Build a beautifully formatted inline string
+        let payloadHtml = '';
+        for (const [key, val] of Object.entries(payload)) {
+            // Format arrays and floats nicely, just like the display cards
+            let displayVal = Array.isArray(val) 
+                ? `[${val.map(v => typeof v === 'number' && !Number.isInteger(v) ? v.toFixed(3) : v).join(', ')}]` 
+                : (typeof val === 'number' && !Number.isInteger(val) ? val.toFixed(3) : val);
+                
+            // Keys in muted blue, values in bright white
+            payloadHtml += `<span style="color: #79c0ff;">${key}:</span><span style="color: #e6edf3; margin-right: 12px;">${displayVal}</span>`;
+        }
+
+        // Timestamp in contrasting red/orange to make the start of the line obvious
         const html = `
-            <div style="margin-bottom: 4px; border-bottom: 1px solid #222; padding-bottom: 4px;">
-                <span style="color: #8b949e;">[${timeStr}]</span> 
-                <span style="color: #7ee787;">${payloadStr}</span>
+            <div style="margin-bottom: 4px; border-bottom: 1px solid #222; padding-bottom: 4px; line-height: 1.5; font-size: 0.8rem;">
+                <span style="color: #ff7b72; margin-right: 8px;">[${timeStr}]</span> 
+                ${payloadHtml}
             </div>`;
-        
+            
         terminal.insertAdjacentHTML('beforeend', html);
-        terminal.scrollTop = terminal.scrollHeight;
+        
+        // Respect the user's scroll lock!
+        if (isNorbAutoScrolling) {
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+        
+        // CRITICAL: Keep the modal DOM light so it doesn't crash if left open!
+        if (terminal.children.length > 300) {
+            terminal.removeChild(terminal.firstChild);
+        }
     }
 
     // Clear active topic when modal closes
     document.getElementById('norbModal').addEventListener('hidden.bs.modal', () => { activeNorbModalTopic = null; });
+
+    // --- Smart Terminal Scrolling Logic ---
+    const rawLogBox = document.getElementById('raw-log');
+    const autoScrollBtn = document.getElementById('auto-scroll-btn');
+
+    rawLogBox.addEventListener('scroll', () => {
+        // INCREASED tolerance to 150px to make it stickier during high-speed streams
+        const atBottom = (rawLogBox.scrollHeight - rawLogBox.scrollTop - rawLogBox.clientHeight) <= 500;
+        
+        if (atBottom) {
+            isAutoScrolling = true;
+            autoScrollBtn.style.display = 'none';
+        } else {
+            isAutoScrolling = false;
+            autoScrollBtn.style.display = 'block';
+        }
+    });
+
+    function resumeAutoScroll() {
+        isAutoScrolling = true;
+        rawLogBox.scrollTop = rawLogBox.scrollHeight;
+        autoScrollBtn.style.display = 'none';
+    }
+
+    // --- nORB Modal Smart Scrolling Logic ---
+    const norbModalTerminal = document.getElementById('norbModalTerminal');
+    const norbAutoScrollBtn = document.getElementById('norb-auto-scroll-btn');
+
+    norbModalTerminal.addEventListener('scroll', () => {
+        // INCREASED tolerance to 150px to make it stickier during high-speed streams
+        const atBottom = (norbModalTerminal.scrollHeight - norbModalTerminal.scrollTop - norbModalTerminal.clientHeight) <= 150;
+        
+        if (atBottom) {
+            isNorbAutoScrolling = true;
+            norbAutoScrollBtn.style.display = 'none';
+        } else {
+            isNorbAutoScrolling = false;
+            norbAutoScrollBtn.style.display = 'block';
+        }
+    });
+
+    function resumeNorbAutoScroll() {
+        isNorbAutoScrolling = true;
+        norbModalTerminal.scrollTop = norbModalTerminal.scrollHeight;
+        norbAutoScrollBtn.style.display = 'none';
+    }
 
 
     // ==========================================
@@ -527,25 +601,31 @@
                 }
             });
 
-            // Efficient Log Appending
-            if (!document.getElementById('page-control').classList.contains('d-none')) {
-                const logBox = document.getElementById('raw-log');
-                s.logs.forEach(l => {
-                    if (l.Time > lastLogTimestamp) {
-                        let badgeColor = (l.Type === 'EVENT') ? 'bg-info text-dark' : (l.Dir === 'TX' ? 'bg-warning text-dark' : 'bg-success');
-                        let html = `<div style="border-bottom:1px solid rgba(255,255,255,0.05);padding:4px 0;">
-                            <span style="color:#8b949e;font-size:0.7rem;margin-right:8px;">[${l.Time}]</span> 
-                            <span class="badge ${badgeColor}" style="width:50px; margin-right:8px;">${l.Type||l.Dir}</span> 
-                            <span style="color:#d2a8ff; margin-right:8px;">ID:${l.ID}</span> 
-                            <span style="color:#7ee787;">${l.Hex}</span>
-                        </div>`;
-                        logBox.insertAdjacentHTML('beforeend', html);
-                        lastLogTimestamp = l.Time;
+            // Always update the logs, regardless of which tab is open
+            const logBox = document.getElementById('raw-log');
+            
+            // ADDED .slice().reverse() to process the batch chronologically
+            s.logs.slice().reverse().forEach(l => {
+                if (l.Time > lastLogTimestamp) {
+                    let badgeColor = (l.Type === 'EVENT') ? 'bg-info text-dark' : (l.Dir === 'TX' ? 'bg-warning text-dark' : 'bg-success');
+                    let html = `<div style="border-bottom:1px solid rgba(255,255,255,0.05);padding:4px 0;">
+                        <span style="color:#8b949e;font-size:0.7rem;margin-right:8px;">[${l.Time}]</span> 
+                        <span class="badge ${badgeColor}" style="width:50px; margin-right:8px;">${l.Type||l.Dir}</span> 
+                        <span style="color:#d2a8ff; margin-right:8px;">ID:${l.ID}</span> 
+                        <span style="color:#7ee787;">${l.Hex}</span>
+                    </div>`;
+                    logBox.insertAdjacentHTML('beforeend', html);
+                    lastLogTimestamp = l.Time;
+                    
+                    // FIXED: Correctly check for page-control visibility since page-logs doesn't exist
+                    if (isAutoScrolling && !document.getElementById('page-control').classList.contains('d-none')) {
                         logBox.scrollTop = logBox.scrollHeight;
-                        if (logBox.children.length > 150) logBox.removeChild(logBox.firstChild);
                     }
-                });
-            }
+                    
+                    // Keep the DOM light
+                    if (logBox.children.length > 300) logBox.removeChild(logBox.firstChild);
+                }
+            });
         } catch(e) {}
         setTimeout(updateLoop, Math.max(100, parseInt(document.getElementById('poll-rate')?.value) || 250));
     }
