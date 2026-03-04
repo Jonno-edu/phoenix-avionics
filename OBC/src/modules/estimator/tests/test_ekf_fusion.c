@@ -165,9 +165,109 @@ static void test_gps_baro_fusion(void)
 
 /* ── Suite runner ───────────────────────────────────────────────────────────── */
 
+/* ── Suite runner ───────────────────────────────────────────────────────────── */
+
+static void test_mag_fusion(void)
+{
+    printf("  test_mag_fusion ...\n");
+    printf("    [Stellenbosch NED ref: N=%.4f E=%.4f D=%.4f Gauss]\n",
+           (double)MAG_REF_STELLENBOSCH_N,
+           (double)MAG_REF_STELLENBOSCH_E,
+           (double)MAG_REF_STELLENBOSCH_D);
+
+    ekf_core_t ekf;
+    ekf_core_init(&ekf);
+
+    /* Reference field for Stellenbosch launch site */
+    const float mag_ref_ned[3] = {
+        MAG_REF_STELLENBOSCH_N,
+        MAG_REF_STELLENBOSCH_E,
+        MAG_REF_STELLENBOSCH_D
+    };
+
+    /* True hidden gyro bias including a Z-axis component (yaw — previously unobservable) */
+    const float hidden_gyro_bias[3]  = { 0.005f, -0.002f, 0.008f };
+    const float hidden_accel_bias[3] = { 0.05f, -0.03f, 0.0f };
+
+    const float accel_noise_std = 0.05f;
+    const float gyro_noise_std  = 0.002f;
+    const float mag_noise_std   = 0.015f;   /* ~15 mGauss noise per axis */
+    const float dt              = 0.004f;   /* 250 Hz */
+
+    const float true_accel[3] = {0.0f, 0.0f, 9.80665f};  /* level, stationary */
+    const float true_gyro[3]  = {0.0f, 0.0f, 0.0f};
+
+    const float accel_var[3] = { accel_noise_std*accel_noise_std,
+                                  accel_noise_std*accel_noise_std,
+                                  accel_noise_std*accel_noise_std };
+    const float gyro_var     = gyro_noise_std * gyro_noise_std;
+
+    /* 30 simulated seconds: ZVU + magnetometer fusion at 5 Hz */
+    int mag_hz_ratio = (int)(1.0f / (5.0f * dt));  /* every 50 steps = 5 Hz */
+
+    for (int i = 0; i < 7500; i++) {
+        float meas_accel[3], meas_gyro[3];
+        for (int axis = 0; axis < 3; axis++) {
+            meas_accel[axis] = true_accel[axis] + hidden_accel_bias[axis]
+                               + generate_gaussian_noise(0.0f, accel_noise_std);
+            meas_gyro[axis]  = true_gyro[axis]  + hidden_gyro_bias[axis]
+                               + generate_gaussian_noise(0.0f, gyro_noise_std);
+        }
+
+        symforce_predict_covariance(
+            ekf.P, ekf.state.q, ekf.state.v_ned, ekf.state.p_ned,
+            ekf.state.gyro_bias, ekf.state.accel_bias,
+            meas_accel, accel_var, meas_gyro, gyro_var, dt
+        );
+
+        /* Stationary ZVU every step */
+        const float vel_var3[3]  = {1e-6f, 1e-6f, 1e-6f};
+        const float gyro_var3[3] = {1e-6f, 1e-6f, 1e-6f};
+        symforce_update_stationary(
+            ekf.P, ekf.state.q, ekf.state.v_ned, ekf.state.p_ned,
+            ekf.state.gyro_bias, ekf.state.accel_bias,
+            meas_gyro, vel_var3, gyro_var3
+        );
+
+        /* Magnetometer fusion at 5 Hz */
+        if (i % mag_hz_ratio == 0) {
+            /* Simulate the true body-frame field: rotate NED ref into body.
+             * q = identity (level, zero-yaw) at init — body ≈ NED, so mag_body ≈ mag_ref.
+             * Add noise. */
+            mag_measurement_t mag_meas;
+            for (int axis = 0; axis < 3; axis++) {
+                mag_meas.field_gauss[axis] = mag_ref_ned[axis]
+                    + generate_gaussian_noise(0.0f, mag_noise_std);
+            }
+            mag_fuse(&ekf, &mag_meas, mag_ref_ned, MAG_DEFAULT_VAR);
+        }
+    }
+
+    printf("    After 30s ZVU+Mag: gyro_bias [%.4f, %.4f, %.4f]  (truth: [%.4f, %.4f, %.4f])\n",
+           (double)ekf.state.gyro_bias[0], (double)ekf.state.gyro_bias[1],
+           (double)ekf.state.gyro_bias[2],
+           (double)hidden_gyro_bias[0], (double)hidden_gyro_bias[1],
+           (double)hidden_gyro_bias[2]);
+    printf("    P[2,2] (yaw cov): %.6f   <- should decrease with mag fusion\n",
+           (double)ekf.P[2*15 + 2]);
+
+    /* X/Y gyro bias convergence (same as before) */
+    ASSERT_NEAR(ekf.state.gyro_bias[0], hidden_gyro_bias[0], 0.002f);
+    ASSERT_NEAR(ekf.state.gyro_bias[1], hidden_gyro_bias[1], 0.002f);
+    /* Z gyro bias (yaw) — now observable with magnetometer */
+    ASSERT_NEAR(ekf.state.gyro_bias[2], hidden_gyro_bias[2], 0.003f);
+    /* Yaw covariance must have reduced significantly from initial 0.05 */
+    ASSERT_TRUE(ekf.P[2*15 + 2] < 0.04f);
+    /* Full covariance must remain finite */
+    ASSERT_TRUE(all_finite(ekf.P, 225));
+
+    printf("  OK\n");
+}
+
 void run_fusion_tests(void)
 {
-    printf("\n=== EKF Fusion Suite (stationary / GPS / Baro) ===\n");
+    printf("\n=== EKF Fusion Suite (stationary / GPS / Baro / Mag) ===\n");
     test_stationary_bias_convergence();
     test_gps_baro_fusion();
+    test_mag_fusion();
 }

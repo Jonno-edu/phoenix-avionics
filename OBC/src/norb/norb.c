@@ -42,6 +42,7 @@ void norb_publish(topic_id_t topic, const void *data) {
     // xQueueOverwrite: always succeeds, never blocks.
     // If the queue already holds a value, it is replaced immediately.
     xQueueOverwrite(topic_queues[topic], data);
+
 }
 
 bool norb_subscribe_poll(topic_id_t topic, void *data_out) {

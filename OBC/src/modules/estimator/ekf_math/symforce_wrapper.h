@@ -76,6 +76,24 @@ void symforce_update_gps(
     float epsilon
 );
 
+/**
+ * 3-axis magnetometer update.
+ *
+ * @param mag_body     Measured magnetic field in body frame (Gauss, float[3]).
+ * @param mag_ref_ned  Reference NED field from World Magnetic Model (Gauss, float[3]).
+ * @param mag_var      Per-axis measurement noise variance (Gauss², float[3]).
+ * @param epsilon      Numerical regularisation scalar.
+ *
+ * Observation model: h(q) = q⁻¹ ⊗ mag_ref_ned ⊗ q
+ * (reference field rotated from NED into body frame)
+ * H is [3×15], non-zero only in the attitude columns (indices 0–2).
+ */
+void symforce_update_mag(
+    float* P, float* q, float* vel, float* pos, float* gyro_bias, float* accel_bias,
+    const float* mag_body, const float* mag_ref_ned,
+    const float* mag_var, float epsilon
+);
+
 #ifdef __cplusplus
 }
 #endif

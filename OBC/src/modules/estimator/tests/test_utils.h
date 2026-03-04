@@ -19,7 +19,9 @@
 #include "ekf_math/symforce_wrapper.h"
 #include "baro_fuse.h"
 #include "gps_fuse.h"
+#include "mag_fuse.h"
 #include "imu_predictor.h"
+#include "ekf_state.h"
 
 /* ── Global test counters (defined in test_utils.c) ────────────────────────── */
 
@@ -79,11 +81,19 @@ float matrix_trace(const float *P, int n);
 float quat_norm(const float q[4]);
 bool  all_finite(const float *arr, int n);
 
+/* ── Stellenbosch reference magnetic field (launch site: ~32°S, 19°E) ─────── */
+/* Values from WMM-2025 for Stellenbosch, elevation 100m, epoch 2026.2.        */
+#define MAG_REF_STELLENBOSCH_N   0.1484f   /* Gauss — North component */
+#define MAG_REF_STELLENBOSCH_E  -0.0509f   /* Gauss — East component  */
+#define MAG_REF_STELLENBOSCH_D  -0.3289f   /* Gauss — Down component  */
+
 /* ── Suite entry points (each defined in their respective test_ekf_*.c) ─────── */
 
 void run_core_tests(void);
 void run_fusion_tests(void);
 void run_dynamic_tests(void);
 void run_fault_tests(void);
+void run_state_tests(void);
+void run_mission_tests(void);
 
 #endif /* TEST_UTILS_H */

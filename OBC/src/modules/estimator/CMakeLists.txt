@@ -60,6 +60,8 @@ set(EKF_GEN_FILES
     ${EKF_GEN_DIR}/cpp/symforce/sym/update_baro.cc
     ${EKF_GEN_DIR}/cpp/symforce/sym/update_gps.h
     ${EKF_GEN_DIR}/cpp/symforce/sym/update_gps.cc
+    ${EKF_GEN_DIR}/cpp/symforce/sym/update_mag.h
+    ${EKF_GEN_DIR}/cpp/symforce/sym/update_mag.cc
 )
 
 set(VENV_PYTHON ${CMAKE_SOURCE_DIR}/.venv/bin/python3)
@@ -78,14 +80,17 @@ add_custom_target(generate_ekf_math DEPENDS ${EKF_GEN_FILES})
 # --- estimator_lib static library ---
 add_library(estimator_lib STATIC
     ekf_core.c
+    ekf_state.c
     fusion/imu_predictor.c
     fusion/baro_fuse.c
     fusion/gps_fuse.c
+    fusion/mag_fuse.c
     ekf_math/symforce_wrapper.cpp
     ${EKF_GEN_DIR}/cpp/symforce/sym/predict_covariance.cc
     ${EKF_GEN_DIR}/cpp/symforce/sym/update_stationary.cc
     ${EKF_GEN_DIR}/cpp/symforce/sym/update_baro.cc
     ${EKF_GEN_DIR}/cpp/symforce/sym/update_gps.cc
+    ${EKF_GEN_DIR}/cpp/symforce/sym/update_mag.cc
 )
 
 add_dependencies(estimator_lib generate_ekf_math)
@@ -115,6 +120,8 @@ if(BUILD_FOR_HOST)
         tests/test_ekf_fusion.c
         tests/test_ekf_dynamic.c
         tests/test_ekf_faults.c
+        tests/test_ekf_state.c
+        tests/test_mission_profile.c
     )
 
     target_include_directories(run_ekf_tests_bin PRIVATE

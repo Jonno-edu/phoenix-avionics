@@ -4,6 +4,7 @@
 #include "sym/update_stationary.h"
 #include "sym/update_baro.h"
 #include "sym/update_gps.h"
+#include "sym/update_mag.h"
 
 extern "C" {
 
@@ -136,6 +137,41 @@ void symforce_update_gps(
     sym::UpdateGps<float>(
         q_map, vel_map, pos_map, bg_map, ba_map, P_map,
         gps_pos_map, gps_vel_map, pos_var_map, vel_var_map, epsilon,
+        &q_out, &vel_out, &pos_out, &bg_out, &ba_out, &P_out
+    );
+
+    q_map   = q_out;
+    vel_map = vel_out;
+    pos_map = pos_out;
+    bg_map  = bg_out;
+    ba_map  = ba_out;
+    P_map   = P_out;
+}
+
+void symforce_update_mag(
+    float* P, float* q, float* vel, float* pos, float* gyro_bias, float* accel_bias,
+    const float* mag_body, const float* mag_ref_ned,
+    const float* mag_var, float epsilon
+) {
+    Eigen::Map<Eigen::Matrix<float,15,15>> P_map(P);
+    Eigen::Map<Eigen::Matrix<float,4,1>>   q_map(q);
+    Eigen::Map<Eigen::Matrix<float,3,1>>   vel_map(vel);
+    Eigen::Map<Eigen::Matrix<float,3,1>>   pos_map(pos);
+    Eigen::Map<Eigen::Matrix<float,3,1>>   bg_map(gyro_bias);
+    Eigen::Map<Eigen::Matrix<float,3,1>>   ba_map(accel_bias);
+
+    Eigen::Map<const Eigen::Matrix<float,3,1>> mag_body_map(mag_body);
+    Eigen::Map<const Eigen::Matrix<float,3,1>> mag_ref_ned_map(mag_ref_ned);
+    Eigen::Map<const Eigen::Matrix<float,3,1>> mag_var_map(mag_var);
+
+    // P is always full-symmetric after predict_covariance — no symmetrize needed.
+    Eigen::Matrix<float,4,1>   q_out;
+    Eigen::Matrix<float,3,1>   vel_out, pos_out, bg_out, ba_out;
+    Eigen::Matrix<float,15,15> P_out;
+
+    sym::UpdateMag<float>(
+        q_map, vel_map, pos_map, bg_map, ba_map, P_map,
+        mag_body_map, mag_ref_ned_map, mag_var_map, epsilon,
         &q_out, &vel_out, &pos_out, &bg_out, &ba_out, &P_out
     );
 

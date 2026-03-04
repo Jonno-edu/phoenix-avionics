@@ -101,6 +101,16 @@ static void test_baro_outlier_rejection(void)
 
     float p_ned_z_after = ekf.state.p_ned[2];
 
+    printf("    After 10s warmup: ekf_pos[2]=%.3f  ekf_vel[2]=%.3f m/s\n",
+           (double)ekf.state.p_ned[2], (double)ekf.state.v_ned[2]);
+    printf("    Warmed biases: accel=[%.3f,%.3f,%.3f]  gyro=[%.4f,%.4f,%.4f]\n",
+           (double)ekf.state.accel_bias[0], (double)ekf.state.accel_bias[1],
+           (double)ekf.state.accel_bias[2],
+           (double)ekf.state.gyro_bias[0],  (double)ekf.state.gyro_bias[1],
+           (double)ekf.state.gyro_bias[2]);
+    printf("    Spike: true_altitude=%.3f m  injected_altitude=%.3f m  delta=%.1f m\n",
+           (double)(-true_pos[2]), (double)spike.altitude_m,
+           (double)(spike.altitude_m - (-true_pos[2])));
     printf("    p_ned[2] before spike: %.3f m\n", (double)p_ned_z_before);
     printf("    p_ned[2] after  spike: %.3f m  (delta: %.3f m)\n",
            (double)p_ned_z_after,
@@ -146,10 +156,16 @@ static void test_gps_velocity_spike(void)
 
     float v_ned_x_after = ekf.state.v_ned[0];
 
+    printf("    After 20s warmup: ekf_vel=[%.3f, %.3f, %.3f] m/s\n",
+           (double)ekf.state.v_ned[0], (double)ekf.state.v_ned[1], (double)ekf.state.v_ned[2]);
+    printf("    GPS glitch: true_vN=%.3f  injected_vN=%.3f  delta=%.1f m/s\n",
+           (double)true_vel[0], (double)glitch.vel_ned[0],
+           (double)(glitch.vel_ned[0] - true_vel[0]));
     printf("    v_ned[0] before glitch: %.3f m/s\n", (double)v_ned_x_before);
     printf("    v_ned[0] after  glitch: %.3f m/s  (delta: %.3f m/s)\n",
            (double)v_ned_x_after,
            (double)fabsf(v_ned_x_after - v_ned_x_before));
+    printf("    P_vN before gate: P[3,3]=%.4f\n", (double)ekf.P[3*15+3]);
 
     /* Gate must have tripped: velocity should not jump more than 1 m/s */
     ASSERT_NEAR(v_ned_x_after, v_ned_x_before, 1.0f);

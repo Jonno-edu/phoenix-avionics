@@ -73,7 +73,8 @@ def predict_covariance(
     state_t = Values()
     for key in state.keys():
         if key == "quat_nominal":
-            state_t["quat_nominal"] = sf.Rot3(sf.Quaternion(xyz=(state_error["theta"] / 2), w=1)) * state["quat_nominal"]
+            # FIX: Right-Perturbation (Body frame error)
+            state_t["quat_nominal"] = state["quat_nominal"] * sf.Rot3(sf.Quaternion(xyz=(state_error["theta"] / 2), w=1))
         else:
             state_t[key] = state[key] + state_error[key]
 
@@ -109,7 +110,8 @@ def predict_covariance(
     state_error_pred = Values()
     for key in state_error.keys():
         if key == "theta":
-            delta_q = sf.Quaternion.from_storage(state_t_pred["quat_nominal"].to_storage()) * sf.Quaternion.from_storage(state_pred["quat_nominal"].to_storage()).conj()
+            # Extract Right-Perturbation (q_nom_inv * q_true)
+            delta_q = sf.Quaternion.from_storage(state_pred["quat_nominal"].to_storage()).conj() * sf.Quaternion.from_storage(state_t_pred["quat_nominal"].to_storage())
             state_error_pred["theta"] = 2 * sf.V3(delta_q.x, delta_q.y, delta_q.z) 
         else:
             state_error_pred[key] = state_t_pred[key] - state_pred[key]
@@ -176,7 +178,17 @@ def update_stationary(
 
     # 4. Kalman Gain (K = P * H^T * (H * P * H^T + R)^-1)
     S = H * P * H.T + R
-    K = P * H.T * S.inv()
+    K_raw = P * H.T * S.inv()
+
+    # FIX: Gate the accelerometer bias update.
+    # While stationary, the accel bias is unobservable due to gravity entanglement.
+    # We force the Kalman Gain for the accel_bias rows (12, 13, 14) to exactly 0.
+    K = sf.Matrix.zeros(15, 6)
+    for i in range(15):
+        if i < 12: # Keep attitude, velocity, pos, and gyro_bias gains active
+            for j in range(6):
+                K[i, j] = K_raw[i, j]
+        # Rows 12, 13, 14 remain 0, preventing accel_bias from updating
 
     # 5. Compute Error State (dx = K * y)
     dx = K * y
@@ -223,6 +235,84 @@ def update_baro(
     S = H * P * H.T + R
     K = P * H.T * S.inv()
     dx = K * y
+    I = sf.Matrix.eye(15)
+    P_new = (I - K * H) * P
+
+    d_theta = sf.V3(dx[0], dx[1], dx[2])
+    q_new_rot     = quat * sf.Rot3.from_tangent(d_theta, epsilon=epsilon)
+    q_new_storage = q_new_rot.to_storage()
+    q_new = sf.V4(q_new_storage[3], q_new_storage[0], q_new_storage[1], q_new_storage[2])
+
+    vel_new = vel + sf.V3(dx[3], dx[4], dx[5])
+    pos_new = pos + sf.V3(dx[6], dx[7], dx[8])
+    bg_new  = gyro_bias  + sf.V3(dx[9],  dx[10], dx[11])
+    ba_new  = accel_bias + sf.V3(dx[12], dx[13], dx[14])
+
+    return q_new, vel_new, pos_new, bg_new, ba_new, P_new
+
+
+def update_mag(
+    q: sf.V4,       # [w, x, y, z] body-to-NED
+    vel: sf.V3,
+    pos: sf.V3,
+    gyro_bias: sf.V3,
+    accel_bias: sf.V3,
+    P: MTangent,
+    mag_body: sf.V3,      # measured body-frame field (Gauss)
+    mag_ref_ned: sf.V3,   # reference NED field from WMM (Gauss)
+    mag_var: sf.V3,       # per-axis measurement noise variance (Gauss²)
+    epsilon: sf.Scalar
+) -> T.Tuple[sf.V4, sf.V3, sf.V3, sf.V3, sf.V3, MTangent]:
+    """
+    3-axis magnetometer update.
+
+    Observation model:
+        h(q) = R_ned_to_body * mag_ref_ned = q.inverse() * mag_ref_ned
+
+    Innovation:
+        y = mag_body - h(q)
+
+    H matrix is [3x15], non-zero only in the attitude columns (0-2):
+        H_att = skew(h(q))
+
+    This follows the right-perturbation convention consistent with the other
+    update functions (dx injection uses quat * Rot3.from_tangent(dθ)).
+
+    Physical interpretation:
+        The magnetometer tells the EKF the direction of Earth's magnetic field
+        as seen from the body. Comparing this to the known NED reference
+        corrects the attitude, primarily yaw (heading), which is otherwise
+        unobservable from GPS/Baro/IMU alone.
+    """
+    quat = sf.Rot3(sf.Quaternion(xyz=sf.V3(q[1], q[2], q[3]), w=q[0]))
+
+    # Predicted measurement: rotate reference NED field into body frame
+    mag_pred = quat.inverse() * mag_ref_ned
+
+    # Innovation: measured - predicted
+    y = mag_body - mag_pred
+
+    # H matrix [3x15]:
+    # H_att = d(h(q))/d(dθ) = skew(mag_pred)   (see derivation in roadmap)
+    # All other columns are zero — mag does not directly observe vel, pos, or bias.
+    def _skew(v):
+        M = sf.Matrix.zeros(3, 3)
+        M[0, 1] = -v[2]; M[0, 2] =  v[1]
+        M[1, 0] =  v[2]; M[1, 2] = -v[0]
+        M[2, 0] = -v[1]; M[2, 1] =  v[0]
+        return M
+
+    H = sf.Matrix.zeros(3, 15)
+    H_att = _skew(mag_pred)
+    for i in range(3):
+        for j in range(3):
+            H[i, j] = H_att[i, j]
+
+    R = sf.Matrix.diag([mag_var[0], mag_var[1], mag_var[2]])
+    S = H * P * H.T + R
+    K = P * H.T * S.inv()
+    dx = K * y
+
     I = sf.Matrix.eye(15)
     P_new = (I - K * H) * P
 
@@ -311,5 +401,8 @@ if __name__ == "__main__":
 
     codegen_gps = Codegen.function(update_gps, config=config)
     codegen_gps.generate_function(output_dir=output_dir)
+
+    codegen_mag = Codegen.function(update_mag, config=config)
+    codegen_mag.generate_function(output_dir=output_dir)
 
     print(f"Generated C++ equations in {codegen_data.generated_files[0]}")

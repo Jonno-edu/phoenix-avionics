@@ -46,6 +46,11 @@ static void test_launch_profile(void)
     const int coast_steps   = 250 * 12; /* 12 s */
     const int total_steps   = idle_steps + burn_steps + coast_steps;
 
+    printf("    Steps: idle=%d  burn=%d  coast=%d\n",
+           idle_steps, burn_steps, coast_steps);
+    printf("    %-5s  %-8s  %-10s  %-10s  %-10s  %-10s\n",
+           "t(s)", "phase", "true_p[2]", "ekf_p[2]", "true_v[2]", "ekf_v[2]");
+
     for (int step = 0; step < total_steps; step++) {
 
         /* ── Flight model: derive specific force and true NED acceleration ── */
@@ -93,6 +98,35 @@ static void test_launch_profile(void)
         /* ── 3. EKF predict via the real integration path ── */
         imu_predict(&ekf, &imu);
 
+        /* ── Periodic snapshot every 2 s ── */
+        if (step % 500 == 0) {
+            const char *phase = step < idle_steps ? "idle"
+                              : step < idle_steps + burn_steps ? "BURN" : "coast";
+            printf("    %5.1f  %-8s  %10.2f  %10.2f  %10.3f  %10.3f\n",
+                   (double)(step * dt), phase,
+                   (double)true_pos[2], (double)ekf.state.p_ned[2],
+                   (double)true_vel[2], (double)ekf.state.v_ned[2]);
+        }
+
+        /* ── Phase transition snapshots ── */
+        if (step == idle_steps) {
+            printf("    --- IGNITION (step %d, T=%.1fs)  "
+                   "true_vel[2]=%.2f  ekf_vel[2]=%.2f\n",
+                   step, (double)(step * dt),
+                   (double)true_vel[2], (double)ekf.state.v_ned[2]);
+        }
+        if (step == idle_steps + burn_steps) {
+            printf("    --- BURNOUT  (step %d, T=%.1fs)  "
+                   "true_vel[2]=%.2f  ekf_vel[2]=%.2f  "
+                   "true_pos[2]=%.1f  ekf_pos[2]=%.1f\n",
+                   step, (double)(step * dt),
+                   (double)true_vel[2], (double)ekf.state.v_ned[2],
+                   (double)true_pos[2], (double)ekf.state.p_ned[2]);
+            printf("            P_vz=%.3f  P_pz=%.3f  |q|=%.8f\n",
+                   (double)ekf.P[5*15+5], (double)ekf.P[8*15+8],
+                   (double)quat_norm(ekf.state.q));
+        }
+
         /* ── 4. Barometer update at 50 Hz (every 5 steps) ── */
         if (step % 5 == 0) {
             baro_measurement_t b = {
@@ -112,12 +146,29 @@ static void test_launch_profile(void)
         }
     }
 
-    printf("    True  p_ned[2]: %8.3f m   |  EKF: %8.3f m\n",
-           (double)true_pos[2], (double)ekf.state.p_ned[2]);
-    printf("    True  v_ned[2]: %8.3f m/s |  EKF: %8.3f m/s\n",
-           (double)true_vel[2], (double)ekf.state.v_ned[2]);
-    printf("    EKF   accel_bias[2]: %.4f  (truth: %.4f)\n",
-           (double)ekf.state.accel_bias[2], (double)hidden_accel_bias[2]);
+    printf("    --- Final state (T=%.0fs) ---\n", (double)(total_steps * dt));
+    printf("    true_pos = [%.2f, %.2f, %.2f] m\n",
+           (double)true_pos[0], (double)true_pos[1], (double)true_pos[2]);
+    printf("    ekf_pos  = [%.2f, %.2f, %.2f] m  err_z=%.2f m\n",
+           (double)ekf.state.p_ned[0], (double)ekf.state.p_ned[1], (double)ekf.state.p_ned[2],
+           (double)(ekf.state.p_ned[2] - true_pos[2]));
+    printf("    true_vel = [%.3f, %.3f, %.3f] m/s\n",
+           (double)true_vel[0], (double)true_vel[1], (double)true_vel[2]);
+    printf("    ekf_vel  = [%.3f, %.3f, %.3f] m/s  err_z=%.3f m/s\n",
+           (double)ekf.state.v_ned[0], (double)ekf.state.v_ned[1], (double)ekf.state.v_ned[2],
+           (double)(ekf.state.v_ned[2] - true_vel[2]));
+    printf("    EKF accel_bias = [%.4f, %.4f, %.4f] m/s²  (truth=[%.4f, %.4f, %.4f])\n",
+           (double)ekf.state.accel_bias[0], (double)ekf.state.accel_bias[1],
+           (double)ekf.state.accel_bias[2],
+           (double)hidden_accel_bias[0], (double)hidden_accel_bias[1],
+           (double)hidden_accel_bias[2]);
+    printf("    EKF gyro_bias  = [%.5f, %.5f, %.5f] rad/s\n",
+           (double)ekf.state.gyro_bias[0], (double)ekf.state.gyro_bias[1],
+           (double)ekf.state.gyro_bias[2]);
+    printf("    P trace=%.2f  P_vz=%.4f  P_pz=%.4f  |q|=%.8f\n",
+           (double)matrix_trace(ekf.P, 15),
+           (double)ekf.P[5*15+5], (double)ekf.P[8*15+8],
+           (double)quat_norm(ekf.state.q));
 
     /* Covariance must remain finite — highest-priority assertion */
     ASSERT_TRUE(all_finite(ekf.P, 225));

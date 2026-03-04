@@ -51,5 +51,5 @@ void ekf_core_reset(ekf_core_t* ekf) {
     ekf->P[13*15 + 13] = P_INIT_BIAS_A;
     ekf->P[14*15 + 14] = P_INIT_BIAS_A;
 
-    ekf->initialized = false;
+    ekf->flight_mode = EKF_MODE_UNINITIALIZED;
 }
