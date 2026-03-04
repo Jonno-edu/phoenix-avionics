@@ -17,13 +17,13 @@ Usage
     cmake --build build_host --target run_ekf_export
 
     # 2. Plot interactively (from workspace root)
-    python3 scripts/plot_ekf_mission.py
+    python3 src/modules/estimator/tests/plot_ekf_mission.py
 
     # 3. Point at a different CSV
-    python3 scripts/plot_ekf_mission.py --csv path/to/ekf_mission_data.csv
+    python3 src/modules/estimator/tests/plot_ekf_mission.py --csv path/to/ekf_mission_data.csv
 
     # 4. Save to PNG (for CI artefacts / PR comments)
-    python3 scripts/plot_ekf_mission.py --save ekf_mission.png
+    python3 src/modules/estimator/tests/plot_ekf_mission.py --save ekf_mission.png
 """
 
 import argparse
@@ -328,13 +328,31 @@ def plot_ekf_results(csv_path: Path, save_path: Path | None = None) -> None:
         plt.show()
 
 
-# ── CLI ───────────────────────────────────────────────────────────────────────
+# ── CLI ─────────────────────────────────────────────────────────────────────
 
 def _find_csv() -> Path:
-    """Resolve default CSV path relative to this script's workspace root."""
-    # Script lives at OBC/scripts/, CSV is typically at OBC/build_host/
-    script_dir  = Path(__file__).resolve().parent
-    workspace   = script_dir.parent         # OBC/
+    """Resolve default CSV path by ascending the filesystem until a workspace
+    root is found. The workspace root is detected by the presence of
+    `build_host/` or `CMakeLists.txt`. This keeps the script runnable from
+    its new location under `src/modules/estimator/tests/`.
+    """
+    script_dir = Path(__file__).resolve().parent
+
+    p = script_dir
+    workspace = None
+    while True:
+        if (p / "build_host").exists() or (p / "CMakeLists.txt").exists():
+            workspace = p
+            break
+        if p == p.parent:
+            # Fallback: assume four levels up is the repo root (src/modules/estimator/tests)
+            try:
+                workspace = script_dir.parents[4]
+            except Exception:
+                workspace = script_dir
+            break
+        p = p.parent
+
     candidates  = [
         workspace / "build_host" / "ekf_mission_data.csv",
         Path("build_host") / "ekf_mission_data.csv",
@@ -346,7 +364,7 @@ def _find_csv() -> Path:
     print(
         "[plot] ERROR: could not find ekf_mission_data.csv\n"
         "       Run:  cmake --build build_host --target run_ekf_export\n"
-        "       Then: python3 scripts/plot_ekf_mission.py",
+        "       Then: python3 src/modules/estimator/tests/plot_ekf_mission.py",
         file=sys.stderr,
     )
     sys.exit(1)

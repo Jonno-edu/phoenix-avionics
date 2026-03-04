@@ -159,8 +159,28 @@ class MissionControlApp:
         # Preferred path: use auto-generated unpack function from gsu_norb_dict
         if gsu_norb_dict and topic_id in gsu_norb_dict.UNPACK_FNS:
             try:
-                data = gsu_norb_dict.UNPACK_FNS[topic_id](raw_data)
-                data["_topic"] = gsu_norb_dict.TOPIC_NAMES.get(topic_id, f"topic_{topic_id}")
+                unpacked_data = gsu_norb_dict.UNPACK_FNS[topic_id](raw_data)
+                topic_name = gsu_norb_dict.TOPIC_NAMES.get(topic_id, f"topic_{topic_id}")
+                
+                # Update global state for System Overview
+                with self.lock:
+                    self.latest_data[topic_id] = unpacked_data
+                
+                # Send to SSE clients in expected format
+                sse_message = {
+                    "topic_id": topic_id,
+                    "topic_name": topic_name,
+                    "payload": unpacked_data
+                }
+                
+                clients = self.norb_stream_clients.get(topic_id, [])
+                for q in list(clients):
+                    try:
+                        q.put_nowait(sse_message)
+                    except Exception:
+                        pass  # drop if client queue is full
+                return
+                
             except Exception as e:
                 print(f"nORB dict parse error topic {topic_id}: {e}")
                 return
@@ -169,23 +189,34 @@ class MissionControlApp:
             defn = self.norb_defs[topic_id]
             try:
                 values = struct.unpack(defn["fmt"], raw_data)
-                data = dict(zip(defn["fields"], values))
-                data["_topic"] = defn["name"]
+                unpacked_data = dict(zip(defn["fields"], values))
+                topic_name = defn["name"]
+                
+                # Update global state for System Overview
+                with self.lock:
+                    self.latest_data[topic_id] = unpacked_data
+                
+                # Send to SSE clients in expected format
+                sse_message = {
+                    "topic_id": topic_id,
+                    "topic_name": topic_name,
+                    "payload": unpacked_data
+                }
+                
+                clients = self.norb_stream_clients.get(topic_id, [])
+                for q in list(clients):
+                    try:
+                        q.put_nowait(sse_message)
+                    except Exception:
+                        pass  # drop if client queue is full
+                return
+                
             except Exception as e:
                 print(f"nORB manual parse error topic {topic_id}: {e}")
                 return
         else:
             print(f"[nORB] Warning: Received unknown topic ID {topic_id}")
             return
-
-        data["_time"] = datetime.now().strftime("%H:%M:%S.%f")[:-3]
-        # Push to all SSE clients listening on this topic
-        clients = self.norb_stream_clients.get(topic_id, [])
-        for q in list(clients):
-            try:
-                q.put_nowait(data)
-            except Exception:
-                pass  # drop if client queue is full
 
     def _update(self, tm_id, pkt):
         ts_rcv = datetime.now().strftime("%H:%M:%S.%f")[:-3]
@@ -233,13 +264,21 @@ class MissionControlApp:
 
         @self.app.route('/api/norb/stream')
         def norb_stream():
-            topic_id = int(request.args.get('topic_id', -1))
-            if topic_id not in self.norb_defs:
+            topic_arg = request.args.get('topic_id', '-1')
+            if topic_arg == 'all':
+                topic_id = None
+            else:
+                topic_id = int(topic_arg)
+            if topic_id is not None and topic_id not in self.norb_defs:
                 return jsonify(error="Unknown topic"), 400
 
             client_queue = Queue(maxsize=200)
             with self.lock:
-                self.norb_stream_clients[topic_id].append(client_queue)
+                if topic_id is None:
+                    for tid in self.norb_defs:
+                        self.norb_stream_clients[tid].append(client_queue)
+                else:
+                    self.norb_stream_clients[topic_id].append(client_queue)
 
             def generate():
                 try:
@@ -253,10 +292,17 @@ class MissionControlApp:
                     pass
                 finally:
                     with self.lock:
-                        try:
-                            self.norb_stream_clients[topic_id].remove(client_queue)
-                        except ValueError:
-                            pass
+                        if topic_id is None:
+                            for tid in self.norb_defs:
+                                try:
+                                    self.norb_stream_clients[tid].remove(client_queue)
+                                except ValueError:
+                                    pass
+                        else:
+                            try:
+                                self.norb_stream_clients[topic_id].remove(client_queue)
+                            except ValueError:
+                                pass
 
             return Response(
                 generate(),

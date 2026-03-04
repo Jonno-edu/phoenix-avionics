@@ -17,6 +17,7 @@
 
 #include <FreeRTOS.h>
 #include <task.h>
+#include <math.h>
 #include "pico/time.h"
 #include "norb/norb.h"
 #include "norb/topic_defs/sensor_imu.h"
@@ -59,21 +60,30 @@ static void sim_imu_task(void *params)
     (void)params;
     TickType_t xLastWake = xTaskGetTickCount();
     sensor_imu_t imu = {0};
+    uint32_t sample_count = 0;
 
     while (1) {
         vTaskDelayUntil(&xLastWake, pdMS_TO_TICKS(SIM_IMU_DT_MS));
 
         imu.timestamp_us = time_us_64();
+        sample_count++;
 
-        /* Accelerometer: 1G on Z (NED, body at rest) + white noise */
-        imu.accel_ms2[0] =  SIM_IMU_ACCEL_NOISE_MS2 * prng_noise();
-        imu.accel_ms2[1] =  SIM_IMU_ACCEL_NOISE_MS2 * prng_noise();
-        imu.accel_ms2[2] =  SIM_IMU_GRAVITY_MS2
+        /* Slow sinusoidal movements for visualization */
+        float time_sec = (float)sample_count * SIM_IMU_DT_MS / 1000.0f;
+        float slow_accel_x = 2.0f * sinf(0.4f * time_sec);  /* 0.1 Hz, ±2 m/s² */
+        float slow_accel_y = 1.5f * cosf(2.0f * time_sec); /* 0.15 Hz, ±1.5 m/s² */
+        float slow_gyro_x = 0.5f * sinf(1.0f * time_sec);  /* 0.05 Hz, ±0.5 rad/s */
+        float slow_gyro_y = 0.3f * cosf(0.1f * time_sec);  /* 0.08 Hz, ±0.3 rad/s */
+
+        /* Accelerometer: 1G on Z (NED, body at rest) + slow movements + white noise */
+        imu.accel_ms2[0] = slow_accel_x + SIM_IMU_ACCEL_NOISE_MS2 * prng_noise();
+        imu.accel_ms2[1] = slow_accel_y + SIM_IMU_ACCEL_NOISE_MS2 * prng_noise();
+        imu.accel_ms2[2] = SIM_IMU_GRAVITY_MS2
                           + SIM_IMU_ACCEL_NOISE_MS2 * prng_noise();
 
-        /* Gyroscope: zero mean + known DC bias on Z + white noise */
-        imu.gyro_rads[0] = SIM_IMU_GYRO_NOISE_RADS * prng_noise();
-        imu.gyro_rads[1] = SIM_IMU_GYRO_NOISE_RADS * prng_noise();
+        /* Gyroscope: zero mean + known DC bias on Z + slow movements + white noise */
+        imu.gyro_rads[0] = slow_gyro_x + SIM_IMU_GYRO_NOISE_RADS * prng_noise();
+        imu.gyro_rads[1] = slow_gyro_y + SIM_IMU_GYRO_NOISE_RADS * prng_noise();
         imu.gyro_rads[2] = SIM_IMU_GYRO_BIAS_Z
                          + SIM_IMU_GYRO_NOISE_RADS * prng_noise();
 
