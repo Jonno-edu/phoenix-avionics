@@ -9,6 +9,8 @@ from collections import deque
 from pathlib import Path
 from queue import Queue, Empty
 from flask import Flask, render_template, jsonify, request, Response
+import logging
+logging.getLogger('werkzeug').setLevel(logging.ERROR)
 import rs485_app_lib as lib
 
 # --- Auto-import generated nORB dictionary (written here by CMake build) ---
@@ -55,7 +57,6 @@ class MissionControlApp:
             "target_addr": target_addr,
             "port": port,
             "baud": baud,
-            "tm_requests": [],
             "display_cards": [],
             "command_cards": [],
             "plots": [],
@@ -67,25 +68,7 @@ class MissionControlApp:
 
         self._setup_routes()
 
-    # --- API FOR DEVELOPERS ---
-
-    def add_telemetry(self, tm_id, name, parser, displays=None, plots=None):
-        """
-        Register a Telemetry packet.
-        displays: list of dicts e.g., [{"key": "Mag_X", "label": "Mag X", "type": "text"}]
-        plots: list of dicts e.g., [{"id": "plot_mag", "title": "Magnetometer", "keys": ["Mag_X"], "colors": ["#f00"]}]
-        """
-        self.tm_defs[tm_id] = {"name": name, "parser": parser}
-        self.ui_config["tm_requests"].append({"id": tm_id, "name": name})
-        
-        if displays:
-            self.ui_config["display_cards"].append({"tm_id": tm_id, "name": name, "fields": displays})
-            
-        if plots:
-            for plot in plots:
-                self.ui_config["plots"].append(plot)
-                self.history[plot["id"]] = deque(maxlen=5000)
-                self.tm_defs[tm_id].setdefault("plots", []).append(plot["id"])
+    # --- INTERNAL ENGINE ---
 
     def _load_norb_from_dict(self) -> None:
         """Auto-populate norb_defs and UI config from the auto-generated gsu_norb_dict.
@@ -150,6 +133,7 @@ class MissionControlApp:
     def _update_norb_stream(self, pkt):
         """Called when an EVENT_OBC_NORB_STREAM packet arrives from the OBC."""
         raw = pkt["data"]
+        ts_rcv = datetime.now().strftime("%H:%M:%S.%f")[:-3]
         if len(raw) < 1:
             return
         topic_id = raw[0]
@@ -165,6 +149,14 @@ class MissionControlApp:
                 # Update global state for System Overview
                 with self.lock:
                     self.latest_data[topic_id] = unpacked_data
+                    # Log activity in the raw packet stream
+                    self.raw_log.appendleft({
+                        "Time": ts_rcv, 
+                        "Dir": "RX", 
+                        "Type": "nORB", 
+                        "ID": topic_id, 
+                        "Hex": f"[{topic_name}] {raw_data.hex(' ')}"
+                    })
                 
                 # Send to SSE clients in expected format
                 sse_message = {
@@ -195,6 +187,13 @@ class MissionControlApp:
                 # Update global state for System Overview
                 with self.lock:
                     self.latest_data[topic_id] = unpacked_data
+                    self.raw_log.appendleft({
+                        "Time": ts_rcv, 
+                        "Dir": "RX", 
+                        "Type": "nORB", 
+                        "ID": topic_id, 
+                        "Hex": f"[{topic_name}] {raw_data.hex(' ')}"
+                    })
                 
                 # Send to SSE clients in expected format
                 sse_message = {
@@ -217,25 +216,6 @@ class MissionControlApp:
         else:
             print(f"[nORB] Warning: Received unknown topic ID {topic_id}")
             return
-
-    def _update(self, tm_id, pkt):
-        ts_rcv = datetime.now().strftime("%H:%M:%S.%f")[:-3]
-        parser = self.tm_defs[tm_id]["parser"]
-        try:
-            data = parser(pkt["data"])
-            data["_updated"] = ts_rcv
-            with self.lock:
-                self.latest_data[tm_id] = data
-                
-                # Update history for plots associated with this TM
-                if "plots" in self.tm_defs[tm_id]:
-                    entry = {k: v for k, v in data.items() if isinstance(v, (int, float, str))}
-                    entry["Time"] = data.get("Sat_Time", ts_rcv)
-                    for plot_id in self.tm_defs[tm_id]["plots"]:
-                        self.history[plot_id].append(entry)
-                        
-                self.raw_log.appendleft({"Time": ts_rcv, "Dir": "RX", "Type": "TM", "ID": tm_id, "Hex": pkt["data"].hex(" ").upper()})
-        except Exception as e: print(f"Parse Error TM {tm_id}: {e}")
 
     def _setup_routes(self):
         @self.app.route('/')
@@ -367,14 +347,15 @@ class MissionControlApp:
         def connect():
             args = request.json
             try:
-                self.interface = lib.RS485Interface(port=args.get('port', '/dev/ttyACM0'), baudrate=int(args.get('baud', 9600)))
+                # Use the port and baud submitted by the UI, fallback to defaults
+                port = args.get('port') or self.ui_config.get('port', '/dev/ttyACM0')
+                baud = int(args.get('baud')) if args.get('baud') else self.ui_config.get('baud', 115200)
+                
+                self.interface = lib.RS485Interface(port=port, baudrate=baud)
                 if self.interface.connect():
                     # USE self.host_addr and self.broadcast_addr here!
                     self.link = lib.OBCLink(self.interface, host_addr=self.host_addr, broadcast_addr=self.broadcast_addr)
                     
-                    for tm_id in self.tm_defs:
-                        self.link.on_tm_report(tm_id, lambda p, id=tm_id: self._update(id, p))
-
                     # Register nORB stream handler (EVENT_OBC_NORB_STREAM = 0x02)
                     self.link.on_event(_EVT_OBC_NORB_STREAM, lambda p: self._update_norb_stream(p))
 
@@ -390,8 +371,10 @@ class MissionControlApp:
                     self._auto_subscribe_norb(target)
 
                     return jsonify(success=True)
-            except Exception as e: print(e)
-            return jsonify(success=False)
+            except Exception as e: 
+                print(f"Connect route error: {e}")
+                return jsonify(success=False, error=str(e))
+            return jsonify(success=False, error="Serial port could not be opened")
 
         @self.app.route('/api/disconnect', methods=['POST'])
         def disconnect():
