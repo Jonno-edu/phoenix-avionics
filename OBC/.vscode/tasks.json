@@ -213,7 +213,7 @@
         {
             "label": "Test: Run EKF Suite",
             "type": "shell",
-            "command": "cmake --preset mac-host-tests && cmake --build build_host --target run_ekf_tests",
+            "command": "cmake --preset mac-host-tests && cmake --build build_host --target run_ekf_tests && cmake --build build_host --target run_ekf_export && .venv/bin/python3 scripts/plot_ekf_mission.py --save src/modules/estimator/tests/plots/mission_profile.png",
             "group": {
                 "kind": "test",
                 "isDefault": true

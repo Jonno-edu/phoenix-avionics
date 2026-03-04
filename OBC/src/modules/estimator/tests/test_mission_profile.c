@@ -80,6 +80,12 @@ static void test_full_mission_60s(void)
     float true_pos[3] = { 0.0f, 0.0f,  0.0f };
     float true_vel[3] = { 0.0f, 0.0f,  0.0f };
 
+    /* GPS state machine — models receiver tracking-loop dynamics.
+     * Limits: ≤ 4 g dynamics, ≤ 500 m/s velocity, ≤ 80,000 m altitude.
+     * After lock-loss the receiver needs 5 s to re-acquire. */
+    bool  gps_has_lock         = true;
+    float time_since_lock_lost = 0.0f;
+
     /* Phase durations */
     const int pad_steps   = (int)(15.0f / dt);   /*  3750 — 15 s static pad  */
     const int burn_steps  = (int)( 5.0f / dt);   /*  1250 — 5 s motor burn   */
@@ -155,9 +161,45 @@ static void test_full_mission_60s(void)
             specific_force[1] = 0.0f;
             specific_force[2] = 0.0f;
             vib_noise_std     = 0.1f;
-            send_gps          = (step % 25 == 0);      /* GPS at 10 Hz */
+            send_gps          = (step % 25 == 0);      /* GPS at 10 Hz (gated below) */
             send_baro         = (step % 5  == 0);      /* Baro at 50 Hz */
         }
+
+        /* ── GPS tracking-loop state machine ──────────────────────────────
+         * >4 g: lock lost immediately.  Recovers once accel ≤ 4 g AND
+         * velocity < 505 m/s AND a 5 s hot-start re-acquisition has elapsed.
+         * CoCom ceilings (500 m/s, 80 km) are also enforced.
+         */
+        {
+            float true_accel_g = sqrtf(
+                true_accel_ned[0]*true_accel_ned[0] +
+                true_accel_ned[1]*true_accel_ned[1] +
+                true_accel_ned[2]*true_accel_ned[2]) / G_MS2;
+            float true_vel_mag = sqrtf(
+                true_vel[0]*true_vel[0] +
+                true_vel[1]*true_vel[1] +
+                true_vel[2]*true_vel[2]);
+            float true_altitude = -true_pos[2];   /* NED Z-down → positive-up */
+
+            if (gps_has_lock) {
+                if (true_accel_g > 4.0f ||
+                    true_vel_mag  > 500.0f ||
+                    true_altitude > 80000.0f) {
+                    gps_has_lock         = false;
+                    time_since_lock_lost = 0.0f;
+                }
+            } else {
+                if (true_accel_g  <= 4.0f &&
+                    true_vel_mag   < 505.0f &&
+                    true_altitude  < 80000.0f) {
+                    time_since_lock_lost += dt;
+                    if (time_since_lock_lost > 5.0f) {
+                        gps_has_lock = true;
+                    }
+                }
+            }
+        }
+        send_gps = send_gps && gps_has_lock;
 
         /* Integrate ground truth in all phases */
         for (int ax = 0; ax < 3; ax++) {
@@ -256,7 +298,8 @@ static void test_full_mission_60s(void)
                    (double)matrix_trace(ekf.P, 15));
         }
         if (step == pad_steps + burn_steps) {
-            printf("    --- Start of COAST phase: GPS+Baro fusion resumes\n");
+            printf("    --- Start of COAST phase: Baro fusion active; "
+                   "GPS re-acquisition in progress (~5 s delay, lock ≈T+25 s)\n");
         }
 
         /* ── External sensor fusion (coast only) ───────────────────────── */

@@ -142,5 +142,36 @@ if(BUILD_FOR_HOST)
         USES_TERMINAL
     )
 
+    # ── EKF CSV export binary ──────────────────────────────────────────────
+    # Runs the same 60-second mission profile as test_mission_profile.c but
+    # writes every timestep to ekf_mission_data.csv for offline visualisation.
+    # Usage: cmake --build build_host --target run_ekf_export
+    # Then:  python3 scripts/plot_ekf_mission.py
+    add_executable(run_ekf_export_bin
+        tests/test_ekf_export.c
+        tests/test_utils.c
+    )
+
+    target_include_directories(run_ekf_export_bin PRIVATE
+        ${ESTIMATOR_DIR}
+        ${ESTIMATOR_DIR}/fusion
+        ${ESTIMATOR_DIR}/ekf_math
+        ${EKF_GEN_DIR}/cpp/symforce
+        ${CMAKE_BINARY_DIR}/norb_generated
+    )
+
+    target_link_libraries(run_ekf_export_bin PRIVATE estimator_lib m)
+
+    # Convenience target: cmake --build build_host --target run_ekf_export
+    # The binary is run from CMAKE_BINARY_DIR so the CSV lands at build_host/ekf_mission_data.csv.
+    add_custom_target(run_ekf_export
+        COMMAND run_ekf_export_bin
+        DEPENDS run_ekf_export_bin
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        COMMENT "[estimator] Exporting EKF mission data to build_host/ekf_mission_data.csv..."
+        USES_TERMINAL
+    )
+
     message(STATUS "[estimator] HOST build: run_ekf_tests_bin and run_ekf_tests targets registered.")
+    message(STATUS "[estimator] HOST build: run_ekf_export_bin and run_ekf_export targets registered.")
 endif()
