@@ -27,6 +27,10 @@ MSG_TC_ACK  = 0b011  # Telecommand Acknowledge (Restored)
 MSG_TM_REQ  = 0b100  # Telemetry Request
 MSG_TM_RPT  = 0b101  # Telemetry Report
 
+# Event IDs (msg_id values used with MSG_EVT) — must match phoenix_icd.h
+EVENT_COMMON_LOG      = 0x01
+EVENT_OBC_NORB_STREAM = 0x02  # Auto-generated nORB topic stream
+
 def make_desc(msg_type: int, msg_id: int) -> int:
     return ((msg_type & 0x07) << 5) | (msg_id & 0x1F)
 

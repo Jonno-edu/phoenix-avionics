@@ -3,15 +3,28 @@ import threading
 import json
 import io
 import csv
+import sys
 from datetime import datetime
 from collections import deque
+from pathlib import Path
 from queue import Queue, Empty
 from flask import Flask, render_template, jsonify, request, Response
 import rs485_app_lib as lib
 
-# ICD constant mirrored from phoenix_icd.h
+# --- Auto-import generated nORB dictionary (written here by CMake build) ---
+# gsu_norb_dict.py is regenerated into this directory every OBC firmware build
+# via the --gsu-outdir flag passed to tools/generate_norb_topics.py.
+_GSU_DIR = Path(__file__).parent
+sys.path.insert(0, str(_GSU_DIR))
+try:
+    import gsu_norb_dict
+except ImportError:
+    print(f"[WARN] Could not import gsu_norb_dict from {_GSU_DIR}. Build OBC firmware first.")
+    gsu_norb_dict = None
+
+# ICD constants mirrored from phoenix_icd.h
 _TC_OBC_NORB_SUBSCRIBE = 0x0C
-_TLM_OBC_NORB_STREAM   = 0x0C
+_EVT_OBC_NORB_STREAM   = lib.EVENT_OBC_NORB_STREAM   # 0x02
 
 class MissionControlApp:
     def __init__(self, title="Mission Control Dashboard", host_addr=240, broadcast_addr=0, target_addr=2, port="/dev/ttyACM0", baud=115200):
@@ -34,7 +47,7 @@ class MissionControlApp:
         self.tc_defs = {}   
 
         # nORB streaming — keyed by numeric topic_id
-        self.norb_defs = {}           # topic_id -> {name, fmt, fields}
+        self.norb_defs = {}           # topic_id -> {name, [fmt, fields]}
         self.norb_stream_clients = {} # topic_id -> list[Queue]
 
         self.ui_config = {
@@ -46,8 +59,11 @@ class MissionControlApp:
             "display_cards": [],
             "command_cards": [],
             "plots": [],
-            "norb_topics": [],         # populated by add_norb_topic()
+            "norb_topics": [],         # auto-populated from gsu_norb_dict
         }
+
+        # Auto-populate nORB definitions from the generated dictionary
+        self._load_norb_from_dict()
 
         self._setup_routes()
 
@@ -71,32 +87,43 @@ class MissionControlApp:
                 self.history[plot["id"]] = deque(maxlen=5000)
                 self.tm_defs[tm_id].setdefault("plots", []).append(plot["id"])
 
+    def _load_norb_from_dict(self) -> None:
+        """Auto-populate norb_defs and UI config from the auto-generated gsu_norb_dict.
+        Called once at startup. Topics added here do NOT require add_norb_topic() calls."""
+        if not gsu_norb_dict:
+            return
+        for topic_id, topic_name in gsu_norb_dict.TOPIC_NAMES.items():
+            if topic_id not in self.norb_defs:
+                self.norb_defs[topic_id] = {"name": topic_name}
+                self.norb_stream_clients[topic_id] = []
+                self.ui_config["norb_topics"].append({"id": topic_id, "name": topic_name})
+        print(f"[nORB] Auto-loaded {len(gsu_norb_dict.TOPIC_NAMES)} topics from gsu_norb_dict.")
+
+    def _auto_subscribe_norb(self, target_addr: int, rate_ms: int = 100) -> None:
+        """Send TC_OBC_NORB_SUBSCRIBE for every known topic immediately after OBC connects."""
+        if not gsu_norb_dict or not self.connected:
+            return
+        print("[nORB] Auto-subscribing to all topics...")
+        for topic_id, topic_name in gsu_norb_dict.TOPIC_NAMES.items():
+            payload = struct.pack('<BH', topic_id, rate_ms)
+            self.link.send_telecommand(target_addr, _TC_OBC_NORB_SUBSCRIBE, payload)
+            print(f"  -> Subscribed to {topic_name} (ID: {topic_id}) at {rate_ms} ms")
+
     def add_norb_topic(self, topic_id, name, struct_fmt, struct_fields):
         """
-        Register a nORB topic for streaming via the nORB Listener page.
-
-        topic_id     : Numeric value of topic_id_t enum on the OBC
-                       (TOPIC_BAROMETER=0, TOPIC_SENSOR_IMU=6, etc.)
-        name         : Human-readable topic name (e.g. 'barometer').
-        struct_fmt   : Python struct format string, little-endian.
-                       e.g. '<Qfff' for barometer_t (uint64 + 3 floats).
-        struct_fields: List of field name strings matching struct_fmt.
-
-        Example:
-            mc.add_norb_topic(
-                topic_id=0,
-                name='barometer',
-                struct_fmt='<Qfff',
-                struct_fields=['timestamp_us', 'pressure_pa', 'temperature_c', 'altitude_m']
-            )
+        Manually register a nORB topic (legacy / override path).
+        Prefer dropping a .msg file and rebuilding OBC — gsu_norb_dict is
+        imported automatically and add_norb_topic() calls are no longer needed.
         """
         self.norb_defs[topic_id] = {
             "name":   name,
             "fmt":    struct_fmt,
             "fields": struct_fields,
         }
-        self.norb_stream_clients[topic_id] = []
-        self.ui_config["norb_topics"].append({"id": topic_id, "name": name})
+        self.norb_stream_clients.setdefault(topic_id, [])
+        # Only append to UI list if not already present from the dict
+        if not any(t["id"] == topic_id for t in self.ui_config["norb_topics"]):
+            self.ui_config["norb_topics"].append({"id": topic_id, "name": name})
 
     def add_telecommand(self, tc_id, name, group="General", fields=None, packer=None):
         """
@@ -121,29 +148,44 @@ class MissionControlApp:
     # --- INTERNAL ENGINE ---
 
     def _update_norb_stream(self, pkt):
-        """Called when a TLM_OBC_NORB_STREAM packet arrives from the OBC."""
+        """Called when an EVENT_OBC_NORB_STREAM packet arrives from the OBC."""
         raw = pkt["data"]
         if len(raw) < 1:
             return
         topic_id = raw[0]
-        if topic_id not in self.norb_defs:
+        raw_data = raw[1:]
+        data = None
+
+        # Preferred path: use auto-generated unpack function from gsu_norb_dict
+        if gsu_norb_dict and topic_id in gsu_norb_dict.UNPACK_FNS:
+            try:
+                data = gsu_norb_dict.UNPACK_FNS[topic_id](raw_data)
+                data["_topic"] = gsu_norb_dict.TOPIC_NAMES.get(topic_id, f"topic_{topic_id}")
+            except Exception as e:
+                print(f"nORB dict parse error topic {topic_id}: {e}")
+                return
+        # Fallback path: use a manually registered struct definition
+        elif topic_id in self.norb_defs and "fmt" in self.norb_defs[topic_id]:
+            defn = self.norb_defs[topic_id]
+            try:
+                values = struct.unpack(defn["fmt"], raw_data)
+                data = dict(zip(defn["fields"], values))
+                data["_topic"] = defn["name"]
+            except Exception as e:
+                print(f"nORB manual parse error topic {topic_id}: {e}")
+                return
+        else:
+            print(f"[nORB] Warning: Received unknown topic ID {topic_id}")
             return
-        defn = self.norb_defs[topic_id]
-        payload = raw[1:]
-        try:
-            values = struct.unpack(defn["fmt"], payload)
-            data = dict(zip(defn["fields"], values))
-            data["_topic"] = defn["name"]
-            data["_time"]  = datetime.now().strftime("%H:%M:%S.%f")[:-3]
-            # Push to all SSE clients listening on this topic
-            clients = self.norb_stream_clients.get(topic_id, [])
-            for q in list(clients):
-                try:
-                    q.put_nowait(data)
-                except Exception:
-                    pass  # drop if client queue is full
-        except Exception as e:
-            print(f"nORB stream parse error topic {topic_id}: {e}")
+
+        data["_time"] = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+        # Push to all SSE clients listening on this topic
+        clients = self.norb_stream_clients.get(topic_id, [])
+        for q in list(clients):
+            try:
+                q.put_nowait(data)
+            except Exception:
+                pass  # drop if client queue is full
 
     def _update(self, tm_id, pkt):
         ts_rcv = datetime.now().strftime("%H:%M:%S.%f")[:-3]
@@ -286,16 +328,21 @@ class MissionControlApp:
                     
                     for tm_id in self.tm_defs:
                         self.link.on_tm_report(tm_id, lambda p, id=tm_id: self._update(id, p))
-                    
-                    # Register nORB stream handler (TLM_OBC_NORB_STREAM = 0x0C)
-                    self.link.on_tm_report(_TLM_OBC_NORB_STREAM, lambda p: self._update_norb_stream(p))
 
-                    self.link.on_event(1, lambda p: self.raw_log.appendleft({"Time": datetime.now().strftime("%H:%M:%S.%f")[:-3], "Dir": "RX", "Type": "EVENT", "ID": 1, "Hex": f"[ASCII] {p['data'].decode('ascii','replace')}"}))
-                    for i in range(1, 32): 
+                    # Register nORB stream handler (EVENT_OBC_NORB_STREAM = 0x02)
+                    self.link.on_event(_EVT_OBC_NORB_STREAM, lambda p: self._update_norb_stream(p))
+
+                    self.link.on_event(lib.EVENT_COMMON_LOG, lambda p: self.raw_log.appendleft({"Time": datetime.now().strftime("%H:%M:%S.%f")[:-3], "Dir": "RX", "Type": "EVENT", "ID": lib.EVENT_COMMON_LOG, "Hex": f"[ASCII] {p['data'].decode('ascii','replace')}"}))
+                    for i in range(1, 32):
                         self.link.on_tc_ack(i, lambda p: self.raw_log.appendleft({"Time": datetime.now().strftime("%H:%M:%S.%f")[:-3], "Dir": "RX", "Type": "ACK", "ID": p['desc']&0x1F, "Hex": "OK"}))
-                    
+
                     self.link.start_listening()
                     self.connected = True
+
+                    # Auto-subscribe to all nORB topics from the generated dictionary
+                    target = int(args.get('target', self.ui_config['target_addr']))
+                    self._auto_subscribe_norb(target)
+
                     return jsonify(success=True)
             except Exception as e: print(e)
             return jsonify(success=False)

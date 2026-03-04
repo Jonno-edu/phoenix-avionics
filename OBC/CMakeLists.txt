@@ -101,19 +101,28 @@ endif()
 set(NORB_GEN_OUTPUTS
     ${NORB_GEN_DIR}/norb/topics.h
     ${NORB_GEN_DIR}/norb_autogen.c
+    ${NORB_GEN_DIR}/gsu_norb_dict.py
 )
 foreach(msg_file ${NORB_MSG_FILES})
     get_filename_component(topic_name ${msg_file} NAME_WE)
     list(APPEND NORB_GEN_OUTPUTS ${NORB_GEN_DIR}/norb/topic_defs/${topic_name}.h)
 endforeach()
 
+# Path to the shared ICD header — passed to the generator for @extern struct parsing
+# and declared as a dependency so CMake rebuilds if the ICD changes.
+set(PHOENIX_ICD_H ${CMAKE_SOURCE_DIR}/lib/phoenix-icd/include/phoenix_icd.h)
+
 add_custom_command(
     OUTPUT  ${NORB_GEN_OUTPUTS}
     COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/generate_norb_topics.py
             --outdir  ${NORB_GEN_DIR}
             --topics  ${NORB_MSG_FILES}
-    DEPENDS ${NORB_MSG_FILES} ${CMAKE_SOURCE_DIR}/tools/generate_norb_topics.py
-    COMMENT "Generating nORB topic headers and init code from .msg files"
+            --icd-include ${PHOENIX_ICD_H}
+            --gsu-outdir  ${CMAKE_SOURCE_DIR}/../GSU
+    DEPENDS ${NORB_MSG_FILES}
+            ${CMAKE_SOURCE_DIR}/tools/generate_norb_topics.py
+            ${PHOENIX_ICD_H}
+    COMMENT "Generating nORB topic headers, init code, and GSU dictionary from .msg files"
     VERBATIM
 )
 
