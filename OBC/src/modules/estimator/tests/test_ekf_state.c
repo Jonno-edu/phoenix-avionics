@@ -30,7 +30,7 @@ static int drive_static_imu_no_mag(ekf_state_ctx_t *ctx,
                                    float            dt,
                                    int              steps)
 {
-    const float accel[3] = { 0.0f, 0.0f, 9.80665f };
+    const float accel[3] = { 0.0f, 0.0f, -9.80665f };
     const float gyro[3]  = { 0.0f, 0.0f, 0.0f };
     const float mag[3]   = { 0.0f, 0.0f, 0.0f };
 

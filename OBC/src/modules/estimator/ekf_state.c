@@ -38,7 +38,11 @@
  */
 static void _set_attitude_from_gravity(ekf_core_t *ekf, const float g_avg[3])
 {
-    float ax = g_avg[0], ay = g_avg[1], az = g_avg[2];
+    // The accelerometer measures specific force. When stationary, the pad pushes UP,
+    // so the measurement is -g in the Z axis. We must flip the vector to align 
+    // it with NED gravity (which acts downwards).
+    float ax = -g_avg[0], ay = -g_avg[1], az = -g_avg[2];
+    
     float norm = sqrtf(ax*ax + ay*ay + az*az);
     if (norm < 1.0f) return;   /* degenerate — no update */
     ax /= norm; ay /= norm; az /= norm;
