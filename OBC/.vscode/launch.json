@@ -13,6 +13,19 @@
       "externalConsole": false,
       "MIMode": "lldb"
     },
+    {
+      "name": "🚢 Debug EKF CSV Runner (Mac LLDB)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build_host/src/modules/estimator/run_csv_runner_bin",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/src/modules/estimator/tests",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "lldb",
+      "preLaunchTask": "shell: CMake: Host Build CSV Runner"
+    },
 
     {
       "name": "SSH: Flash",

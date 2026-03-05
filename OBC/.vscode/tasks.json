@@ -210,6 +210,19 @@
                 "command": "${env:USERPROFILE}/.pico-sdk/openocd/0.12.0+dev/openocd.exe"
             }
         },
+        {
+            "label": "shell: CMake: Host Build CSV Runner",
+            "type": "shell",
+            "command": "cmake --preset mac-host-tests && cmake --build build_host --target run_csv_runner_bin",
+            "group": {
+                "kind": "build"
+            },
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared"
+            },
+            "problemMatcher": ["$gcc"]
+        },
         // ── EKF SIL: CSV Runner + Plotter ─────────────────────────────
         // Reconfigures build_host (picks up new targets), builds the CSV
         // runner, executes it against the GSU sensor stream, then opens the

@@ -63,8 +63,8 @@ typedef unsigned long long uint64_t;
 // ============================================================================
 // Fixed linting: ensured stdint.h is at the very top.
 #define FUSE_GPS  true   // Set false to dead-reckon position/velocity
-#define FUSE_BARO true   // Set false to ignore pressure altitude
-#define FUSE_MAG  true  // Set false to bypass pad heading alignment
+#define FUSE_BARO false  // Set false to ignore pressure altitude
+#define FUSE_MAG  false // Set false to bypass pad heading alignment
 // ============================================================================
 
 // Path to the input sensor stream CSV, relative to the tests/ working directory.
@@ -239,10 +239,37 @@ int main(void) {
             // ── 3. GPS measurement update at 10 Hz ───────────────────────────
             if (FUSE_GPS && (time - last_gps_time >= GPS_RATE_S)) {
                 if (ekf_state_is_flight_ready(&state_ctx)) {
-                    float pos_ned[3] = { 0.0f, 0.0f, -alt };
+                    
+                    // --- Convert Lat/Lon to local NED ---
+                    static bool home_set = false;
+                    static double home_lat_rad = 0.0;
+                    static double home_lon_rad = 0.0;
+                    const double R_EARTH = 6378137.0; // WGS-84 equatorial radius in meters
+                    const double DEG2RAD = M_PI / 180.0;
+
+                    // Latch the first valid coordinate as the launch pad origin
+                    if (!home_set) {
+                        home_lat_rad = lat * DEG2RAD;
+                        home_lon_rad = lon * DEG2RAD;
+                        home_set = true;
+                        printf("\n>>> GPS Home origin latched. Fusing incoming fixes...\n\n");
+                    }
+
+                    double lat_rad = lat * DEG2RAD;
+                    double lon_rad = lon * DEG2RAD;
+
+                    // Flat-earth approximation (valid for local flights < 50km)
+                    float pN = (float)((lat_rad - home_lat_rad) * R_EARTH);
+                    float pE = (float)((lon_rad - home_lon_rad) * R_EARTH * cos(home_lat_rad));
+                    // ------------------------------------
+
+                    float pos_ned[3] = { pN, pE, -alt };
                     float vel_ned[3] = { vel_n, vel_e, vel_d };
-                    ekf_core_push_gps(&ekf, imu_accum.timestamp_us,
-                                      pos_ned, vel_ned);
+                    
+                    // Fetch the tail timestamp to bypass the 1-element queue limitation
+                    uint64_t tail_time = ekf.imu_buffer[ekf.tail_idx].timestamp_us;
+                    
+                    ekf_core_push_gps(&ekf, tail_time, pos_ned, vel_ned);
                 }
                 last_gps_time = time;
             }
@@ -281,50 +308,36 @@ int main(void) {
                     ekf.debug.baro_innov, ekf.debug.baro_test_ratio, (int)ekf.debug.baro_rejected,
                     ekf.debug.gps_innov_pos[2], ekf.debug.gps_test_ratio_pos[2], (int)ekf.debug.gps_rejected);
 
-            // ── 10 Hz terminal debug readout (every 25 steps at 250 Hz) ──────────
-            if (step_count % 25 == 0) {
+            // ── Throttled Terminal Readout (1Hz) ──────────────────────────
+            static float last_print_time = -1.0f;
+            if (time - last_print_time >= 1.0f) {
+                last_print_time = time;
+
                 const char *mode_str =
                     (state_ctx.mode == 0) ? "UNINIT" :
                     (state_ctx.mode == 1) ? "LEVEL"  :
                     (state_ctx.mode == 2) ? "ALIGN"  :
                     (state_ctx.mode == 3) ? "ZVU"    : "FLIGHT";
-                printf("[%7.2f] MODE:%-6s ALT:%7.1f m  VD:%6.2f m/s  YAW:%6.1f deg"
-                       "  BARO_INN:%7.3f m  REJ:%s%s%s\n"
-                       "         ACC:%7.3f %7.3f %7.3f m/s²"
-                       "  GYR:%7.4f %7.4f %7.4f rad/s"
-                       "  MAG:%6.1f %6.1f %6.1f µT"
-                       "  BARO:%8.1f Pa\n",
-                    (float)imu_accum.timestamp_us / 1e6f, mode_str,
-                    -ekf.head_state.p_ned[2],
-                     ekf.head_state.v_ned[2],
-                     yaw * 57.2958f,
-                     ekf.debug.baro_innov,
-                     ekf.debug.gps_rejected  ? "G" : "-",
-                     ekf.debug.baro_rejected ? "B" : "-",
-                     ekf.debug.mag_rejected  ? "M" : "-",
-                     accel[0], accel[1], accel[2],
-                     gyro[0],  gyro[1],  gyro[2],
-                     mag[0],   mag[1],   mag[2],
-                     pressure_pa);
+
+                // Buffer the formatted string to print to both console and log
+                char log_buffer[1024];
+                snprintf(log_buffer, sizeof(log_buffer),
+                    "[%7.2f] MODE:%-6s dt:%.4fs\n"
+                    "  SENSORS | ACC:%7.2f %7.2f %7.2f m/s2  GYR:%7.3f %7.3f %7.3f rad/s  BARO:%8.1f Pa\n"
+                    "  STATE   | ALT:%7.1f m  VD:%6.2f m/s  YAW:%6.1f deg  REJ:%s%s%s\n"
+                    "  UNCERT  | σ_PN:%.2f σ_PE:%.2f σ_PD:%.2f σ_VD:%.2f σ_YAW:%.2f\n"
+                    "--------------------------------------------------------------------------------\n",
+                    time, mode_str, imu_accum.dt_s,
+                    accel[0], accel[1], accel[2], gyro[0], gyro[1], gyro[2], pressure_pa,
+                    -ekf.head_state.p_ned[2], ekf.head_state.v_ned[2], yaw * 57.2958f,
+                    ekf.debug.gps_rejected  ? "G" : "-",
+                    ekf.debug.baro_rejected ? "B" : "-",
+                    ekf.debug.mag_rejected  ? "M" : "-",
+                    std_pN, std_pE, std_pD, std_vD, std_yaw);
+
+                printf("%s", log_buffer);
                 if (flog) {
-                    fprintf(flog, "[%7.2f] MODE:%-6s ALT:%7.1f m  VD:%6.2f m/s  YAW:%6.1f deg"
-                                  "  BARO_INN:%7.3f m  REJ:%s%s%s\n"
-                                  "         ACC:%7.3f %7.3f %7.3f m/s²"
-                                  "  GYR:%7.4f %7.4f %7.4f rad/s"
-                                  "  MAG:%6.1f %6.1f %6.1f µT"
-                                  "  BARO:%8.1f Pa\n",
-                        (float)imu_accum.timestamp_us / 1e6f, mode_str,
-                        -ekf.head_state.p_ned[2],
-                         ekf.head_state.v_ned[2],
-                         yaw * 57.2958f,
-                         ekf.debug.baro_innov,
-                         ekf.debug.gps_rejected  ? "G" : "-",
-                         ekf.debug.baro_rejected ? "B" : "-",
-                         ekf.debug.mag_rejected  ? "M" : "-",
-                         accel[0], accel[1], accel[2],
-                         gyro[0],  gyro[1],  gyro[2],
-                         mag[0],   mag[1],   mag[2],
-                         pressure_pa);
+                    fprintf(flog, "%s", log_buffer);
                 }
             }
             step_count++;

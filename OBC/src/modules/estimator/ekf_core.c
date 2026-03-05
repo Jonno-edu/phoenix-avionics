@@ -15,7 +15,7 @@ extern void imu_predict(ekf_core_t* ekf, const imu_history_t* imu);
  */
 static void _load_default_params(ekf_params_t* p) {
     /* Physical configuration */
-    p->imu_lever_arm[0] = 0.1f;  /* 10 cm forward of CG */
+    p->imu_lever_arm[0] = 0.0f;  /* Coincident with CG */
     p->imu_lever_arm[1] = 0.0f;
     p->imu_lever_arm[2] = 0.0f;
     p->gravity_ms2 = 9.80665f;
@@ -190,6 +190,13 @@ void imu_propagate_kinematics(ekf_state_t* state, const imu_history_t* imu,
 
     /* 2. Update orientation using the small-angle quaternion integrator. */
     quat_integrate_small_angle(state->q, gyro_corrected, dt);
+
+    /* ---> NEW: Explicitly normalize the quaternion to prevent exponential explosion <--- */
+    float q_mag = sqrtf(state->q[0]*state->q[0] + state->q[1]*state->q[1] + 
+                        state->q[2]*state->q[2] + state->q[3]*state->q[3]);
+    for (int i = 0; i < 4; i++) {
+        state->q[i] /= q_mag;
+    }
 
     /* 3. Rotate bias-corrected body acceleration to NED and add gravity. */
     float acc_n[3];
