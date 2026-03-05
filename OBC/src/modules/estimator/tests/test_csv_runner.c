@@ -144,7 +144,7 @@ int main(void) {
 
     fprintf(fout, "time,flight_mode,"
                   "p_N,p_E,p_D,v_N,v_E,v_D,"
-                  "roll,pitch,yaw,bg_x,bg_y,bg_z,"
+                  "roll,pitch,yaw,bg_x,bg_y,bg_z,ba_x,ba_y,ba_z,"
                   "std_pN,std_pE,std_pD,std_vD,std_yaw,"
                   "baro_innov,baro_ratio,baro_rej,"
                   "gps_innov_pD,gps_ratio_pD,gps_rej\n");
@@ -154,6 +154,28 @@ int main(void) {
 
     float prev_time    = -1.0f;
     float last_gps_time = -1.0f;
+
+    // ── GPS Tracking Variables for Logging ──
+    bool   home_set     = false;
+    double home_lat_rad = 0.0;
+    double home_lon_rad = 0.0;
+    double home_lat_deg = 0.0;
+    double home_lon_deg = 0.0;
+    float  home_alt_m   = 0.0f;
+
+    float  latest_gps_ned[3] = {0.0f, 0.0f, 0.0f};
+    double latest_lat = 0.0;
+    double latest_lon = 0.0;
+    float  latest_alt = 0.0f;
+
+    // --- Relax GPS parameters for this specific noisy receiver ---
+    for (int i = 0; i < 3; i++) {
+        ekf.params.gps_pos_var[i] = 25.0f; // Expect 5m std deviation (5^2 = 25)
+        ekf.params.gps_vel_var[i] = 10.0f; // Expect 3.1m/s std deviation
+    }
+    // Widen the Chi-Squared gate from the default 3-sigma to 5-sigma
+    ekf.params.gps_pos_gate = 5.0f;
+    ekf.params.gps_vel_gate = 5.0f;
 
     // ── PX4-style trapezoidal integrator state ────────────────────────────────
     // 1000 Hz raw samples are averaged (prev + curr) × dt before accumulation,
@@ -233,49 +255,102 @@ int main(void) {
             ekf_state_update(&state_ctx, &ekf, accel, gyro, mag_gauss,
                              FUSE_MAG, imu_accum.dt_s);
 
+            // ── ROCKET DYNAMICS FIX: Bias Locking & Boost Noise ───────────────
+            static bool flight_biases_locked = false;
+            
+            if (state_ctx.mode == 4) { // FLIGHT MODE
+                // 1. Lock biases at liftoff so scale-factor isn't absorbed as bias
+                if (!flight_biases_locked) {
+                    flight_biases_locked = true;
+                    // Mathematically decouple biases from the covariance matrix
+                    for (int i = 0; i < 3; i++) {
+                        for (int j = 0; j < 15; j++) {
+                            ekf.P[(9+i)*15 + j]  = 0.0f; // Gyro bias row
+                            ekf.P[j*15 + (9+i)]  = 0.0f; // Gyro bias col
+                            ekf.P[(12+i)*15 + j] = 0.0f; // Accel bias row
+                            ekf.P[j*15 + (12+i)] = 0.0f; // Accel bias col
+                        }
+                        // Set tiny variance to keep matrix invertible but practically static
+                        ekf.P[(9+i)*15 + (9+i)]   = 1e-8f;  
+                        ekf.P[(12+i)*15 + (12+i)] = 1e-8f;
+                    }
+                    printf("\n>>> LIFTOFF DETECTED: IMU Biases Locked for Flight <<<\n\n");
+                }
+
+                // 2. Inflate accel noise during boost to encompass scale-factor error.
+                // This ensures the 3-sigma bounds grow wide enough to accept the GPS at burnout.
+                float acc_mag = sqrtf(accel[0]*accel[1] + accel[1]*accel[1] + accel[2]*accel[2]);
+                if (acc_mag > 25.0f) {
+                    ekf.params.accel_noise_var[0] = 5.0f; 
+                    ekf.params.accel_noise_var[1] = 5.0f;
+                    ekf.params.accel_noise_var[2] = 5.0f;
+                } else {
+                    ekf.params.accel_noise_var[0] = 0.05f; // Normal coast phase noise
+                    ekf.params.accel_noise_var[1] = 0.05f;
+                    ekf.params.accel_noise_var[2] = 0.05f;
+                }
+            }
+            // ──────────────────────────────────────────────────────────────────
+
             // Propagate EKF with the accumulated delta-angle / delta-velocity.
             ekf_core_step(&ekf, &imu_accum);
 
             // ── 3. GPS measurement update at 10 Hz ───────────────────────────
-            if (FUSE_GPS && (time - last_gps_time >= GPS_RATE_S)) {
-                if (ekf_state_is_flight_ready(&state_ctx)) {
+            float acc_mag = sqrtf(accel[0]*accel[0] + accel[1]*accel[1] + accel[2]*accel[2]);
+            bool is_boosting = (acc_mag > 15.0f); // Mask GPS/Baro if > 2.5 G's
+
+            if (FUSE_GPS && (time - last_gps_time >= GPS_RATE_S) && !is_boosting) {
+                const double R_EARTH = 6378137.0; // WGS-84 equatorial radius in meters
+                const double DEG2RAD = M_PI / 180.0;
+
+                // GUARD: Only latch home if the GPS has a valid fix.
+                if (!home_set && lat != 0.0 && lon != 0.0) {
+                    home_lat_deg = lat;
+                    home_lon_deg = lon;
+                    home_lat_rad = lat * DEG2RAD;
+                    home_lon_rad = lon * DEG2RAD;
+                    home_alt_m   = alt;
+                    home_set = true;
                     
-                    // --- Convert Lat/Lon to local NED ---
-                    static bool home_set = false;
-                    static double home_lat_rad = 0.0;
-                    static double home_lon_rad = 0.0;
-                    const double R_EARTH = 6378137.0; // WGS-84 equatorial radius in meters
-                    const double DEG2RAD = M_PI / 180.0;
+                    // Print a massive banner so it's obvious exactly where and what latched
+                    char home_msg[512];
+                    snprintf(home_msg, sizeof(home_msg), 
+                        "\n================================================================================\n"
+                        ">>> GPS HOME LATCHED: Lat %.6f, Lon %.6f, Alt %.1fm\n"
+                        "================================================================================\n\n", 
+                        lat, lon, alt);
+                    printf("%s", home_msg);
+                    if (flog) fprintf(flog, "%s", home_msg);
+                }
 
-                    // Latch the first valid coordinate as the launch pad origin
-                    if (!home_set) {
-                        home_lat_rad = lat * DEG2RAD;
-                        home_lon_rad = lon * DEG2RAD;
-                        home_set = true;
-                        printf("\n>>> GPS Home origin latched. Fusing incoming fixes...\n\n");
-                    }
-
+                if (home_set) {
                     double lat_rad = lat * DEG2RAD;
                     double lon_rad = lon * DEG2RAD;
 
-                    // Flat-earth approximation (valid for local flights < 50km)
+                    // Flat-earth approximation
                     float pN = (float)((lat_rad - home_lat_rad) * R_EARTH);
                     float pE = (float)((lon_rad - home_lon_rad) * R_EARTH * cos(home_lat_rad));
-                    // ------------------------------------
+                    float rel_alt = alt - home_alt_m;
 
-                    float pos_ned[3] = { pN, pE, -alt };
+                    // Save to latest for the logger
+                    latest_gps_ned[0] = pN;
+                    latest_gps_ned[1] = pE;
+                    latest_gps_ned[2] = -rel_alt;
+                    latest_lat = lat;
+                    latest_lon = lon;
+                    latest_alt = alt;
+
+                    float pos_ned[3] = { pN, pE, -rel_alt };
                     float vel_ned[3] = { vel_n, vel_e, vel_d };
                     
-                    // Fetch the tail timestamp to bypass the 1-element queue limitation
                     uint64_t tail_time = ekf.imu_buffer[ekf.tail_idx].timestamp_us;
-                    
                     ekf_core_push_gps(&ekf, tail_time, pos_ned, vel_ned);
                 }
                 last_gps_time = time;
             }
 
             // ── 4. Barometer measurement update ──────────────────────────────
-            if (FUSE_BARO && ekf_state_is_flight_ready(&state_ctx)) {
+            if (FUSE_BARO && ekf_state_is_flight_ready(&state_ctx) && !is_boosting) {
                 baro_measurement_t baro_m;
                 baro_m.altitude_m = pressure_to_altitude(pressure_pa);
                 baro_fuse(&ekf, &baro_m);
@@ -295,7 +370,7 @@ int main(void) {
 
             fprintf(fout, "%.3f,%d,"
                           "%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,"
-                          "%.3f,%.3f,%.3f,%.5f,%.5f,%.5f,"
+                          "%.3f,%.3f,%.3f,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,"
                           "%.4f,%.4f,%.4f,%.4f,%.4f,"
                           "%.3f,%.3f,%d,"
                           "%.3f,%.3f,%d\n",
@@ -304,13 +379,14 @@ int main(void) {
                     ekf.head_state.v_ned[0], ekf.head_state.v_ned[1], ekf.head_state.v_ned[2],
                     roll, pitch, yaw,
                     ekf.head_state.gyro_bias[0], ekf.head_state.gyro_bias[1], ekf.head_state.gyro_bias[2],
+                    ekf.head_state.accel_bias[0], ekf.head_state.accel_bias[1], ekf.head_state.accel_bias[2],
                     std_pN, std_pE, std_pD, std_vD, std_yaw,
                     ekf.debug.baro_innov, ekf.debug.baro_test_ratio, (int)ekf.debug.baro_rejected,
                     ekf.debug.gps_innov_pos[2], ekf.debug.gps_test_ratio_pos[2], (int)ekf.debug.gps_rejected);
 
-            // ── Throttled Terminal Readout (1Hz) ──────────────────────────
-            static float last_print_time = -1.0f;
-            if (time - last_print_time >= 1.0f) {
+            // ── Throttled Terminal Readout (0.5 Hz) ──────────────────────────
+            static float last_print_time = -2.0f;
+            if (time - last_print_time >= 2.0f) {
                 last_print_time = time;
 
                 const char *mode_str =
@@ -319,21 +395,36 @@ int main(void) {
                     (state_ctx.mode == 2) ? "ALIGN"  :
                     (state_ctx.mode == 3) ? "ZVU"    : "FLIGHT";
 
-                // Buffer the formatted string to print to both console and log
-                char log_buffer[1024];
+                char log_buffer[2048];
                 snprintf(log_buffer, sizeof(log_buffer),
-                    "[%7.2f] MODE:%-6s dt:%.4fs\n"
-                    "  SENSORS | ACC:%7.2f %7.2f %7.2f m/s2  GYR:%7.3f %7.3f %7.3f rad/s  BARO:%8.1f Pa\n"
-                    "  STATE   | ALT:%7.1f m  VD:%6.2f m/s  YAW:%6.1f deg  REJ:%s%s%s\n"
-                    "  UNCERT  | σ_PN:%.2f σ_PE:%.2f σ_PD:%.2f σ_VD:%.2f σ_YAW:%.2f\n"
+                    "[%7.2f] MODE: %-6s\n"
+                    "  RAW SENS: ACC:%7.3f %7.3f %7.3f  GYR:%7.4f %7.4f %7.4f  BARO: %8.1f Pa\n"
+                    "  GPS RAW : Lat: %10.6f  Lon: %10.6f  Alt: %6.1f m  (HOME: %10.6f, %10.6f, %6.1f m)\n"
+                    "  GPS NED : N: %8.2f m  E: %8.2f m  D: %8.2f m\n"
+                    "  EKF NED : N: %8.2f m  E: %8.2f m  D: %8.2f m  (ALT: %.1f m)\n"
+                    "  EKF VEL : VN: %7.2f m/s  VE: %7.2f m/s  VD: %7.2f m/s  YAW: %6.1f deg\n"
+                    "  EKF BIAS: GYR X:%7.4f Y:%7.4f Z:%7.4f  ACC X:%7.3f Y:%7.3f Z:%7.3f\n"
+                    "  UNCERT  : sPN: %5.2f  sPE: %5.2f  sPD: %5.2f  sVD: %5.2f  sYAW: %5.2f\n"
+                    "  INNOV   : POS N: %6.2fm (TR: %5.2f)  E: %6.2fm (TR: %5.2f)  D: %6.2fm (TR: %5.2f)\n"
+                    "  VEL_TR  : VN_TR: %5.2f  VE_TR: %5.2f  VD_TR: %5.2f\n"
+                    "  REJECTS : %s%s%s\n"
                     "--------------------------------------------------------------------------------\n",
-                    time, mode_str, imu_accum.dt_s,
+                    time, mode_str,
                     accel[0], accel[1], accel[2], gyro[0], gyro[1], gyro[2], pressure_pa,
-                    -ekf.head_state.p_ned[2], ekf.head_state.v_ned[2], yaw * 57.2958f,
-                    ekf.debug.gps_rejected  ? "G" : "-",
+                    latest_lat, latest_lon, latest_alt, home_lat_deg, home_lon_deg, home_alt_m,
+                    latest_gps_ned[0], latest_gps_ned[1], latest_gps_ned[2],
+                    ekf.head_state.p_ned[0], ekf.head_state.p_ned[1], ekf.head_state.p_ned[2], -ekf.head_state.p_ned[2],
+                    ekf.head_state.v_ned[0], ekf.head_state.v_ned[1], ekf.head_state.v_ned[2], yaw * 57.2958f,
+                    ekf.head_state.gyro_bias[0], ekf.head_state.gyro_bias[1], ekf.head_state.gyro_bias[2],
+                    ekf.head_state.accel_bias[0], ekf.head_state.accel_bias[1], ekf.head_state.accel_bias[2],
+                    std_pN, std_pE, std_pD, std_vD, std_yaw,
+                    ekf.debug.gps_innov_pos[0], ekf.debug.gps_test_ratio_pos[0],
+                    ekf.debug.gps_innov_pos[1], ekf.debug.gps_test_ratio_pos[1],
+                    ekf.debug.gps_innov_pos[2], ekf.debug.gps_test_ratio_pos[2],
+                    ekf.debug.gps_test_ratio_vel[0], ekf.debug.gps_test_ratio_vel[1], ekf.debug.gps_test_ratio_vel[2],
+                    ekf.debug.gps_rejected ? "G" : "-",
                     ekf.debug.baro_rejected ? "B" : "-",
-                    ekf.debug.mag_rejected  ? "M" : "-",
-                    std_pN, std_pE, std_pD, std_vD, std_yaw);
+                    ekf.debug.mag_rejected ? "M" : "-");
 
                 printf("%s", log_buffer);
                 if (flog) {

@@ -193,7 +193,7 @@ def plot_altitude(ax: plt.Axes, raw_df: pd.DataFrame, ekf_df: pd.DataFrame) -> N
     ax.fill_between(t_ekf,
                     alt_ekf - 3.0 * sigma_pD,
                     alt_ekf + 3.0 * sigma_pD,
-                    color="#C62828", alpha=0.15, label="±3σ Bound", zorder=1)
+                    color="#4DD0E1", alpha=0.35, label="±3σ Bound", zorder=1)
 
     ax.set_ylabel("Altitude (m)", fontsize=9)
     ax.set_title("Altitude Tracking  |  EKF ±3σ Confidence Ribbon",
@@ -216,7 +216,7 @@ def plot_velocity_down(ax: plt.Axes, raw_df: pd.DataFrame,
     ax.fill_between(t_ekf,
                     ekf_df["v_D"] - 3.0 * sigma_v,
                     ekf_df["v_D"] + 3.0 * sigma_v,
-                    color="#C62828", alpha=0.12, label="±3σ Bound", zorder=1)
+                    color="#4DD0E1", alpha=0.30, label="±3σ Bound", zorder=1)
     ax.axhline(0.0, color="grey", linewidth=0.6, linestyle=":", zorder=2)
 
     ax.set_ylabel("Velocity D (m/s)", fontsize=9)
@@ -226,32 +226,79 @@ def plot_velocity_down(ax: plt.Axes, raw_df: pd.DataFrame,
     _grid(ax)
 
 
-def plot_attitude_and_bias(ax: plt.Axes, ekf_df: pd.DataFrame) -> None:
-    """Attitude angles (deg) on primary axis; gyro biases on secondary."""
+def plot_attitude(ax: plt.Axes, ekf_df: pd.DataFrame) -> None:
+    """Attitude angles (deg)."""
     t_ekf  = ekf_df["time"]
-    ax_b   = ax.twinx()
+    sigma_yaw = ekf_df["std_yaw"].clip(lower=0.0)
 
     ax.plot(t_ekf, np.degrees(ekf_df["roll"]),  label="Roll",  linewidth=1.4, color="#1565C0")
     ax.plot(t_ekf, np.degrees(ekf_df["pitch"]), label="Pitch", linewidth=1.4, color="#2E7D32")
     ax.plot(t_ekf, np.degrees(ekf_df["yaw"]),   label="Yaw",   linewidth=1.4, color="#6A1B9A")
+
+    # Add 3σ confidence ribbon for Yaw (since it's the most common drifting attitude state)
+    yaw_deg = np.degrees(ekf_df["yaw"])
+    sigma_yaw_deg = np.degrees(sigma_yaw)
+    ax.fill_between(t_ekf,
+                    yaw_deg - 3.0 * sigma_yaw_deg,
+                    yaw_deg + 3.0 * sigma_yaw_deg,
+                    color="#4DD0E1", alpha=0.20, label="Yaw ±3σ", zorder=1)
+
     ax.axhline(0.0, color="grey", linewidth=0.5, linestyle=":", zorder=1)
 
-    ax_b.plot(t_ekf, ekf_df["bg_x"], label="Gyro Bias X",
-              color="darkorange", linestyle="--", linewidth=1.0, alpha=0.8)
-    ax_b.plot(t_ekf, ekf_df["bg_y"], label="Gyro Bias Y",
-              color="forestgreen", linestyle="--", linewidth=1.0, alpha=0.8)
-    ax_b.plot(t_ekf, ekf_df["bg_z"], label="Gyro Bias Z",
-              color="saddlebrown", linestyle="--", linewidth=1.0, alpha=0.8)
-    ax_b.set_ylabel("Gyro Bias (rad/s)", fontsize=8)
-
     ax.set_ylabel("Angle (deg)", fontsize=9)
-    ax.set_title("Attitude  |  Gyro Bias Convergence (dashed, right axis)",
-                 fontsize=10, fontweight="bold")
+    ax.set_title("Attitude  |  Yaw ±3σ Confidence Bound", fontsize=10, fontweight="bold")
+    ax.legend(loc="upper left", fontsize=8, ncol=4)
+    _grid(ax)
 
-    lines_a, labels_a = ax.get_legend_handles_labels()
-    lines_b, labels_b = ax_b.get_legend_handles_labels()
-    ax_b.legend(lines_a + lines_b, labels_a + labels_b,
-                loc="upper left", fontsize=8, ncol=2)
+
+def plot_errors(ax: plt.Axes, raw_df: pd.DataFrame, ekf_df: pd.DataFrame) -> None:
+    """State errors (measured - estimated) + confidence bounds."""
+    t_ekf = ekf_df["time"]
+
+    # Vertical Velocity Error (GPS - EKF)
+    # We interpolate raw GPS to EKF timestamps for a clean subtraction
+    vD_raw_interp = np.interp(t_ekf, raw_df["time"], raw_df["vel_d"])
+    vD_error = vD_raw_interp - ekf_df["v_D"]
+    sigma_vD = ekf_df["std_vD"].clip(lower=0.0)
+
+    ax.plot(t_ekf, vD_error, label="Vel D Error (GPS - EKF)", color="#C62828", linewidth=1.2, zorder=3)
+    ax.fill_between(t_ekf,
+                    -3.0 * sigma_vD,
+                     3.0 * sigma_vD,
+                    color="#4DD0E1", alpha=0.35, label="Vel D ±3σ Bound", zorder=2)
+
+    ax.axhline(0.0, color="black", linewidth=0.8, linestyle="--", zorder=1)
+
+    ax.set_ylabel("Error (m/s)", fontsize=9)
+    ax.set_title("Vertical Velocity Tracking Error  |  ±3σ Filter Uncertainty",
+                 fontsize=10, fontweight="bold")
+    ax.legend(loc="upper left", fontsize=8)
+    _grid(ax)
+
+
+def plot_biases(ax: plt.Axes, ekf_df: pd.DataFrame) -> None:
+    """Gyro and Accel Biases on twin axes."""
+    t_ekf = ekf_df["time"]
+    ax_b = ax.twinx()
+
+    # Gyro Biases (Left Axis)
+    l1, = ax.plot(t_ekf, ekf_df["bg_x"], label="Gyro X", color="#1565C0", linestyle="-", linewidth=1.2)
+    l2, = ax.plot(t_ekf, ekf_df["bg_y"], label="Gyro Y", color="#2E7D32", linestyle="-", linewidth=1.2)
+    l3, = ax.plot(t_ekf, ekf_df["bg_z"], label="Gyro Z", color="#6A1B9A", linestyle="-", linewidth=1.2)
+    ax.set_ylabel("Gyro Bias (rad/s)", fontsize=9)
+
+    # Accel Biases (Right Axis)
+    l4, = ax_b.plot(t_ekf, ekf_df["ba_x"], label="Accel X", color="#1565C0", linestyle="--", linewidth=1.2)
+    l5, = ax_b.plot(t_ekf, ekf_df["ba_y"], label="Accel Y", color="#2E7D32", linestyle="--", linewidth=1.2)
+    l6, = ax_b.plot(t_ekf, ekf_df["ba_z"], label="Accel Z", color="#6A1B9A", linestyle="--", linewidth=1.2)
+    ax_b.set_ylabel("Accel Bias (m/s²)", fontsize=9)
+
+    ax.set_title("Sensor Biases  |  Solid: Gyro (left)  |  Dashed: Accel (right)", fontsize=10, fontweight="bold")
+    ax.axhline(0.0, color="grey", linewidth=0.5, linestyle=":", zorder=1)
+
+    lines = [l1, l2, l3, l4, l5, l6]
+    labels = [l.get_label() for l in lines]
+    ax.legend(lines, labels, loc="upper left", fontsize=8, ncol=2)
     _grid(ax)
 
 
@@ -339,6 +386,7 @@ def print_statistics(raw_df: pd.DataFrame, ekf_df: pd.DataFrame) -> None:
     gps_rejs   = (ekf_df["gps_rej"] == 1).sum()
 
     final_bg = ekf_df[["bg_x", "bg_y", "bg_z"]].iloc[-1]
+    final_ba = ekf_df[["ba_x", "ba_y", "ba_z"]].iloc[-1]
     final_std_pD = ekf_df["std_pD"].iloc[-1]
     final_std_vD = ekf_df["std_vD"].iloc[-1]
 
@@ -363,6 +411,8 @@ def print_statistics(raw_df: pd.DataFrame, ekf_df: pd.DataFrame) -> None:
     print(f"│  Final σ(vel D):     {final_std_vD:.4f} m/s")
     print(f"│  Final gyro bias:    X={final_bg['bg_x']:.5f}  "
           f"Y={final_bg['bg_y']:.5f}  Z={final_bg['bg_z']:.5f}  rad/s")
+    print(f"│  Final accel bias:   X={final_ba['ba_x']:.5f}  "
+          f"Y={final_ba['ba_y']:.5f}  Z={final_ba['ba_z']:.5f}  m/s²")
     print("└────────────────────────────────────────────────────────────────────┘")
     print()
 
@@ -388,14 +438,17 @@ def build_title(ekf_df: pd.DataFrame) -> str:
 def plot(raw_df: pd.DataFrame, ekf_df: pd.DataFrame, save: bool) -> None:
     print_statistics(raw_df, ekf_df)
 
-    fig, axs = plt.subplots(5, 1, figsize=(14, 20), sharex=True)
+    # 7 subplots: Alt, VelD, Attitude, State Bias, Track Error, Innovations, Health
+    fig, axs = plt.subplots(7, 1, figsize=(14, 28), sharex=True)
     fig.suptitle(build_title(ekf_df), fontsize=13, fontweight="bold", y=0.995)
 
     plot_altitude        (axs[0], raw_df, ekf_df)
     plot_velocity_down   (axs[1], raw_df, ekf_df)
-    plot_attitude_and_bias(axs[2], ekf_df)
-    plot_innovations     (axs[3], ekf_df)
-    plot_chi2            (axs[4], ekf_df)
+    plot_attitude        (axs[2], ekf_df)
+    plot_biases          (axs[3], ekf_df)
+    plot_errors          (axs[4], raw_df, ekf_df)
+    plot_innovations     (axs[5], ekf_df)
+    plot_chi2            (axs[6], ekf_df)
 
     # Phase shading on every panel (must run after data is plotted so ylim is set)
     for ax in axs:
