@@ -91,8 +91,40 @@ typedef struct {
     float    vel_ned[3];
 } ekf_delayed_obs_t;
 
+/**
+ * @brief Live diagnostic snapshot — innovations, chi-squared test ratios, and rejection flags.
+ *
+ * Written by the fusion modules each cycle before the gate decision is made.
+ * Zero-cost at runtime (struct is inside ekf_core_t, no heap allocation).
+ * Use this to transform the EKF from a black box into a fully transparent
+ * statistical engine: plot innovations to detect sensor biases, watch
+ * test ratios to see the chi-squared gates fire in real time.
+ */
+typedef struct {
+    /* ── Innovations (Measured − Predicted) ──────────────────────────── */
+    float gps_innov_pos[3];          /**< GPS position residuals [N, E, D] (m). */
+    float gps_innov_vel[3];          /**< GPS velocity residuals [N, E, D] (m/s). */
+    float baro_innov;                /**< Barometer altitude residual (m). */
+    float mag_innov_mag;             /**< Magnetometer magnitude residual (Gauss). */
+    float mag_innov_angle_cos;       /**< cos(angle) between measured and predicted field vector. */
+
+    /* ── Chi-Squared Test Ratios (> 1.0 indicates rejection) ─────────── */
+    float gps_test_ratio_pos[3];     /**< GPS position chi-sq ratios [N, E, D]. */
+    float gps_test_ratio_vel[3];     /**< GPS velocity chi-sq ratios [N, E, D]. */
+    float baro_test_ratio;           /**< Barometer chi-sq ratio. */
+    float mag_test_ratio_mag;        /**< Magnetometer magnitude chi-sq ratio. */
+
+    /* ── Rejection Flags ─────────────────────────────────────────────── */
+    bool     gps_rejected;                  /**< True if any GPS axis failed its gate this cycle. */
+    bool     baro_rejected;                 /**< True if baro failed its gate this cycle. */
+    bool     mag_rejected;                  /**< True if mag magnitude gate fired. */
+    bool     mag_ang_rejected;              /**< True if mag angular pre-gate fired. */
+    uint32_t gps_consecutive_rejections;    /**< Consecutive GPS rejections since last good sample. */
+} ekf_debug_t;
+
 typedef struct {
     ekf_params_t params;           /**< Live-tunable filter configuration (gravity, noise, gates). */
+    ekf_debug_t  debug;            /**< Live diagnostic data — innovations, test ratios, rejection flags. */
 
     /* 1. The Delayed EKF (source of truth, living ~200ms in the past) */
     ekf_state_t delayed_state;

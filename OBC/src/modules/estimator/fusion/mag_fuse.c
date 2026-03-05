@@ -24,8 +24,13 @@ bool mag_fuse(ekf_core_t           *ekf,
 
     /* ── 1. Angular Innovation Gate ─────────────────────────────────────────── */
     float cos_angle = dot / (norm_m * norm_pred);
-    if (cos_angle < MAG_GATE_COS) {
-        return false;  
+
+    /* --- DEBUG LOGGING --- */
+    ekf->debug.mag_innov_angle_cos = cos_angle;
+    ekf->debug.mag_ang_rejected    = (cos_angle < MAG_GATE_COS);
+
+    if (ekf->debug.mag_ang_rejected) {
+        return false; /* Angular gate: field direction deviated beyond threshold */
     }
 
     /* ── 2. Magnitude Chi-Squared Gate ──────────────────────────────────────── */
@@ -38,7 +43,12 @@ bool mag_fuse(ekf_core_t           *ekf,
     float test_ratio_mag = (innov_mag * innov_mag) /
                            ((ekf->params.mag_magnitude_gate * ekf->params.mag_magnitude_gate) * mag_var);
 
-    if (test_ratio_mag > 1.0f) {
+    /* --- DEBUG LOGGING --- */
+    ekf->debug.mag_innov_mag      = innov_mag;
+    ekf->debug.mag_test_ratio_mag = test_ratio_mag;
+    ekf->debug.mag_rejected       = (test_ratio_mag > 1.0f);
+
+    if (ekf->debug.mag_rejected) {
         return false; /* High-current pyrotechnic spike detected — reject */
     }
 

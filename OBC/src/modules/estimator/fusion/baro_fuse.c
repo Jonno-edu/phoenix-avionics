@@ -17,8 +17,13 @@ void baro_fuse(ekf_core_t *ekf, const baro_measurement_t *baro)
     float test_ratio_baro = (innovation * innovation) /
                             ((ekf->params.baro_gate * ekf->params.baro_gate) * innov_var_baro);
 
+    /* --- DEBUG LOGGING --- */
+    ekf->debug.baro_innov      = innovation;
+    ekf->debug.baro_test_ratio = test_ratio_baro;
+    ekf->debug.baro_rejected   = (test_ratio_baro > 1.0f);
+
     /* Gate: Reject-Only for transonic pressure waves */
-    if (test_ratio_baro > 1.0f) {
+    if (ekf->debug.baro_rejected) {
         return;
     }
 

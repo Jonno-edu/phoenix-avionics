@@ -82,7 +82,7 @@ class MissionControlApp:
                 self.ui_config["norb_topics"].append({"id": topic_id, "name": topic_name})
         print(f"[nORB] Auto-loaded {len(gsu_norb_dict.TOPIC_NAMES)} topics from gsu_norb_dict.")
 
-    def _auto_subscribe_norb(self, target_addr: int, rate_ms: int = 50) -> None:
+    def _auto_subscribe_norb(self, target_addr: int, rate_ms: int = 20) -> None:
         """Send TC_OBC_NORB_SUBSCRIBE for every known topic immediately after OBC connects."""
         if not gsu_norb_dict or not self.connected:
             return

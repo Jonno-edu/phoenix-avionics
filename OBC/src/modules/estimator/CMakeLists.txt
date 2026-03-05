@@ -176,4 +176,42 @@ if(BUILD_FOR_HOST)
 
     message(STATUS "[estimator] HOST build: run_ekf_tests_bin and run_ekf_tests targets registered.")
     message(STATUS "[estimator] HOST build: run_ekf_export_bin and run_ekf_export targets registered.")
+
+    # ── CSV SIL runner ────────────────────────────────────────────────────────
+    # Ingests a real GSU sensor-stream CSV, drives the full EKF pipeline
+    # (with trapezoidal IMU pre-integration), and writes ekf_output.csv to the
+    # tests/ source directory for analysis with plot_csv_results.py.
+    #
+    # Sensor fusion can be toggled at the top of test_csv_runner.c:
+    #   #define FUSE_GPS  true / false
+    #   #define FUSE_BARO true / false
+    #   #define FUSE_MAG  true / false
+    #
+    # Usage: cmake --build build_host --target run_csv_runner
+    # Then:  python3 src/modules/estimator/tests/plot_csv_results.py
+    add_executable(run_csv_runner_bin
+        tests/test_csv_runner.c
+    )
+
+    target_include_directories(run_csv_runner_bin PRIVATE
+        ${ESTIMATOR_DIR}
+        ${ESTIMATOR_DIR}/fusion
+        ${ESTIMATOR_DIR}/ekf_math
+        ${EKF_GEN_DIR}/cpp/symforce
+        ${CMAKE_BINARY_DIR}/norb_generated
+    )
+
+    target_link_libraries(run_csv_runner_bin PRIVATE estimator_lib m)
+
+    # Run from the tests/ source directory so ekf_output.csv lands there,
+    # keeping all SIL artefacts (CSV, plots) alongside the source files.
+    add_custom_target(run_csv_runner
+        COMMAND run_csv_runner_bin
+        DEPENDS run_csv_runner_bin
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tests
+        COMMENT "[estimator] Running EKF SIL CSV runner → tests/ekf_output.csv"
+        USES_TERMINAL
+    )
+
+    message(STATUS "[estimator] HOST build: run_csv_runner_bin and run_csv_runner targets registered.")
 endif()

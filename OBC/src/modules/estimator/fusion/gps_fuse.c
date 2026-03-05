@@ -35,11 +35,20 @@ void gps_fuse(ekf_core_t *ekf, const gps_measurement_t *gps)
         float test_ratio_p = (innov_p * innov_p) /
                              ((ekf->params.gps_pos_gate * ekf->params.gps_pos_gate) * innov_var_p);
 
+        /* --- DEBUG LOGGING --- */
+        ekf->debug.gps_innov_vel[i]      = innov_v;
+        ekf->debug.gps_test_ratio_vel[i] = test_ratio_v;
+        ekf->debug.gps_innov_pos[i]      = innov_p;
+        ekf->debug.gps_test_ratio_pos[i] = test_ratio_p;
+
         if (test_ratio_v > 1.0f || test_ratio_p > 1.0f) {
             reject_measurement = true;
-            break; 
+            /* No break: continue so all 3 axes are evaluated and logged. */
         }
     }
+
+    ekf->debug.gps_rejected              = reject_measurement;
+    ekf->debug.gps_consecutive_rejections = (uint32_t)rejected_samples;
 
     /* ── Timeout & Hard Reset Logic ──────────────────────────────────────── */
     if (reject_measurement) {

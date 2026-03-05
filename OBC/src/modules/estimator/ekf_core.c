@@ -106,6 +106,10 @@ void ekf_core_reset(ekf_core_t* ekf) {
 
     ekf->flight_mode = EKF_MODE_UNINITIALIZED;
 
+    /* Zero the debug snapshot (already covered by the memset above, but
+     * kept explicit so the intent is clear). */
+    memset(&ekf->debug, 0, sizeof(ekf_debug_t));
+
     /* Populate safe defaults so the filter runs correctly before any ground
      * station parameter uplink has occurred. */
     _load_default_params(&ekf->params);

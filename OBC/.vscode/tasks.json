@@ -210,6 +210,27 @@
                 "command": "${env:USERPROFILE}/.pico-sdk/openocd/0.12.0+dev/openocd.exe"
             }
         },
+        // ── EKF SIL: CSV Runner + Plotter ─────────────────────────────
+        // Reconfigures build_host (picks up new targets), builds the CSV
+        // runner, executes it against the GSU sensor stream, then opens the
+        // sensor-isolation plot. Toggle FUSE_GPS / FUSE_BARO / FUSE_MAG in
+        // test_csv_runner.c before running to isolate divergence sources.
+        {
+            "label": "EKF: SIL CSV Runner",
+            "type": "shell",
+            "command": "cmake --preset mac-host-tests && cmake --build build_host --target run_csv_runner && .venv/bin/python3 src/modules/estimator/tests/plot_csv_results.py --save",
+            "group": {
+                "kind": "test"
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "clear": true
+            },
+            "problemMatcher": ["$gcc"]
+        },
         {
             "label": "Test: Run EKF Suite",
             "type": "shell",
