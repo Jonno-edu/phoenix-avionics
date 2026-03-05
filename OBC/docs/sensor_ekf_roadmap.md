@@ -1,48 +1,50 @@
 # Sensor + EKF Implementation Roadmap
 
-*Last updated: 4 March 2026*
+*Last updated: 5 March 2026*
 
 ---
 
 ## Architecture Overview
 
-Phoenix Avionics implements a PX4-inspired dual-path IMU architecture split across two distinct data paths:
+Phoenix Avionics implements a PX4-inspired dual-path IMU architecture split across two distinct data paths, and utilizes a **Delayed Horizon (Time Travel)** architecture to correctly fuse asynchronous, delayed sensor data.
 
-* **The EKF Path (Observer):** Statically calibrated IMU data is integrated into delta-angles and delta-velocities and fed to the error-state EKF. The EKF propagates the nominal state and estimates in-flight gyro and accel bias drift. It intentionally never receives bias-corrected data — it needs to *see* the drift to estimate it.
-* **The Rate Path (Consumer):** Raw gyro data has static calibration AND the EKF's live bias estimate subtracted from it, then is passed through a low-pass filter and published as `vehicle_angular_velocity`. The future rate controller receives perfectly zeroed, debiased angular rates in real time. **This path (`angvel.c`) is deliberately deferred** — it is not needed until a rate controller exists to consume it, and implementing it now would add complexity without any observable benefit.
+### 1. The Estimator Path (Delayed Horizon)
+To handle the reality of sensor processing latency (e.g., GPS taking 150ms+ to compute a fix), the EKF does not run in the present. 
+* **The Delayed State (Source of Truth):** The heavy 15-state Error-State Kalman Filter (ESKF) lives strictly ~200ms in the past. When delayed GPS/Baro measurements arrive, they are placed in a "Waiting Room" until the delayed EKF's timeline naturally catches up to their exact timestamp. 
+* **The Head State (Navigation Output):** To fly the rocket, the flight controller needs the state *right now*. The estimator maintains a 128-sample ring buffer of IMU history. Every 4ms, it copies the fully-fused past state and rapidly integrates the ring buffer forward using lightweight non-linear kinematics to produce a real-time `head_state`.
 
-```
+### 2. The Rate Path (Consumer - Deferred)
+Raw gyro data has static calibration AND the EKF's live bias estimate subtracted from it, then is passed through a low-pass filter and published as `vehicle_angular_velocity`. The future rate controller receives perfectly zeroed, debiased angular rates in real time. **This path (`angvel.c`) is deliberately deferred** — it is not needed until a rate controller exists.
+
+```text
 Raw IMU (TOPIC_SENSOR_IMU, 250 Hz)
   │
-  ├──→ Integrator → TOPIC_VEHICLE_IMU (250 Hz) ──→ Error-State EKF
-  │                                                        │
-  │                                        TOPIC_ESTIMATOR_SENSOR_BIAS (bias feedback)
-  │                                                        │
-  └──→ Rate Conditioner ←───────────────────────────────────
+  ├──→ Integrator → TOPIC_VEHICLE_IMU (250 Hz)
+  │         │
+  │         ├──→ [ Ring Buffer ] ──(Fast Forward)──→ Head State (Present) ──→ TOPIC_VEHICLE_STATE
+  │         │
+  │         └──→ (Wait 200ms) ──→ Delayed EKF (Past) ←── GPS/Baro/Mag (Waiting Rooms)
+  │                                    │
+  │                    TOPIC_ESTIMATOR_SENSOR_BIAS (bias feedback)
+  │                                    │
+  └──→ Rate Conditioner ←──────────────┘
             │  (deferred — no rate controller yet)
             └──→ TOPIC_VEHICLE_ANGULAR_VELOCITY (250 Hz) ──→ Rate Controller (future)
 
 ```
-
-The EKF uses an **Error-State Kalman Filter (ESKF)** formulation derived from Joan Solà's *"Quaternion kinematics for the error-state Kalman filter"*.
-
-* The **nominal state** (`q`, `v_ned`, `p_ned`, `bg`, `ba`) is propagated deterministically via non-linear kinematics using IMU delta angles and delta velocities.
-* The **15-element error state** (`δθ`, `δv`, `δp`, `δbg`, `δba`) is maintained as a Gaussian distribution `N(0, P)`.
-* Measurement corrections update the error state via the standard linear Kalman update, then the correction is injected back into the nominal state and the error state is reset to zero.
-* This avoids the quaternion unit-norm constraint problem and gives significantly better linearisation accuracy than a direct quaternion EKF.
 
 ---
 
 ## Roadmap Status Summary
 
 | Phase | Title | Status |
-|-------|-------|--------|
+| --- | --- | --- |
 | 1 | Foundation: Topics, Build, BSP Plumbing | ✅ Complete |
 | 2 | Simulated IMU Driver + Integrator | ✅ Complete |
-| 3 | ESKF Core: IMU Propagation | ✅ Complete |
-| 4 | ESKF Fusion Math & Adversarial Test Suite | ✅ Complete |
-| 5 | Kinematic Lever Arm Compensation & Attitude Tests | ✅ Complete |
-| 6 | Sensor Plumbing & Voting | ⏳ Pending |
+| 3 | ESKF Core: Delayed Horizon & Propagation | ✅ Complete |
+| 4 | ESKF Fusion Math, Chi-Squared Gates & Resets | ✅ Complete |
+| 5 | Kinematic Lever Arm Compensation & Attitude | ✅ Complete |
+| 6 | Sensor Plumbing, Waiting Rooms & Voting | ⏳ Pending |
 | 7 | Launchpad Alignment & Flight State Machine | ⏳ Pending |
 | 8 | Commander Arming Gate | ⏳ Pending |
 | 9 | EKF Structural Hardening & Configuration | ⏳ Pending |
@@ -50,47 +52,18 @@ The EKF uses an **Error-State Kalman Filter (ESKF)** formulation derived from Jo
 
 ---
 
-## Phase 1 — Foundation: Topics, Build, and BSP Plumbing (✅ Complete)
+## Phase 3 — Error-State EKF Core: Delayed Horizon (✅ Complete)
 
-**Goal:** Establish every structural pre-requisite. Nothing else can start without this phase.
+**Goal:** A running ESKF that manages the dual-state timeline, propagates the nominal state, and updates the 15×15 error-state covariance using SymForce-generated C++ math.
 
-*Status: `.msg` files created, nORB topics generated, esl-math enabled, and build succeeds.*
-
----
-
-## Phase 2 — Simulated IMU Driver + Integrator (✅ Complete)
-
-**Goal:** Continuous, physically plausible data flowing through `TOPIC_SENSOR_IMU` → `TOPIC_VEHICLE_IMU` at 250 Hz.
-
-*Status: 1 kHz sim driver functional with gravity + DC bias on Z-axis. Integrator task accurately accumulating 4×1 ms windows into 250 Hz outputs.*
-
----
-
-## Phase 3 — Error-State EKF Core: IMU Propagation (✅ Complete)
-
-**Goal:** A running ESKF that performs static alignment, propagates the nominal state, updates the 15×15 error-state covariance using SymForce-generated C++ math, and begins converging on gyro and accel bias estimates.
-
-*Status: Implemented a production-grade modular EKF architecture. The filter runs at 250 Hz, integrating `TOPIC_VEHICLE_IMU` delta-angles/velocities into a 15-state ESKF. High-performance SymForce C++ math is successfully bridged to the C firmware via a zero-copy Eigen wrapper.*
-
-### Module Architecture
-
-The estimator module follows a strict separation of concerns:
-
-| File | Responsibility |
-|------|---------------|
-| `src/modules/estimator/ekf.c` | OS layer: 250 Hz FreeRTOS task, nORB subscribe/publish |
-| `src/modules/estimator/ekf_core.c` | Filter core: owns the 15-state memory and 15×15 `P` matrix |
-| `src/modules/estimator/fusion/imu_predictor.c` | Non-linear kinematics: integrates `vehicle_imu_t` into nominal state |
-| `src/modules/estimator/ekf_math/symforce_wrapper.cpp` | C++ bridge: `Eigen::Map` zero-copy casts for all SymForce functions |
-| `src/modules/estimator/ekf_math/generate_eskf_math.py` | SymForce script: derives ESKF Jacobians, generates unrolled C++ |
-| `src/modules/estimator/gen/cpp/symforce/sym/` | All autogenerated covariance and update math |
+*Status: Implemented a production-grade delayed-horizon modular architecture. The filter runs at 250 Hz, pushing `TOPIC_VEHICLE_IMU` frames into a 128-sample ring buffer, evaluating the heavy SymForce predictor on the 200ms delayed tail, and fast-forwarding the `head_state` to the present via `imu_propagate_kinematics()`.*
 
 ### ESKF State Definition
 
 We implement a **15-state ESKF** optimised for rocket ascent. Magnetometer data is used exclusively for pre-flight heading alignment; continuous magnetic fusion is unreliable during high-dynamic rocket flight.
 
 | Symbol | Dim | Description |
-|--------|-----|-------------|
+| --- | --- | --- |
 | `q` | 4 | Nominal orientation quaternion (NED ← body) |
 | `v_ned` | 3 | Nominal NED velocity (m/s) |
 | `p_ned` | 3 | Nominal NED position (m) |
@@ -98,239 +71,102 @@ We implement a **15-state ESKF** optimised for rocket ascent. Magnetometer data 
 | `ba` | 3 | Nominal accel bias estimate (m/s²) |
 | `P[15][15]` | 225 | Error-state covariance, row-major float array |
 
-Error-state ordering: `[δθ, δv, δp, δbg, δba]`.
-
-### Initial Covariance (`P` diagonal at reset)
-
-| States | Indices | Value |
-|--------|---------|-------|
-| Attitude `δθ` | 0–2 | 0.05 |
-| Velocity `δv` | 3–5 | 100.0 |
-| Position `δp` | 6–8 | 100.0 |
-| Gyro bias `δbg` | 9–11 | 0.001 |
-| Accel bias `δba` | 12–14 | 0.1 |
-
 ---
 
-## Phase 4 — ESKF Global Fusion Math & Adversarial Test Suite (✅ Complete)
+## Phase 4 — Global Fusion Math & Dynamic Gating (✅ Complete)
 
-**Goal:** Expand the SymForce mathematical foundation to include measurement updates for GPS and Barometer. Prove the filter is correct under both ideal and adversarial conditions using a rigorous host-compiled test suite before touching FreeRTOS or hardware drivers.
+**Goal:** Expand the SymForce mathematical foundation to include measurement updates for GPS, Barometer, and Magnetometer. Implement dynamic Chi-Squared innovation gates to reject outliers, and timeout logic to handle state resets.
 
-*Status: All fusion math generated, bridged, and verified. 96/96 host tests pass across 6 domain-separated test files covering: unit math, 60 s bias-convergence fusion, 1D launch profile, high-rate attitude test, ±50 m/s² motor vibration, outlier rejection gates, GPS dropout dead-reckoning, and 60 s mission-profile timelines.*
+*Status: All fusion math generated and bridged. Hard limits have been replaced by dynamic Chi-Squared Test Ratios that scale with the EKF's internal state variance.*
 
 ### Fusion Implementation Details
 
-#### Barometer Fusion — `fusion/baro_fuse.{h,c}`
-
-* **Measurement model:** altitude = −p_ned[2]
-* **Innovation:** `y = baro.altitude_m - (-ekf.state.p_ned[2])`
-* **Gate:** ±5 m chi-square innovation gate
-* **Noise model:** `baro_var = 0.25 m²` (~0.5 m 1-sigma, representative of MS5607/BMP581)
-* **H matrix:** [1×15], `H[0,8] = −1`
-* **Autogenerated:** `gen/cpp/symforce/sym/update_baro.{h,cc}`
-
 #### GPS Fusion — `fusion/gps_fuse.{h,c}`
 
-* **Measurement model:** 6-DOF position + velocity in NED
-* **Innovation:** `y = [gps.pos_ned - p_ned, gps.vel_ned - v_ned]`
-* **Gate:** ±20 m per-axis (position), ±5 m/s per-axis (velocity) innovation gates
-* **Noise model:** `pos_var = {2.25, 2.25, 2.25} m²`, `vel_var = {0.01, 0.01, 0.01} (m/s)²`
-* **H matrix:** [6×15], identity blocks at v_ned (cols 3–5) and p_ned (cols 6–8)
-* **Autogenerated:** `gen/cpp/symforce/sym/update_gps.{h,cc}`
+* **Measurement:** 6-DOF position + velocity in NED
+* **Gate:** 3-sigma Chi-Squared Test Ratio on both Position and Velocity.
+* **Timeout & Reset:** If the Test Ratio exceeds 1.0 for 50 consecutive samples (5 seconds), the filter performs a **Hard Reset**. It overwrites the state and variance, and mathematically decorrelates the covariance matrix by zeroing off-diagonal elements to prevent violent attitude shifts.
 
-#### Critical: Covariance Symmetry Fix
+#### Barometer Fusion — `fusion/baro_fuse.{h,c}`
 
-`predict_covariance` (SymForce optimisation) stores only the upper triangle. After each prediction, the result is symmetrised via `selfadjointView<Eigen::Upper>()` in `symforce_predict_covariance()`. Without this fix the lower-triangle cross-covariance terms `P[bias, vel/pos]` are zero, making it impossible for GPS/Baro to observe bias drift — the filter would never converge on `ba` or `bg`.
+* **Measurement:** Altitude = −p_ned[2]
+* **Gate:** 5-sigma Chi-Squared Test Ratio.
+* **Transonic Lockout:** Configured as **Reject Only**. No timeouts or resets are permitted. When the transonic pressure wave induces a massive fake altitude spike, the test ratio fires and safely locks out the barometer. The EKF dead-reckons through the supersonic phase and automatically resumes fusion once pressure normalizes.
 
-#### Observability Notes
+#### Magnetometer Fusion — `fusion/mag_fuse.{h,c}`
 
-| State | Observable via GPS+Baro+Mag? | Notes |
-|-------|------------------------------|-------|
-| `p_ned` | ✅ Yes | All axes constrained via GPS and Barometer |
-| `v_ned` | ✅ Yes | GPS velocity directly constrains `v_ned` |
-| `gyro_bias` | ✅ Yes | **Fully observable**. Roll/Pitch converge via gravity (accelerometer); Yaw converges via 3D Magnetometer fusion. |
-| `accel_bias` | ⚠️ Partial | Z-axis converges slowly via baro; X/Y require translational dynamics |
+* **Measurement:** 3D magnetic field vector.
+* **Gate:** Dual gate system. An angular constraint (`MAG_GATE_COS`) prevents wild yaw shifts, while a 3-sigma **Magnitude Chi-Squared Gate** instantly rejects electromagnetic pulses caused by pyrotechnic deployment charges in the avionics bay.
 
 ---
 
-### Test Suite — Full Results (4 March 2026)
+### Test Suite — Full Results (5 March 2026)
 
-The monolithic `test_ekf_predict.c` was replaced with a domain-separated multi-file suite. All 96 tests pass.
+All 101 host tests pass across 7 domain-separated test files.
 
 **Build command:** `cmake --build build_host --target run_ekf_tests`
 
-```
-╔══════════════════════════════════════════════════╗
-║  Phoenix Avionics — EKF Test Suite               ║
-╚══════════════════════════════════════════════════╝
-
-=== EKF Core Suite (init / reset / covariance math) ===   [test_ekf_core.c]
-
+```text
+=== EKF Core Suite (init / reset / covariance math) ===
   test_init_quaternion_is_identity ............... OK
-  test_init_state_is_zeroed ...................... OK
   test_init_covariance_diagonal .................. OK
-  test_reset_restores_state ...................... OK
-  test_covariance_grows_after_predict ............ OK  (trace: 600.4529 → 600.4578)
-  test_covariance_stays_finite_over_1s ........... OK  (final trace: 912.9003)
-  test_quaternion_norm_preserved_after_predict ... OK  (|q| = 1.00000000)
+  test_covariance_grows_after_predict ............ OK (trace: 600.4529 → 600.4578)
 
-=== EKF Fusion Suite (stationary / GPS / Baro) ===        [test_ekf_fusion.c]
+=== EKF Fusion Suite (stationary / GPS / Baro / Mag) ===
+  test_stationary_bias_convergence ............... OK (Target: [0.0050, -0.0020, 0.0150])
+  test_gps_baro_fusion ........................... OK
+  test_mag_fusion ................................ OK
 
-  test_stationary_bias_convergence ...
-    Target Gyro Bias:  [0.0050, -0.0020, 0.0150]
-    EKF Gyro Bias:     [0.0050, -0.0020, 0.0150]   ← exact convergence (all 3 axes)
-    OK
+=== EKF Dynamic Flight Suite (launch profile / vibration) ===
+  test_launch_profile ............................ OK (True v_ned[2]: -29.413 | EKF: -29.666)
+  test_motor_vibration ........................... OK (±50 m/s² noise handled)
+  test_high_roll_rate ............................ OK (Lever arm centripetal stripped)
 
-  test_mag_fusion ...
-    [Warmed with 3D Magnetometer fusion]
-    After 30s ZVU+Mag: Gyro Bias [0.0050, -0.0020, 0.0150]
-    ← Yaw bias verified observable via Mag
-    OK
+=== EKF Fault Injection Suite (gating / dropouts / NaN) ===
+  test_baro_outlier_rejection .................... OK (-200m spike rejected)
+  test_gps_velocity_spike ........................ OK (+50m/s glitch rejected)
+  test_gps_dropout_dead_reckoning ................ OK (Baro holds Z, X/Y drift bounded)
 
-=== EKF Dynamic Flight Suite (launch profile / vibration) ===  [test_ekf_dynamic.c]
+=== EKF State Machine Suite ===
+  test_liftoff_detection ......................... OK
+  test_flight_ready_gate ......................... OK
 
-  test_launch_profile ...
-    [3 s pad idle → 5 s +3g motor burn → 12 s freefall coast, 250 Hz]
-    True  p_ned[2]: -1426.884 m   |  EKF: -1426.716 m  (error: 0.168 m)
-    True  v_ned[2]:   -29.413 m/s |  EKF:   -29.343 m/s (error: 0.070 m/s)
-    EKF   accel_bias[2]: 0.1289  (truth: 0.1500, error: 0.021 m/s²)
-    OK
-
-  test_motor_vibration ...
-    [2 s at ±50 m/s² zero-mean IMU noise — extreme solid rocket motor vibration]
-    P trace after vibration: 1243.0861   ← finite, bounded
-    |q| = 1.00000000                     ← quaternion numerically stable
-    OK
-
-  test_high_roll_rate ...
-    [5 s @ 10 rad/s pitch with 10 cm X-axis lever arm]
-    |q| = 1.00000000                     ← stable at high angular rates
-    v_ned[0] = 0.009 m/s                 ← lever arm centripetal term stripped
-    OK
-
-=== EKF Fault Injection Suite (gating / dropouts / NaN) ===  [test_ekf_faults.c]
-
-  test_baro_outlier_rejection ...
-    [10 s normal fusion, then −200 m baro spike simulating transonic pressure event]
-    p_ned[2] before spike: -49.928 m
-    p_ned[2] after  spike: -49.928 m   (delta: 0.000 m)
-    ← gate fired: state completely unchanged
-    OK
-
-  test_gps_velocity_spike ...
-    [20 s normal fusion, then +50 m/s GPS velocity glitch on North channel]
-    v_ned[0] before glitch: 0.031 m/s
-    v_ned[0] after  glitch: 0.031 m/s  (delta: 0.000 m/s)
-    ← gate fired: velocity completely unchanged
-    OK
-
-  test_gps_dropout_dead_reckoning ...
-    [Phase A] 20 s full GPS+Baro fusion
-    Bias after calibration: accel[0.067, -0.060, 0.002]  gyro[0.0050, -0.0023, -0.0077]
-    [Phase B] 30 s GPS dropout — Baro only, dead-reckoning on IMU
-    After dropout: p_ned[2] = -100.025 m  (truth: -100.0 m, error: 0.025 m)
-    After dropout: v_ned[0] = -2.282 m/s  v_ned[1] = -0.922 m/s
-    ← Z locked by Baro; X/Y drift slowly (unobservable) but bounded < 3 m/s
-    OK
-
-  test_nan_gyro_input ...
-    [delta_angle[0] = NaN injected into imu_predict()]
-    NaN sample was rejected by imu_predict() guard.
-    ← isnan() guard already implemented; state remained finite
-    OK (documented)
+=== EKF Advanced Suite (latency / jitter / unmodeled forces) ===
+  test_gps_latency ............................... OK (200ms delayed buffer sync verified)
+  test_imu_jitter_and_drops ...................... OK (Dynamic dt handling)
+  test_crosswind_drag ............................ OK (Tracks unmodeled East wind push)
 
 ══════════════════════════════════════════════════════
-  96 / 96 tests passed.
+  101 / 101 tests passed.
 ══════════════════════════════════════════════════════
-```
-
-#### What the Results Tell Us
-
-| Observation | Interpretation |
-|-------------|----------------|
-| P trace grows from 600.45 → 600.46 on a single predict step | Covariance inflation is working and numerically stable |
-| P trace reaches 912.9 after 250 uncorrected predict steps (1 s) | Filter accumulates uncertainty correctly without corrections |
-| Stationary bias converges to 4 decimal places | ZVU update path is mathematically correct |
-| GPS+Baro 60 s: position error 0.011 m, velocity error 0.001 m/s | Full fusion pipeline is production quality |
-| Gyro-Z bias does not converge (0.0020 → 0.0004) | Expected and correct — yaw is unobservable without magnetometer |
-| Launch profile: 20 s / 1427 m trajectory, error 0.168 m | Filter survives 3g ignition and freefall transition |
-| Motor vibration: P trace 1243 after ±50 m/s² noise | Covariance bounded; no divergence under extreme SRM noise |
-| High rate pitch: |q| = 1.00000000 at 10 rad/s | Quaternion integration remains stable at high rotation rates |
-| High rate pitch: v_ned error < 0.01 m/s | Lever arm centripetal compensation verified to remove massive spurious acceleration |
-| Baro −200 m spike: Δp = 0.000 m | Innovation gate working perfectly |
-| GPS +50 m/s spike: Δv = 0.000 m/s | Innovation gate working perfectly |
-| GPS dropout: Z error 0.025 m after 30 s | Baro anchors Z independently; dead-reckoning is clean |
-| GPS dropout: horizontal drift < 3 m/s over 30 s | Calibrated biases slow the drift significantly |
-| NaN input: state remained finite | Guard already exists in `imu_predictor.c` |
-
-#### Test File Structure
 
 ```
-src/modules/estimator/tests/
-├── test_utils.h          — shared macros (ASSERT_NEAR, ASSERT_TRUE), mock types
-├── test_utils.c          — Box-Muller generator, mock sensors, quat math
-├── test_ekf_core.c       — init, reset, covariance propagation math
-├── test_ekf_fusion.c     — stationary ZVU convergence, 60 s GPS+Baro+Mag
-├── test_ekf_dynamic.c    — 1D launch profile, ±50 m/s² vibration, high-rate spin
-├── test_ekf_faults.c     — baro outlier, GPS glitch, GPS dropout, NaN guard
-├── test_ekf_state.c      — 5-stage warmup state machine transitions
-├── test_mission_profile.c — 60-second pad-to-apogee mission timeline
-└── test_main.c           — master runner with suite banners
-```
-
-#### Known Limitations & Open Items
-
-| Item | Severity | Notes |
-|------|----------|-------|
-| Gyro-Z bias not observable | By design | Requires magnetometer; will be addressed in Phase 7 |
-| Horizontal dead-reckoning drift 2.3 m/s over 30 s | Acceptable | Bounded by calibrated biases. GPS dropout > 30 s should trigger a flight-mode warning in the commander |
-| Baro gate hardcoded at ±5 m | Review needed | During apogee approach (near Mach 1) a tighter or dynamic gate may be warranted |
 
 ---
 
-## Phase 5 — Kinematic Lever Arm Compensation & Attitude Tests (✅ Complete)
+## Phase 6 — Sensor Plumbing & Waiting Rooms (⏳ Pending)
 
-**Goal:** Allow the IMU to be mounted off-axis from the vehicle CG without rotational kinematics corrupting the velocity and position state. Resolve the "attitude-mode" test gap.
-
-### Accomplishments
-
-1. **Lever Arm Math:** Implemented $\omega \times (\omega \times r)$ (centripetal) and $\alpha \times r$ (tangential) acceleration compensation inside `imu_predict()`.
-2. **`prev_gyro` bookkeeping field:** Added `prev_gyro[3]` to `ekf_state_t` to enable angular-acceleration estimation.
-3. **Attitude Test Suite:** Added a high-rate pitch test to `test_ekf_dynamic.c` verifying the centripetal term is stripped correctly at 10 rad/s.
-4. **Verification:** Proved that the quaternion stays strictly normalised (|q|=1.000) and NED velocity does not diverge due to lever-arm induced acceleration.
-
----
-
-## Phase 6 — Sensor Plumbing & Voting (⏳ Pending)
-
-**Goal:** Establish the pre-EKF FreeRTOS sensor pipeline for Magnetometer, GPS, and dual Barometers.
+**Goal:** Establish the pre-EKF FreeRTOS sensor pipeline for Magnetometer, GPS, and dual Barometers, and bridge them into the EKF's timeline.
 
 ### Steps
 
-1. **Redundant Barometer Voting:**
-   - Implement `voted_sensors_update.c` to read both MS5607 and BMP581.
-   - Select primary baro based on health and inter-sensor variance; publish unified `TOPIC_BAROMETER`.
-
-2. **Magnetometer & WMM:**
-   - Integrate `mag.c` driver.
-   - Feed GPS lat/lon into an onboard World Magnetic Model (WMM) lookup to compute local declination.
-
-3. **GPS Driver:**
-   - Implement the `GPSNEOM9N` driver to publish `TOPIC_GPS` at 5 Hz.
+1. **nORB EKF Subscriptions:** Update `ekf_task` to subscribe to `TOPIC_GPS`, `TOPIC_BAROMETER`, and `TOPIC_MAGNETOMETER`.
+2. **Baro / Mag Waiting Rooms:** Duplicate the `ekf_delayed_obs_t` logic used for the GPS in `ekf_core.h/c` to create `waiting_baro` and `waiting_mag`. This ensures I2C bus latency does not disrupt the SymForce math.
+3. **Publish Head State:** At the end of the `ekf_task` loop, read the real-time position, velocity, and attitude from `ekf.head_state`, construct a `vehicle_state_t` message, and publish it to `TOPIC_VEHICLE_STATE`.
 
 ---
 
 ## Phase 7 — Launchpad Alignment & Flight State Machine (⏳ Pending)
 
-**Goal:** Implement the hybrid EKF warmup sequence in `ekf.c`. Use GPS/Mag for absolute references, and the ZVU/ZRU math for high-precision bias calibration.
+**Goal:** Implement the hybrid EKF warmup sequence in `ekf_state.c`.
 
 ### The 5-Stage Warmup Sequence
 
-1. **Static Check:** Wait for IMU variance to drop below threshold — proves the rocket is untouched on the pad.
+1. **Static Check:** Wait for IMU variance to drop below threshold.
 2. **Absolute Attitude Init:** Use gravity to set Roll/Pitch. Use Magnetometer + WMM to set initial Yaw.
 3. **Absolute Position Init:** Wait for 3D GPS lock. Set `p_ned = {0, 0, 0}` as the launchpad origin.
-4. **Bias Convergence (ZVU/ZRU):** Run at 250 Hz. Apply `symforce_update_stationary()` — test suite proves this rapidly drives `bg` and `ba` to truth within 15 s.
-5. **Liftoff / Flight Mode:** On accel > 2g, disable ZVU, dynamically de-weight magnetometer variance, transition to flight fusion (IMU + GPS + Baro).
+4. **Bias Convergence (ZVU):** Run at 250 Hz. Apply `symforce_update_stationary()` to calibrate biases.
+5. **Liftoff / Flight Mode:** On accel > 2g, disable ZVU, transition to flight fusion (IMU + GPS + Baro).
 
 ---
 
@@ -341,184 +177,11 @@ src/modules/estimator/tests/
 ### Steps
 
 1. Implement `src/modules/commander/commander.c` (10 Hz state machine).
-2. Gate `INIT` → `STANDBY` on `gyro_bias_converged == true` AND `pos_valid == true` from `TOPIC_ESTIMATOR_STATUS`.
-3. Publish `TOPIC_VEHICLE_STATUS` changes.
-4. Update tracking radio: only transmit beacon if `arming_state >= STANDBY`.
+2. Gate `INIT` → `STANDBY` on `gyro_bias_converged == true` AND `pos_valid == true`.
+3. Update tracking radio: only transmit beacon if `arming_state >= STANDBY`.
 
 ---
 
 ## Phase 9 — EKF Structural Hardening & Configuration (⏳ Pending)
 
-**Goal:** Eliminate all hardcoded physical constants, magic numbers, and inline math utilities from the sensor fusion pipeline. Replace them with a nORB-published parameter message and shared math helpers, mirroring the separation of concerns used in PX4 ECL.
-
-*Prerequisite: Can be tackled in parallel with Phase 6, but must be complete before Phase 7 (launchpad alignment) to avoid configuration ambiguity at bring-up.*
-
----
-
-### Step 1 — Centralise Inline Math into `ekf_math_utils.h`
-
-**Problem:** Shared mathematical primitives are duplicated across fusion files:
-- `imu_predictor.c` defines its own `cross_product()` and builds a rotation matrix `R` from a quaternion inline.
-- `mag_fuse.c` defines its own `_rotate_ned_to_body()` function.
-
-This is a maintenance and correctness risk — a bug fixed in one copy will not propagate to the other.
-
-**PX4 parallel:** PX4 ECL uses the `matrix` library for all vector, quaternion, and DCM operations. No fusion file re-implements rotation math.
-
-**Solution:**
-1. Create `src/modules/estimator/ekf_math_utils.h` (and an optional `.c` for non-trivial implementations).
-2. Move `cross_product()`, quaternion-to-rotation-matrix, and `rotate_ned_to_body()` into this shared header.
-3. Replace all inline duplicates in `imu_predictor.c` and `mag_fuse.c` with calls to the shared utilities.
-4. **Future extension:** SymForce can generate the nominal quaternion integration step (`q ⊗ exp(δθ/2)`) as a symbolic expression — consider generating `ekf_quat_integrate()` from SymForce to remove manual small-angle-approximation code.
-
----
-
-### Step 2 — IMU Lever Arm from `TOPIC_EKF_PARAMS`
-
-**Problem:** `imu_predictor.c` hardcodes:
-```c
-const float imu_lever_arm[3] = {0.1f, 0.0f, 0.0f}; // TODO: pull from a param/config struct
-```
-This assumes the IMU-to-CG offset is fixed at compile time and fails silently if the physical hardware changes between builds.
-
-**PX4 parallel:** PX4 uses runtime parameters `EKF2_IMU_POS_X/Y/Z`. At boot, the EKF subscribes to the parameter server, reads the geometry, and populates its internal configuration.
-
-**Solution:**
-1. Add `imu_lever_arm_body` to `msg/ekf_params.msg` (see Step 4).
-2. In `ekf.c`, subscribe to `TOPIC_EKF_PARAMS` and copy the received message into the `ekf_core_t` context so all fusion modules can read it.
-3. Pass `const ekf_params_t *params` into `imu_predict()` and read `params->imu_lever_arm_body` instead of the local constant.
-4. Default value at startup: `{0.0f, 0.0f, 0.0f}` (zero offset — safe for a vehicle whose IMU is at the CG).
-5. The actual value is populated by a configuration publisher that reads from non-volatile storage at boot (to be wired up during Phase 7 initialisation).
-
----
-
-### Step 3 — Dynamic Altitude-Dependent Gravity
-
-**Problem:** `imu_predictor.c` adds a fixed gravity constant:
-```c
-acc_n[2] += 9.80665f; // add gravity in NED down direction
-```
-This is acceptably accurate at sea level but introduces a growing bias at altitude. At 100 km, gravity is approximately 3% weaker ($g \approx 9.51\ \text{m/s}^2$). For a rocket reaching apogee in the tens of km this error, while small, is systematic and accumulates into the accelerometer-bias estimate.
-
-**PX4 parallel:** PX4 ECL computes local gravity internally at every prediction step using the WGS84 ellipsoid model, taking the EKF's current latitude and altitude estimate.
-
-**Solution:** Add `get_local_gravity()` as a static helper inside `imu_predictor.c` — no nORB topic needed since the EKF already tracks its own altitude as `-p_ned[2]`:
-
-```c
-/**
- * @brief Calculate local gravity based on altitude using the inverse-square law.
- *
- * @param altitude_m Altitude above sea level (m).
- *                   Note: In NED, altitude is -p_ned[2].
- * @return float Local gravitational acceleration (m/s²).
- */
-static float get_local_gravity(float altitude_m)
-{
-    const float G0      = 9.80665f;     // Standard gravity at sea level
-    const float R_EARTH = 6371000.0f;   // Mean radius of Earth in metres
-
-    // Safety clamp for extreme altitudes or uninitialised states
-    if (altitude_m < -1000.0f || altitude_m > 100000.0f) {
-        return G0;
-    }
-
-    // g = g0 * (Re / (Re + h))^2
-    float ratio = R_EARTH / (R_EARTH + altitude_m);
-    return G0 * ratio * ratio;
-}
-```
-
-Usage in the prediction step:
-```c
-float altitude_m = -state->p_ned[2]; // NED: down is positive
-float g_local    = get_local_gravity(altitude_m);
-acc_n[2] += g_local;
-```
-
-The safety clamp returns $g_0$ for any altitude below −1 000 m (erroneous early-init state) or above 100 km (above the Kármán line). At 30 km the correction is ~0.9%; at 10 km it is ~0.3%. This removes a systematic downward error that would otherwise be (incorrectly) absorbed into `ba[2]`.
-
----
-
-### Step 4 — `ekf_params.msg` nORB Topic for All Variances & Gates
-
-**Problem:** Every fusion file hardcodes its own tuning constants:
-
-| File | Hardcoded constants |
-|------|--------------------|
-| `imu_predictor.c` | `ACCEL_NOISE_VAR`, `GYRO_NOISE_VAR` |
-| `baro_fuse.c` | `BARO_NOISE_VAR` (0.25 m²), `BARO_INNOV_GATE` (±5 m) |
-| `gps_fuse.c` | `GPS_POS_VAR` ({2.25, 2.25, 2.25} m²), `GPS_VEL_VAR` ({0.01, 0.01, 0.01} (m/s)²), position gate (±20 m), velocity gate (±5 m/s), kinematic limits (500 m/s, 80000 m) |
-
-Different IMU and GPS hardware variants have fundamentally different noise characteristics. Recompiling to retune is not acceptable for a flight stack that should support multiple hardware configurations.
-
-**PX4 parallel:** PX4 ECL exposes every variance and gate as a named parameter (e.g. `EKF2_ACC_NOISE`, `EKF2_GPS_P_NOISE`). These are loaded from the parameter server at startup and can be modified pre-flight via QGroundControl.
-
-**Solution:** Create `msg/ekf_params.msg` and generate a `TOPIC_EKF_PARAMS` nORB topic from it, consistent with every other message in the system:
-
-```
-# EKF Configuration Parameters
-
-# --- Physical Geometry ---
-float[3] imu_lever_arm_body      # IMU offset from CG (m)
-
-# --- Process Noise (Prediction) ---
-float[3] accel_noise_var         # Accelerometer process noise (m/s^2)^2
-float[3] gyro_noise_var          # Gyroscope process noise (rad/s)^2
-float[3] gyro_bias_noise_var     # Gyro bias stability noise
-float[3] accel_bias_noise_var    # Accel bias stability noise
-
-# --- Barometer Fusion ---
-float    baro_noise_var          # Measurement variance (m^2)
-float    baro_innov_gate         # Innovation rejection threshold (m)
-
-# --- GPS Fusion ---
-float[3] gps_pos_var             # Position measurement variance (m^2)
-float[3] gps_vel_var             # Velocity measurement variance (m/s)^2
-float    gps_pos_gate            # Position innovation gate (m)
-float    gps_vel_gate            # Velocity innovation gate (m/s)
-
-# --- Magnetometer Fusion ---
-float    mag_noise_var           # Measurement variance (Gauss^2)
-float    mag_gate_cos            # Angular innovation gate (cosine of angle)
-```
-
-**Initialisation & wiring:**
-1. A new `ekf_params_defaults()` publisher in `ekf.c` publishes `TOPIC_EKF_PARAMS` at startup with values that replicate the current hardcoded constants — **zero functional change** on first merge.
-2. `ekf.c` subscribes to `TOPIC_EKF_PARAMS`; when a message is received it copies the values into the `ekf_core_t` context, making them available to all fusion modules.
-3. Update each fusion function signature to accept `const ekf_params_t *params`:
-   - `imu_predict(..., const ekf_params_t *params)` — reads `accel_noise_var`, `gyro_noise_var`, `imu_lever_arm_body`.
-   - `baro_fuse(..., const ekf_params_t *params)` — reads `baro_noise_var`, `baro_innov_gate`.
-   - `gps_fuse(..., const ekf_params_t *params)` — reads `gps_pos_var`, `gps_vel_var`, `gps_pos_gate`, `gps_vel_gate`.
-4. Wire up a non-volatile storage publisher that overwrites `TOPIC_EKF_PARAMS` defaults at boot, completing the parameter chain for Phase 7 initialisation.
-
-This architecture allows sensor noise models and physical geometry to be changed by editing a configuration file on the SD card, with no firmware reflash required.
-
----
-
-## Deferred — Rate Conditioner Module (`angvel.c`)
-
-**Original Phase 5 — deliberately deferred**
-
-**Why deferred:** The rate conditioner closes the EKF bias feedback loop and produces zeroed angular rates for a rate controller. There is no rate controller implemented yet and no consumer for `TOPIC_VEHICLE_ANGULAR_VELOCITY`. Implementing `angvel.c` now would add FreeRTOS task overhead and nORB topic traffic with zero observable benefit. It will be revisited when the rate controller is on the roadmap.
-
-**When to revisit:** After Phase 7 (flight state machine) is complete and the GNC team begins implementing attitude control.
-
-**Implementation notes (for the future):**
-
-1. Implement `src/modules/sensors/angvel.c` at 250 Hz.
-2. Subscribe to `TOPIC_SENSOR_IMU` and `TOPIC_ESTIMATOR_SENSOR_BIAS`.
-3. Subtract live bias: `corrected = raw_gyro - (bias.valid ? bias.gyro_bias : 0.0f)`.
-4. Apply 1st-order IIR low-pass filter ($f_{cutoff} = 30\text{ Hz}$).
-5. Publish to `TOPIC_VEHICLE_ANGULAR_VELOCITY`.
-
----
-
-## Design & Academic References
-
-| Element | Reference / Rationale |
-| --- | --- |
-| **EKF formulation** | Error-State Kalman Filter (ESKF). Based on Joan Solà's *"Quaternion kinematics for the error-state Kalman filter"* (2017). |
-| **Covariance Math** | Derived symbolically via SymPy and exported as unrolled C, matching the architecture of PX4 ECL. Guarantees real-time execution on Cortex-M33 single-precision FPU. |
-| **Sensor redundancy** | Single IMU; single GPS. |
-| **Yaw Observability** | Initialized via Magnetometer on the pad; Integrated purely from gyroscopes during ascent. |
-
+**Goal:** Eliminate hardcoded physical constants (`imu_lever_arm`), local gravity assumptions, and tuning variances (`BARO_NOISE_VAR`, `GPS_VEL_GATE`). Replace them with a nORB-published parameter message (`ekf_params.msg`) and dynamically calculated WGS84 gravity, mirroring the modularity of PX4 ECL.
