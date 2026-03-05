@@ -5,17 +5,25 @@
 /* Baro measurement noise variance: (0.5 m)^2 = 0.25 m^2 */
 #define BARO_NOISE_VAR   0.25f
 
-/* Innovation gate: reject measurements more than 5 m from the prediction */
-#define BARO_INNOV_GATE  5.0f
+/* 5-sigma dynamic gate to handle standard aerodynamic buffeting */
+#define BARO_GATE        5.0f
 
 void baro_fuse(ekf_core_t *ekf, const baro_measurement_t *baro)
 {
-    /* predicted altitude from nominal state: alt_pred = -p_ned[2] */
     float alt_pred  = -ekf->delayed_state.p_ned[2];
     float innovation = baro->altitude_m - alt_pred;
 
-    /* Innovation gate — reject outliers */
-    if (fabsf(innovation) > BARO_INNOV_GATE) {
+    /* Get State Variance from the P matrix (Index 8 is Down Position) */
+    float state_var_pD = ekf->P[8*15 + 8];
+
+    /* Calculate Innovation Variance */
+    float innov_var_baro = state_var_pD + BARO_NOISE_VAR;
+
+    /* Calculate Chi-Squared Test Ratio */
+    float test_ratio_baro = (innovation * innovation) / ((BARO_GATE * BARO_GATE) * innov_var_baro);
+
+    /* Gate: Reject-Only for transonic pressure waves */
+    if (test_ratio_baro > 1.0f) {
         return;
     }
 

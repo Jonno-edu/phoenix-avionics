@@ -1,28 +1,10 @@
-/**
- * @file mag_fuse.c
- * @brief 3-axis magnetometer fusion update for the error-state EKF.
- *
- * Calls the SymForce-generated sym::UpdateMag<float>() via symforce_update_mag().
- * All gate logic lives here so the generated math is kept pure.
- */
-
 #include "mag_fuse.h"
 #include "ekf_math/symforce_wrapper.h"
-
 #include <math.h>
 #include <stdbool.h>
 
-/* ── Helpers ─────────────────────────────────────────────────────────────────── */
+#define MAG_MAGNITUDE_GATE 3.0f /* 3-sigma gate for field strength */
 
-/**
- * Rotate a 3-vector from NED to body using the rotation matrix R^T derived
- * from quaternion q = [w, x, y, z] (body-to-NED convention).
- *
- * R^T (NED → body):
- *   [ 1-2(y²+z²),   2(xy+wz),    2(xz-wy)  ]
- *   [ 2(xy-wz),    1-2(x²+z²),   2(yz+wx)  ]
- *   [ 2(xz+wy),    2(yz-wx),    1-2(x²+y²) ]
- */
 static void _rotate_ned_to_body(const float q[4], const float v[3], float out[3])
 {
     const float w = q[0], x = q[1], y = q[2], z = q[3];
@@ -44,38 +26,44 @@ static void _rotate_ned_to_body(const float q[4], const float v[3], float out[3]
     out[2] = RT20*v[0] + RT21*v[1] + RT22*v[2];
 }
 
-/* ── Public API ──────────────────────────────────────────────────────────────── */
-
 bool mag_fuse(ekf_core_t           *ekf,
               const mag_measurement_t *mag,
               const float           mag_ref_ned[3],
               float                 mag_var)
 {
-    /* ── 1. Angular Innovation Gate ─────────────────────────────────────────── */
-
-    /* Predicted body-frame field: h(q) = R^T * mag_ref_ned */
     float pred[3];
     _rotate_ned_to_body(ekf->delayed_state.q, mag_ref_ned, pred);
 
     const float *m = mag->field_gauss;
 
-    /* Dot product and norms for cosine of angle between measured and predicted */
     float dot       = m[0]*pred[0] + m[1]*pred[1] + m[2]*pred[2];
     float norm_m    = sqrtf(m[0]*m[0]    + m[1]*m[1]    + m[2]*m[2]);
     float norm_pred = sqrtf(pred[0]*pred[0] + pred[1]*pred[1] + pred[2]*pred[2]);
 
     if (norm_m < 1e-6f || norm_pred < 1e-6f) {
-        return false;  /* Degenerate measurement — hardware fault or uninitialized */
+        return false; 
     }
 
+    /* ── 1. Angular Innovation Gate ─────────────────────────────────────────── */
     float cos_angle = dot / (norm_m * norm_pred);
-
     if (cos_angle < MAG_GATE_COS) {
-        return false;  /* Gate fired: >30° angular discrepancy — reject */
+        return false;  
     }
 
-    /* ── 2. Apply SymForce-generated Kalman Update ─────────────────────────── */
+    /* ── 2. Magnitude Chi-Squared Gate ──────────────────────────────────────── */
+    /* An external EM pulse will radically alter the magnitude of the reading.
+     * Since body rotation does not alter the length of the Earth's magnetic 
+     * vector, the state uncertainty regarding the magnitude is essentially 0.
+     * Therefore, innov_var is purely the sensor noise (mag_var).
+     */
+    float innov_mag = norm_m - norm_pred;
+    float test_ratio_mag = (innov_mag * innov_mag) / ((MAG_MAGNITUDE_GATE * MAG_MAGNITUDE_GATE) * mag_var);
 
+    if (test_ratio_mag > 1.0f) {
+        return false; /* High-current pyrotechnic spike detected — reject */
+    }
+
+    /* ── 3. Apply SymForce-generated Kalman Update ─────────────────────────── */
     const float mag_var3[3] = { mag_var, mag_var, mag_var };
 
     symforce_update_mag(

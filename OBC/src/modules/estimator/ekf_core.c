@@ -1,6 +1,7 @@
 #include "ekf_core.h"
 #include <string.h>
 #include <math.h>
+#include "fusion/gps_fuse.h"
 
 /* Forward declaration for the SymForce-based delayed predictor in imu_predictor.c. */
 extern void imu_predict(ekf_core_t* ekf, const imu_history_t* imu);
@@ -33,6 +34,9 @@ void ekf_core_reset(ekf_core_t* ekf) {
     /* Reset ring buffer indices. */
     ekf->head_idx = 0;
     ekf->tail_idx = 0;
+
+    /* Initialise GPS waiting room. */
+    ekf->waiting_gps.is_waiting = false;
 
     /* Initial covariance P: high uncertainty.
      * Index mapping: 0-2 = attitude, 3-5 = velocity, 6-8 = position,
@@ -85,6 +89,20 @@ void ekf_core_step(ekf_core_t* ekf, const imu_history_t* imu) {
         uint64_t tail_time = ekf->imu_buffer[ekf->tail_idx].timestamp_us;
 
         if ((head_time - tail_time) >= EKF_TARGET_DELAY_US) {
+            
+            /* -> NEW: Check if the timelines align for a waiting GPS measurement <- */
+            if (ekf->waiting_gps.is_waiting && tail_time >= ekf->waiting_gps.timestamp_us) {
+                gps_measurement_t g;
+                for (int i = 0; i < 3; i++) {
+                    g.pos_ned[i] = ekf->waiting_gps.pos_ned[i];
+                    g.vel_ned[i] = ekf->waiting_gps.vel_ned[i];
+                }
+                
+                /* Fuse it directly into the delayed state */
+                gps_fuse(ekf, &g); 
+                ekf->waiting_gps.is_waiting = false;
+            }
+
             /* Run the heavy SymForce predictor on the delayed state. */
             imu_predict(ekf, &ekf->imu_buffer[ekf->tail_idx]);
 
@@ -171,4 +189,13 @@ void imu_propagate_kinematics(ekf_state_t* state, const imu_history_t* imu) {
         state->v_ned[i] += acc_n[i] * dt;
         state->p_ned[i] += state->v_ned[i] * dt;
     }
+}
+
+void ekf_core_push_gps(ekf_core_t* ekf, uint64_t timestamp_us, const float pos_ned[3], const float vel_ned[3]) {
+    ekf->waiting_gps.timestamp_us = timestamp_us;
+    for (int i = 0; i < 3; i++) {
+        ekf->waiting_gps.pos_ned[i] = pos_ned[i];
+        ekf->waiting_gps.vel_ned[i] = vel_ned[i];
+    }
+    ekf->waiting_gps.is_waiting = true;
 }

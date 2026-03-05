@@ -82,6 +82,14 @@ typedef struct {
  *   tail_idx       — Index of the next frame to be consumed by the delayed EKF.
  *   head_idx       — Index where the *next* incoming frame will be written.
  */
+
+typedef struct {
+    bool     is_waiting;
+    uint64_t timestamp_us;
+    float    pos_ned[3];
+    float    vel_ned[3];
+} ekf_delayed_obs_t;
+
 typedef struct {
     /* 1. The Delayed EKF (source of truth, living ~200ms in the past) */
     ekf_state_t delayed_state;
@@ -94,6 +102,9 @@ typedef struct {
     imu_history_t imu_buffer[EKF_OBS_BUFFER_SIZE];
     uint8_t       head_idx;    /**< Next write slot. */
     uint8_t       tail_idx;    /**< Next delayed-EKF consume slot. */
+
+    /* 4. The Waiting Room */
+    ekf_delayed_obs_t waiting_gps;
 
     ekf_flight_mode_t flight_mode; /**< Current warmup / flight mode (set by ekf_state.c). */
 } ekf_core_t;
@@ -127,6 +138,14 @@ void ekf_core_step(ekf_core_t* ekf, const imu_history_t* imu);
  * deltas.  Does NOT propagate the covariance matrix.
  */
 void imu_propagate_kinematics(ekf_state_t* state, const imu_history_t* imu);
+
+/**
+ * @brief Push a GPS measurement into the waiting room.
+ *
+ * This allows asynchronous GPS messages to wait until the delayed
+ * filter's timeline catches up to them.
+ */
+void ekf_core_push_gps(ekf_core_t* ekf, uint64_t timestamp_us, const float pos_ned[3], const float vel_ned[3]);
 
 #ifdef __cplusplus
 }
