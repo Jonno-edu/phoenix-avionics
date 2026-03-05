@@ -2,12 +2,6 @@
 #include "../ekf_math/symforce_wrapper.h"
 #include <math.h>
 
-/* Baro measurement noise variance: (0.5 m)^2 = 0.25 m^2 */
-#define BARO_NOISE_VAR   0.25f
-
-/* 5-sigma dynamic gate to handle standard aerodynamic buffeting */
-#define BARO_GATE        5.0f
-
 void baro_fuse(ekf_core_t *ekf, const baro_measurement_t *baro)
 {
     float alt_pred  = -ekf->delayed_state.p_ned[2];
@@ -17,10 +11,11 @@ void baro_fuse(ekf_core_t *ekf, const baro_measurement_t *baro)
     float state_var_pD = ekf->P[8*15 + 8];
 
     /* Calculate Innovation Variance */
-    float innov_var_baro = state_var_pD + BARO_NOISE_VAR;
+    float innov_var_baro = state_var_pD + ekf->params.baro_noise_var;
 
     /* Calculate Chi-Squared Test Ratio */
-    float test_ratio_baro = (innovation * innovation) / ((BARO_GATE * BARO_GATE) * innov_var_baro);
+    float test_ratio_baro = (innovation * innovation) /
+                            ((ekf->params.baro_gate * ekf->params.baro_gate) * innov_var_baro);
 
     /* Gate: Reject-Only for transonic pressure waves */
     if (test_ratio_baro > 1.0f) {
@@ -35,7 +30,7 @@ void baro_fuse(ekf_core_t *ekf, const baro_measurement_t *baro)
         ekf->delayed_state.gyro_bias,
         ekf->delayed_state.accel_bias,
         baro->altitude_m,
-        BARO_NOISE_VAR,
+        ekf->params.baro_noise_var,
         1e-6f
     );
 }

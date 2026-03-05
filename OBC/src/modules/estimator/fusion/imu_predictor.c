@@ -1,13 +1,7 @@
 #include "imu_predictor.h"
 #include "../ekf_math/symforce_wrapper.h"
+#include "math/ekf_math.h"
 #include <math.h>
-
-// --- Cross product helper: out = a x b ---
-static inline void cross_product(const float a[3], const float b[3], float out[3]) {
-    out[0] = a[1]*b[2] - a[2]*b[1];
-    out[1] = a[2]*b[0] - a[0]*b[2];
-    out[2] = a[0]*b[1] - a[1]*b[0];
-}
 
 /**
  * @brief Run the EKF IMU prediction step
@@ -15,7 +9,7 @@ static inline void cross_product(const float a[3], const float b[3], float out[3
  * Implements Phase 3 Core: IMU Propagation, with Phase 5 lever arm compensation.
  * - Bias correction + angular acceleration estimation
  * - Centripetal & tangential lever arm compensation (omega x (omega x r) + alpha x r)
- * - Nominal state kinematics integration
+ * - Nominal state kinematics integration via math/ekf_math.h
  * - SymForce covariance propagation
  */
 void imu_predict(ekf_core_t* ekf, const imu_history_t* imu) {
@@ -32,8 +26,8 @@ void imu_predict(ekf_core_t* ekf, const imu_history_t* imu) {
     float* prev_gyro = ekf->delayed_state.prev_gyro;
 
     // --- IMU lever arm offset from CG (body frame: x=fwd, y=right, z=down) ---
-    // TODO: pull from a param/config struct when that system exists
-    const float imu_lever_arm[3] = {0.1f, 0.0f, 0.0f}; // 10 cm forward of CG
+    // Pulled from live-tunable params; default is 10 cm forward of CG.
+    const float* imu_lever_arm = ekf->params.imu_lever_arm;
 
     // --- 1. Correct IMU measurements with current biases & compute angular accel ---
     // Note: vehicle_imu contains delta_angle (rad) and delta_velocity (m/s).
@@ -60,9 +54,9 @@ void imu_predict(ekf_core_t* ekf, const imu_history_t* imu) {
     float centripetal_accel[3];
     float tangential_accel[3];
 
-    cross_product(gyro_corrected, imu_lever_arm, omega_cross_r);
-    cross_product(gyro_corrected, omega_cross_r, centripetal_accel);
-    cross_product(angular_accel,  imu_lever_arm, tangential_accel);
+    vec3_cross(gyro_corrected, imu_lever_arm, omega_cross_r);
+    vec3_cross(gyro_corrected, omega_cross_r, centripetal_accel);
+    vec3_cross(angular_accel,  imu_lever_arm, tangential_accel);
 
     for (int i = 0; i < 3; i++) {
         accel_corrected[i] -= centripetal_accel[i] + tangential_accel[i];
@@ -70,47 +64,13 @@ void imu_predict(ekf_core_t* ekf, const imu_history_t* imu) {
 
     // --- 3. Nominal State Integration (Non-linear Kinematics) ---
 
-    // a. Update Orientation using Small-Angle-Approximation (dt is 4ms)
-    float half_angle[3];
-    for (int i = 0; i < 3; i++) {
-        half_angle[i] = 0.5f * gyro_corrected[i] * dt;
-    }
+    // a. Update Orientation using math lib small-angle integrator
+    quat_integrate_small_angle(q, gyro_corrected, dt);
 
-    // q_new = q * exp(da/2)
-    float q_new[4];
-    q_new[0] = q[0] - q[1]*half_angle[0] - q[2]*half_angle[1] - q[3]*half_angle[2];
-    q_new[1] = q[1] + q[0]*half_angle[0] + q[2]*half_angle[2] - q[3]*half_angle[1];
-    q_new[2] = q[2] + q[0]*half_angle[1] + q[3]*half_angle[0] - q[1]*half_angle[2];
-    q_new[3] = q[3] + q[0]*half_angle[2] + q[1]*half_angle[1] - q[2]*half_angle[0];
-
-    // Normalize quaternion
-    float norm = sqrtf(q_new[0]*q_new[0] + q_new[1]*q_new[1] + q_new[2]*q_new[2] + q_new[3]*q_new[3]);
-    if (norm > 0.0f) {
-        q[0] = q_new[0] / norm;
-        q[1] = q_new[1] / norm;
-        q[2] = q_new[2] / norm;
-        q[3] = q_new[3] / norm;
-    }
-
-    // b. Update Velocity (Rotate body accel to NED, add gravity)
-    // R(q) body to NED
-    float R[3][3];
-    R[0][0] = 1.0f - 2.0f * (q[2]*q[2] + q[3]*q[3]);
-    R[0][1] = 2.0f * (q[1]*q[2] - q[0]*q[3]);
-    R[0][2] = 2.0f * (q[1]*q[3] + q[0]*q[2]);
-    R[1][0] = 2.0f * (q[1]*q[2] + q[0]*q[3]);
-    R[1][1] = 1.0f - 2.0f * (q[1]*q[1] + q[3]*q[3]);
-    R[1][2] = 2.0f * (q[2]*q[3] - q[0]*q[1]);
-    R[2][0] = 2.0f * (q[1]*q[3] - q[0]*q[2]);
-    R[2][1] = 2.0f * (q[2]*q[3] + q[0]*q[1]);
-    R[2][2] = 1.0f - 2.0f * (q[1]*q[1] + q[2]*q[2]);
-
+    // b. Rotate bias-corrected CG acceleration to NED and add gravity
     float acc_n[3];
-    acc_n[0] = R[0][0]*accel_corrected[0] + R[0][1]*accel_corrected[1] + R[0][2]*accel_corrected[2];
-    acc_n[1] = R[1][0]*accel_corrected[0] + R[1][1]*accel_corrected[1] + R[1][2]*accel_corrected[2];
-    acc_n[2] = R[2][0]*accel_corrected[0] + R[2][1]*accel_corrected[1] + R[2][2]*accel_corrected[2];
-
-    acc_n[2] += 9.80665f; // Add gravity (downwards positive in NED)
+    vec3_rotate_body_to_ned(q, accel_corrected, acc_n);
+    acc_n[2] += ekf->params.gravity_ms2;
 
     for (int i = 0; i < 3; i++) {
         v_ned[i] += acc_n[i] * dt;
@@ -122,11 +82,7 @@ void imu_predict(ekf_core_t* ekf, const imu_history_t* imu) {
     }
 
     // --- 4. Covariance Propagation (SymForce) ---
-
-    // Process noise variance values
-    const float ACCEL_NOISE_VAR[3] = {1.0e-2f, 1.0e-2f, 1.0e-2f};
-    const float GYRO_NOISE_VAR = 1.0e-4f;
-
+    // Process noise variances pulled from live-tunable params.
     symforce_predict_covariance(
         ekf->P,
         ekf->delayed_state.q,
@@ -135,9 +91,9 @@ void imu_predict(ekf_core_t* ekf, const imu_history_t* imu) {
         ekf->delayed_state.gyro_bias,
         ekf->delayed_state.accel_bias,
         accel_raw,
-        ACCEL_NOISE_VAR,
+        ekf->params.accel_noise_var,
         gyro_raw,
-        GYRO_NOISE_VAR,
+        ekf->params.gyro_noise_var,
         dt
     );
 }

@@ -81,6 +81,7 @@ add_custom_target(generate_ekf_math DEPENDS ${EKF_GEN_FILES})
 add_library(estimator_lib STATIC
     ekf_core.c
     ekf_state.c
+    math/ekf_math.c
     fusion/imu_predictor.c
     fusion/baro_fuse.c
     fusion/gps_fuse.c

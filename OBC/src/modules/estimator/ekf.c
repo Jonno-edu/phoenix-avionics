@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include "norb/norb.h"
 #include "norb/topic_defs/vehicle_imu.h"
+#include "norb/topic_defs/ekf_params.h"
 #include "ekf_core.h"
 
 static ekf_core_t ekf;
@@ -10,12 +11,21 @@ static ekf_core_t ekf;
 void ekf_task(void *params) {
     TickType_t xLastWake = xTaskGetTickCount();
     vehicle_imu_t imu_data;
+    ekf_params_t  new_params;
 
     ekf_core_init(&ekf);
 
     while (1) {
         vTaskDelayUntil(&xLastWake, pdMS_TO_TICKS(4)); // 250 Hz
 
+        // ── 1. Live parameter tuning ────────────────────────────────────────
+        // norb_subscribe_poll is non-blocking: returns true when any value has
+        // ever been published.  Assigning the same params twice is harmless.
+        if (norb_subscribe_poll(TOPIC_EKF_PARAMS, &new_params)) {
+            ekf.params = new_params;
+        }
+
+        // ── 2. IMU ingestion ────────────────────────────────────────────────
         // Subscribe to TOPIC_VEHICLE_IMU (Integrated data from integrator module)
         if (norb_subscribe(TOPIC_VEHICLE_IMU, &imu_data, 10)) {
 

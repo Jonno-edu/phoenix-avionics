@@ -2,9 +2,46 @@
 #include <string.h>
 #include <math.h>
 #include "fusion/gps_fuse.h"
+#include "math/ekf_math.h"
 
 /* Forward declaration for the SymForce-based delayed predictor in imu_predictor.c. */
 extern void imu_predict(ekf_core_t* ekf, const imu_history_t* imu);
+
+/**
+ * @brief Populate ekf->params with safe hard-coded defaults.
+ *
+ * Called at the end of ekf_core_reset() so the filter is immediately usable
+ * without a ground-station parameter uplink.
+ */
+static void _load_default_params(ekf_params_t* p) {
+    /* Physical configuration */
+    p->imu_lever_arm[0] = 0.1f;  /* 10 cm forward of CG */
+    p->imu_lever_arm[1] = 0.0f;
+    p->imu_lever_arm[2] = 0.0f;
+    p->gravity_ms2 = 9.80665f;
+
+    /* Process noise */
+    p->accel_noise_var[0] = 1.0e-2f;
+    p->accel_noise_var[1] = 1.0e-2f;
+    p->accel_noise_var[2] = 1.0e-2f;
+    p->gyro_noise_var = 1.0e-4f;
+
+    /* Sensor noise */
+    p->gps_pos_var[0] = 2.25f; p->gps_pos_var[1] = 2.25f; p->gps_pos_var[2] = 2.25f;
+    p->gps_vel_var[0] = 0.01f; p->gps_vel_var[1] = 0.01f; p->gps_vel_var[2] = 0.01f;
+    p->baro_noise_var = 0.25f;
+    p->mag_noise_var_pad    = 0.05f;
+    p->mag_noise_var_flight = 5.0f;
+
+    /* Chi-squared gates (sigma multiples) */
+    p->gps_pos_gate       = 3.0f;
+    p->gps_vel_gate       = 3.0f;
+    p->baro_gate          = 5.0f;
+    p->mag_magnitude_gate = 3.0f;
+
+    /* Recovery timeout */
+    p->gps_timeout_samples = 50;
+}
 
 void ekf_core_init(ekf_core_t* ekf) {
     memset(ekf, 0, sizeof(ekf_core_t));
@@ -68,6 +105,10 @@ void ekf_core_reset(ekf_core_t* ekf) {
     ekf->P[14*15 + 14] = P_INIT_BIAS_A;
 
     ekf->flight_mode = EKF_MODE_UNINITIALIZED;
+
+    /* Populate safe defaults so the filter runs correctly before any ground
+     * station parameter uplink has occurred. */
+    _load_default_params(&ekf->params);
 }
 
 void ekf_core_step(ekf_core_t* ekf, const imu_history_t* imu) {
@@ -120,7 +161,7 @@ void ekf_core_step(ekf_core_t* ekf, const imu_history_t* imu) {
     /* Rapidly integrate from the delayed tail up to the present head. */
     uint8_t iter = ekf->tail_idx;
     while (iter != ekf->head_idx) {
-        imu_propagate_kinematics(&ekf->head_state, &ekf->imu_buffer[iter]);
+        imu_propagate_kinematics(&ekf->head_state, &ekf->imu_buffer[iter], &ekf->params);
         iter = (iter + 1) & EKF_OBS_BUFFER_MASK;
     }
 }
@@ -129,60 +170,27 @@ void ekf_core_step(ekf_core_t* ekf, const imu_history_t* imu) {
  * Lightweight kinematic integration used to fast-forward head_state to the
  * present moment.  Does NOT touch the covariance matrix or apply lever-arm
  * compensation — those only run on the delayed state via imu_predict().
+ *
+ * Uses math/ekf_math.h helpers so the implementation stays in one place.
  */
-void imu_propagate_kinematics(ekf_state_t* state, const imu_history_t* imu) {
+void imu_propagate_kinematics(ekf_state_t* state, const imu_history_t* imu,
+                              const ekf_params_t* params) {
     float dt = imu->dt_s;
-    float* q = state->q;
 
     /* 1. Correct raw deltas with latest known biases. */
-    float gyro_corrected[3];
-    float accel_corrected[3];
-
+    float gyro_corrected[3], accel_corrected[3];
     for (int i = 0; i < 3; i++) {
         gyro_corrected[i]  = (imu->delta_angle[i]    / dt) - state->gyro_bias[i];
         accel_corrected[i] = (imu->delta_velocity[i] / dt) - state->accel_bias[i];
     }
 
-    /* 2. Update orientation (small-angle quaternion multiplication). */
-    float half_angle[3];
-    for (int i = 0; i < 3; i++) {
-        half_angle[i] = 0.5f * gyro_corrected[i] * dt;
-    }
+    /* 2. Update orientation using the small-angle quaternion integrator. */
+    quat_integrate_small_angle(state->q, gyro_corrected, dt);
 
-    float q_new[4];
-    q_new[0] = q[0] - q[1]*half_angle[0] - q[2]*half_angle[1] - q[3]*half_angle[2];
-    q_new[1] = q[1] + q[0]*half_angle[0] + q[2]*half_angle[2] - q[3]*half_angle[1];
-    q_new[2] = q[2] + q[0]*half_angle[1] + q[3]*half_angle[0] - q[1]*half_angle[2];
-    q_new[3] = q[3] + q[0]*half_angle[2] + q[1]*half_angle[1] - q[2]*half_angle[0];
-
-    float norm = sqrtf(q_new[0]*q_new[0] + q_new[1]*q_new[1]
-                     + q_new[2]*q_new[2] + q_new[3]*q_new[3]);
-    if (norm > 0.0f) {
-        q[0] = q_new[0] / norm;
-        q[1] = q_new[1] / norm;
-        q[2] = q_new[2] / norm;
-        q[3] = q_new[3] / norm;
-    }
-
-    /* 3. Rotate body acceleration to NED frame.  R(q): body to NED. */
-    float R[3][3];
-    R[0][0] = 1.0f - 2.0f * (q[2]*q[2] + q[3]*q[3]);
-    R[0][1] = 2.0f * (q[1]*q[2] - q[0]*q[3]);
-    R[0][2] = 2.0f * (q[1]*q[3] + q[0]*q[2]);
-    R[1][0] = 2.0f * (q[1]*q[2] + q[0]*q[3]);
-    R[1][1] = 1.0f - 2.0f * (q[1]*q[1] + q[3]*q[3]);
-    R[1][2] = 2.0f * (q[2]*q[3] - q[0]*q[1]);
-    R[2][0] = 2.0f * (q[1]*q[3] - q[0]*q[2]);
-    R[2][1] = 2.0f * (q[2]*q[3] + q[0]*q[1]);
-    R[2][2] = 1.0f - 2.0f * (q[1]*q[1] + q[2]*q[2]);
-
+    /* 3. Rotate bias-corrected body acceleration to NED and add gravity. */
     float acc_n[3];
-    acc_n[0] = R[0][0]*accel_corrected[0] + R[0][1]*accel_corrected[1] + R[0][2]*accel_corrected[2];
-    acc_n[1] = R[1][0]*accel_corrected[0] + R[1][1]*accel_corrected[1] + R[1][2]*accel_corrected[2];
-    acc_n[2] = R[2][0]*accel_corrected[0] + R[2][1]*accel_corrected[1] + R[2][2]*accel_corrected[2];
-
-    /* Add gravity (downwards positive in NED). */
-    acc_n[2] += 9.80665f;
+    vec3_rotate_body_to_ned(state->q, accel_corrected, acc_n);
+    acc_n[2] += params->gravity_ms2;
 
     /* 4. Integrate velocity and position. */
     for (int i = 0; i < 3; i++) {

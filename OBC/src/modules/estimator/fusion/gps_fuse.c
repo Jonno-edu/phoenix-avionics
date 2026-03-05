@@ -3,15 +3,6 @@
 #include <math.h>
 #include <stdbool.h>
 
-/* GPS measurement noise variances */
-static const float GPS_POS_VAR[3] = {2.25f, 2.25f, 2.25f};  /* (1.5 m)^2 */
-static const float GPS_VEL_VAR[3] = {0.01f, 0.01f, 0.01f};  /* (0.1 m/s)^2 */
-
-/* Dynamic Gates and Timeout */
-#define GPS_POS_GATE 3.0f /* 3-sigma gate */
-#define GPS_VEL_GATE 3.0f /* 3-sigma gate */
-#define GPS_TIMEOUT_SAMPLES 50 /* 5 seconds at assumed 10Hz */
-
 void gps_fuse(ekf_core_t *ekf, const gps_measurement_t *gps)
 {
     /* ── Kinematic validity guard ────────────────────────────────────────── */
@@ -33,14 +24,16 @@ void gps_fuse(ekf_core_t *ekf, const gps_measurement_t *gps)
         /* Velocity Test Ratio */
         float innov_v = gps->vel_ned[i] - ekf->delayed_state.v_ned[i];
         float state_var_v = ekf->P[(3+i)*15 + (3+i)];
-        float innov_var_v = state_var_v + GPS_VEL_VAR[i];
-        float test_ratio_v = (innov_v * innov_v) / ((GPS_VEL_GATE * GPS_VEL_GATE) * innov_var_v);
+        float innov_var_v = state_var_v + ekf->params.gps_vel_var[i];
+        float test_ratio_v = (innov_v * innov_v) /
+                             ((ekf->params.gps_vel_gate * ekf->params.gps_vel_gate) * innov_var_v);
 
         /* Position Test Ratio */
         float innov_p = gps->pos_ned[i] - ekf->delayed_state.p_ned[i];
         float state_var_p = ekf->P[(6+i)*15 + (6+i)];
-        float innov_var_p = state_var_p + GPS_POS_VAR[i];
-        float test_ratio_p = (innov_p * innov_p) / ((GPS_POS_GATE * GPS_POS_GATE) * innov_var_p);
+        float innov_var_p = state_var_p + ekf->params.gps_pos_var[i];
+        float test_ratio_p = (innov_p * innov_p) /
+                             ((ekf->params.gps_pos_gate * ekf->params.gps_pos_gate) * innov_var_p);
 
         if (test_ratio_v > 1.0f || test_ratio_p > 1.0f) {
             reject_measurement = true;
@@ -52,7 +45,7 @@ void gps_fuse(ekf_core_t *ekf, const gps_measurement_t *gps)
     if (reject_measurement) {
         rejected_samples++;
         
-        if (rejected_samples >= GPS_TIMEOUT_SAMPLES) {
+        if (rejected_samples >= (int)ekf->params.gps_timeout_samples) {
             /* Execute Hard Reset */
             for (int i = 0; i < 3; i++) {
                 /* Overwrite state values */
@@ -60,8 +53,8 @@ void gps_fuse(ekf_core_t *ekf, const gps_measurement_t *gps)
                 ekf->delayed_state.p_ned[i] = gps->pos_ned[i];
                 
                 /* Overwrite state variances */
-                ekf->P[(3+i)*15 + (3+i)] = GPS_VEL_VAR[i];
-                ekf->P[(6+i)*15 + (6+i)] = GPS_POS_VAR[i];
+                ekf->P[(3+i)*15 + (3+i)] = ekf->params.gps_vel_var[i];
+                ekf->P[(6+i)*15 + (6+i)] = ekf->params.gps_pos_var[i];
                 
                 /* Decorrelate state: zero out non-diagonals for these rows/cols */
                 for (int j = 0; j < 15; j++) {
@@ -91,8 +84,8 @@ void gps_fuse(ekf_core_t *ekf, const gps_measurement_t *gps)
         ekf->delayed_state.accel_bias,
         gps->pos_ned,
         gps->vel_ned,
-        GPS_POS_VAR,
-        GPS_VEL_VAR,
+        ekf->params.gps_pos_var,
+        ekf->params.gps_vel_var,
         1e-6f
     );
 }

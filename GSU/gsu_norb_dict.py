@@ -6,27 +6,29 @@ import struct
 from typing import Any, Dict
 
 TOPIC_BAROMETER = 0
-TOPIC_EPS_IDENT = 1
-TOPIC_EPS_MEASUREMENTS = 2
-TOPIC_EPS_POWER_STATUS = 3
-TOPIC_OBC_IDENT = 4
-TOPIC_OBC_LOG_LEVEL = 5
-TOPIC_SENSOR_IMU = 6
-TOPIC_TRACKING_RADIO_IDENT = 7
-TOPIC_VEHICLE_IMU = 8
-TOPIC_VEHICLE_STATE = 9
+TOPIC_EKF_PARAMS = 1
+TOPIC_EPS_IDENT = 2
+TOPIC_EPS_MEASUREMENTS = 3
+TOPIC_EPS_POWER_STATUS = 4
+TOPIC_OBC_IDENT = 5
+TOPIC_OBC_LOG_LEVEL = 6
+TOPIC_SENSOR_IMU = 7
+TOPIC_TRACKING_RADIO_IDENT = 8
+TOPIC_VEHICLE_IMU = 9
+TOPIC_VEHICLE_STATE = 10
 
 TOPIC_NAMES: Dict[int, str] = {
     0: 'BAROMETER',
-    1: 'EPS_IDENT',
-    2: 'EPS_MEASUREMENTS',
-    3: 'EPS_POWER_STATUS',
-    4: 'OBC_IDENT',
-    5: 'OBC_LOG_LEVEL',
-    6: 'SENSOR_IMU',
-    7: 'TRACKING_RADIO_IDENT',
-    8: 'VEHICLE_IMU',
-    9: 'VEHICLE_STATE',
+    1: 'EKF_PARAMS',
+    2: 'EPS_IDENT',
+    3: 'EPS_MEASUREMENTS',
+    4: 'EPS_POWER_STATUS',
+    5: 'OBC_IDENT',
+    6: 'OBC_LOG_LEVEL',
+    7: 'SENSOR_IMU',
+    8: 'TRACKING_RADIO_IDENT',
+    9: 'VEHICLE_IMU',
+    10: 'VEHICLE_STATE',
 }
 
 def unpack_barometer(raw: bytes) -> Dict[str, Any]:
@@ -41,6 +43,30 @@ def unpack_barometer(raw: bytes) -> Dict[str, Any]:
         'pressure_pa': unpacked[2],
         'temperature_c': unpacked[3],
         'altitude_m': unpacked[4],
+    }
+
+def unpack_ekf_params(raw: bytes) -> Dict[str, Any]:
+    """Unpack EVENT_OBC_NORB_STREAM payload for topic EKF_PARAMS.
+    raw = payload[1:] (strips the leading topic_id byte).
+    Byte layout: [uint32 timestamp_ms][ekf_params_t fields...]
+    """
+    unpacked = struct.unpack_from('<I3ff3ff3f3ffffffffI', raw)
+    return {
+        'timestamp_ms': unpacked[0],
+        'imu_lever_arm': list(unpacked[1:4]),
+        'gravity_ms2': unpacked[4],
+        'accel_noise_var': list(unpacked[5:8]),
+        'gyro_noise_var': unpacked[8],
+        'gps_pos_var': list(unpacked[9:12]),
+        'gps_vel_var': list(unpacked[12:15]),
+        'baro_noise_var': unpacked[15],
+        'mag_noise_var_pad': unpacked[16],
+        'mag_noise_var_flight': unpacked[17],
+        'gps_pos_gate': unpacked[18],
+        'gps_vel_gate': unpacked[19],
+        'baro_gate': unpacked[20],
+        'mag_magnitude_gate': unpacked[21],
+        'gps_timeout_samples': unpacked[22],
     }
 
 def unpack_eps_ident(raw: bytes) -> Dict[str, Any]:
@@ -175,13 +201,14 @@ def unpack_vehicle_state(raw: bytes) -> Dict[str, Any]:
 # Usage: parsed = UNPACK_FNS[topic_id](payload[1:])
 UNPACK_FNS: Dict[int, Any] = {
     0: unpack_barometer,
-    1: unpack_eps_ident,
-    2: unpack_eps_measurements,
-    3: unpack_eps_power_status,
-    4: unpack_obc_ident,
-    5: unpack_obc_log_level,
-    6: unpack_sensor_imu,
-    7: unpack_tracking_radio_ident,
-    8: unpack_vehicle_imu,
-    9: unpack_vehicle_state,
+    1: unpack_ekf_params,
+    2: unpack_eps_ident,
+    3: unpack_eps_measurements,
+    4: unpack_eps_power_status,
+    5: unpack_obc_ident,
+    6: unpack_obc_log_level,
+    7: unpack_sensor_imu,
+    8: unpack_tracking_radio_ident,
+    9: unpack_vehicle_imu,
+    10: unpack_vehicle_state,
 }
