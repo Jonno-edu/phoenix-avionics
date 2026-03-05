@@ -27,39 +27,106 @@ typedef enum {
 } ekf_flight_mode_t;
 
 /**
- * @brief EKF 15-state definition
+ * @brief 128 samples at 250Hz (4ms) = 512ms maximum delay horizon.
+ * Power-of-two size allows fast wrapping with a bitmask.
+ */
+#define EKF_OBS_BUFFER_SIZE 128
+#define EKF_OBS_BUFFER_MASK (EKF_OBS_BUFFER_SIZE - 1)
+
+/** Target delay for the delayed filter (200ms expressed in microseconds). */
+#define EKF_TARGET_DELAY_US 200000
+
+/**
+ * @brief Single IMU frame stored in the observation ring buffer.
+ *
+ * Fields mirror vehicle_imu_t so that the nORB message can be copied
+ * directly.  The struct is defined here (rather than reusing vehicle_imu_t)
+ * to keep the EKF core free of nORB runtime dependencies.
  */
 typedef struct {
-    float q[4];          // Orientation [w, x, y, z] (body to NED)
-    float v_ned[3];      // Velocity [vx, vy, vz] (m/s)
-    float p_ned[3];      // Position [x, y, z] (m)
-    float gyro_bias[3];  // Gyro bias [wx, wy, wz] (rad/s)
-    float accel_bias[3]; // Accel bias [ax, ay, az] (m/s^2)
-    float prev_gyro[3];  // Previous un-biased gyro rate [wx, wy, wz] (rad/s) — bookkeeping for angular accel (NOT a filter state)
+    uint64_t timestamp_us;     /**< Sample timestamp (microseconds). */
+    float    dt_s;             /**< Integration interval (seconds). */
+    float    delta_angle[3];   /**< Integrated angular rate [rad]. */
+    float    delta_velocity[3];/**< Integrated specific force [m/s]. */
+} imu_history_t;
+
+/**
+ * @brief EKF 15-state definition.
+ */
+typedef struct {
+    float q[4];          /**< Orientation [w, x, y, z] (body to NED). */
+    float v_ned[3];      /**< Velocity [vx, vy, vz] (m/s). */
+    float p_ned[3];      /**< Position [x, y, z] (m). */
+    float gyro_bias[3];  /**< Gyro bias [wx, wy, wz] (rad/s). */
+    float accel_bias[3]; /**< Accel bias [ax, ay, az] (m/s^2). */
+    float prev_gyro[3];  /**< Previous unbiased gyro rate — bookkeeping for angular accel (NOT a filter state). */
 } ekf_state_t;
 
 /**
- * @brief Main EKF state container
+ * @brief Main EKF state container.
+ *
+ * Architecture: PX4-style delayed-horizon EKF.
+ *
+ *   delayed_state  — The Kalman filter source of truth.  Lives ~200ms in the
+ *                    past.  All heavy SymForce predict/update math runs here.
+ *                    P (the covariance matrix) belongs exclusively to this
+ *                    state.
+ *
+ *   head_state     — The navigation output.  Reconstructed each step by
+ *                    copying delayed_state and fast-forwarding it to the
+ *                    present using the lightweight imu_propagate_kinematics()
+ *                    integrator.  No covariance is maintained here.
+ *
+ *   imu_buffer     — Circular observation buffer holding the most recent
+ *                    EKF_OBS_BUFFER_SIZE IMU frames.
+ *   tail_idx       — Index of the next frame to be consumed by the delayed EKF.
+ *   head_idx       — Index where the *next* incoming frame will be written.
  */
 typedef struct {
-    ekf_state_t       state;
-    float             P[225];        /**< 15×15 covariance, flat row-major float array. */
-    ekf_flight_mode_t flight_mode;   /**< Current warmup / flight mode (set by ekf_state.c). */
+    /* 1. The Delayed EKF (source of truth, living ~200ms in the past) */
+    ekf_state_t delayed_state;
+    float       P[225];        /**< 15x15 covariance (row-major).  Belongs to delayed_state only. */
+
+    /* 2. The Head State (navigation output, present time) */
+    ekf_state_t head_state;
+
+    /* 3. Observation ring buffer */
+    imu_history_t imu_buffer[EKF_OBS_BUFFER_SIZE];
+    uint8_t       head_idx;    /**< Next write slot. */
+    uint8_t       tail_idx;    /**< Next delayed-EKF consume slot. */
+
+    ekf_flight_mode_t flight_mode; /**< Current warmup / flight mode (set by ekf_state.c). */
 } ekf_core_t;
 
 /**
- * @brief Initialize the EKF core
- * 
- * @param ekf Pointer to the EKF core structure
+ * @brief Initialise the EKF core (zero-fills then calls ekf_core_reset).
  */
 void ekf_core_init(ekf_core_t* ekf);
 
 /**
- * @brief Reset the EKF state and covariance
- * 
- * @param ekf Pointer to the EKF core structure
+ * @brief Reset core state, covariance, and buffer indices to safe defaults.
  */
 void ekf_core_reset(ekf_core_t* ekf);
+
+/**
+ * @brief Primary 250Hz IMU ingestion loop.
+ *
+ * Implements the three-step delayed-horizon update:
+ *   1. Push the new IMU sample into the ring buffer.
+ *   2. Advance the delayed tail: run the heavy SymForce predictor on any
+ *      sample that is at least EKF_TARGET_DELAY_US old.
+ *   3. Forward-propagate head_state from delayed_state to the present using
+ *      the lightweight imu_propagate_kinematics() integrator.
+ */
+void ekf_core_step(ekf_core_t* ekf, const imu_history_t* imu);
+
+/**
+ * @brief Lightweight kinematic integrator used to fast-forward head_state.
+ *
+ * Integrates orientation, velocity, and position using the corrected IMU
+ * deltas.  Does NOT propagate the covariance matrix.
+ */
+void imu_propagate_kinematics(ekf_state_t* state, const imu_history_t* imu);
 
 #ifdef __cplusplus
 }

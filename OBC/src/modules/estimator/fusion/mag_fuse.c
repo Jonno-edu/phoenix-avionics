@@ -55,7 +55,7 @@ bool mag_fuse(ekf_core_t           *ekf,
 
     /* Predicted body-frame field: h(q) = R^T * mag_ref_ned */
     float pred[3];
-    _rotate_ned_to_body(ekf->state.q, mag_ref_ned, pred);
+    _rotate_ned_to_body(ekf->delayed_state.q, mag_ref_ned, pred);
 
     const float *m = mag->field_gauss;
 
@@ -80,8 +80,8 @@ bool mag_fuse(ekf_core_t           *ekf,
 
     symforce_update_mag(
         ekf->P,
-        ekf->state.q, ekf->state.v_ned, ekf->state.p_ned,
-        ekf->state.gyro_bias, ekf->state.accel_bias,
+        ekf->delayed_state.q, ekf->delayed_state.v_ned, ekf->delayed_state.p_ned,
+        ekf->delayed_state.gyro_bias, ekf->delayed_state.accel_bias,
         mag->field_gauss, mag_ref_ned, mag_var3, 1e-6f
     );
 

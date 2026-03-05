@@ -35,14 +35,14 @@ void propagate_nominal_state(ekf_core_t *ekf,
                              const float accel_meas[3],
                              float dt)
 {
-    float *q     = ekf->state.q;
-    float *v_ned = ekf->state.v_ned;
-    float *p_ned = ekf->state.p_ned;
+    float *q     = ekf->delayed_state.q;
+    float *v_ned = ekf->delayed_state.v_ned;
+    float *p_ned = ekf->delayed_state.p_ned;
 
     float gc[3], ac[3];
     for (int i = 0; i < 3; i++) {
-        gc[i] = gyro_meas[i]  - ekf->state.gyro_bias[i];
-        ac[i] = accel_meas[i] - ekf->state.accel_bias[i];
+        gc[i] = gyro_meas[i]  - ekf->delayed_state.gyro_bias[i];
+        ac[i] = accel_meas[i] - ekf->delayed_state.accel_bias[i];
     }
 
     /* Small-angle quaternion update */

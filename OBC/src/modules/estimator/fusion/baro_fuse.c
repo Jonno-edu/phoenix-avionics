@@ -11,7 +11,7 @@
 void baro_fuse(ekf_core_t *ekf, const baro_measurement_t *baro)
 {
     /* predicted altitude from nominal state: alt_pred = -p_ned[2] */
-    float alt_pred  = -ekf->state.p_ned[2];
+    float alt_pred  = -ekf->delayed_state.p_ned[2];
     float innovation = baro->altitude_m - alt_pred;
 
     /* Innovation gate — reject outliers */
@@ -21,11 +21,11 @@ void baro_fuse(ekf_core_t *ekf, const baro_measurement_t *baro)
 
     symforce_update_baro(
         ekf->P,
-        ekf->state.q,
-        ekf->state.v_ned,
-        ekf->state.p_ned,
-        ekf->state.gyro_bias,
-        ekf->state.accel_bias,
+        ekf->delayed_state.q,
+        ekf->delayed_state.v_ned,
+        ekf->delayed_state.p_ned,
+        ekf->delayed_state.gyro_bias,
+        ekf->delayed_state.accel_bias,
         baro->altitude_m,
         BARO_NOISE_VAR,
         1e-6f

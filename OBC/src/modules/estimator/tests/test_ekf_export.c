@@ -218,7 +218,7 @@ static void run_ekf_export(void)
                              + generate_gaussian_noise(0.0f, vib_noise_std);
         }
 
-        vehicle_imu_t imu = {0};
+        imu_history_t imu = {0};
         imu.dt_s = dt;
         for (int ax = 0; ax < 3; ax++) {
             imu.delta_angle[ax]    = gyro_meas[ax]  * dt;
@@ -270,7 +270,7 @@ static void run_ekf_export(void)
             baro.altitude_m = raw_baro_alt;
 
             /* Innovation: predicted alt = -p_ned[2] */
-            float alt_pred   = -ekf.state.p_ned[2];
+            float alt_pred   = -ekf.delayed_state.p_ned[2];
             float baro_innov = baro.altitude_m - alt_pred;
 
             /* χ² = ν² / S  where S = H·P·Hᵀ + R
@@ -300,7 +300,7 @@ static void run_ekf_export(void)
             }
 
             /* Z-position innovation before update */
-            float gps_innov_pz = gps.pos_ned[2] - ekf.state.p_ned[2];
+            float gps_innov_pz = gps.pos_ned[2] - ekf.delayed_state.p_ned[2];
 
             /* S = P[IDX_PZ,IDX_PZ] + GPS_POS_VAR[Z] */
             float gps_S_pz = P_DIAG(ekf, IDX_PZ) + EXPORT_GPS_POS_VAR_Z;
@@ -320,10 +320,10 @@ static void run_ekf_export(void)
                 "%.5f,%.5f,"       /* true_abx, ekf_abx */
                 "%.5f,%.5f,",      /* true_gbx, ekf_gbx */
                 (double)t_s, mode,
-                (double)true_pos[2],        (double)ekf.state.p_ned[2],      (double)P_DIAG(ekf, IDX_PZ),
-                (double)true_vel[2],        (double)ekf.state.v_ned[2],      (double)P_DIAG(ekf, IDX_VZ),
-                (double)accel_bias_true[0], (double)ekf.state.accel_bias[0],
-                (double)gyro_bias_true[0],  (double)ekf.state.gyro_bias[0]);
+                (double)true_pos[2],        (double)ekf.delayed_state.p_ned[2],      (double)P_DIAG(ekf, IDX_PZ),
+                (double)true_vel[2],        (double)ekf.delayed_state.v_ned[2],      (double)P_DIAG(ekf, IDX_VZ),
+                (double)accel_bias_true[0], (double)ekf.delayed_state.accel_bias[0],
+                (double)gyro_bias_true[0],  (double)ekf.delayed_state.gyro_bias[0]);
 
         /* raw_baro — NaN on non-baro steps */
         if (baro_valid) {

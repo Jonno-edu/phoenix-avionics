@@ -17,10 +17,10 @@ static void test_init_quaternion_is_identity(void)
     ekf_core_t ekf;
     ekf_core_init(&ekf);
 
-    ASSERT_NEAR(ekf.state.q[0], 1.0f, 1e-6f);
-    ASSERT_NEAR(ekf.state.q[1], 0.0f, 1e-6f);
-    ASSERT_NEAR(ekf.state.q[2], 0.0f, 1e-6f);
-    ASSERT_NEAR(ekf.state.q[3], 0.0f, 1e-6f);
+    ASSERT_NEAR(ekf.delayed_state.q[0], 1.0f, 1e-6f);
+    ASSERT_NEAR(ekf.delayed_state.q[1], 0.0f, 1e-6f);
+    ASSERT_NEAR(ekf.delayed_state.q[2], 0.0f, 1e-6f);
+    ASSERT_NEAR(ekf.delayed_state.q[3], 0.0f, 1e-6f);
 
     printf("OK\n");
 }
@@ -32,10 +32,10 @@ static void test_init_state_is_zeroed(void)
     ekf_core_init(&ekf);
 
     for (int i = 0; i < 3; ++i) {
-        ASSERT_NEAR(ekf.state.v_ned[i],      0.0f, 1e-9f);
-        ASSERT_NEAR(ekf.state.p_ned[i],      0.0f, 1e-9f);
-        ASSERT_NEAR(ekf.state.gyro_bias[i],  0.0f, 1e-9f);
-        ASSERT_NEAR(ekf.state.accel_bias[i], 0.0f, 1e-9f);
+        ASSERT_NEAR(ekf.delayed_state.v_ned[i],      0.0f, 1e-9f);
+        ASSERT_NEAR(ekf.delayed_state.p_ned[i],      0.0f, 1e-9f);
+        ASSERT_NEAR(ekf.delayed_state.gyro_bias[i],  0.0f, 1e-9f);
+        ASSERT_NEAR(ekf.delayed_state.accel_bias[i], 0.0f, 1e-9f);
     }
 
     printf("OK\n");
@@ -79,14 +79,14 @@ static void test_reset_restores_state(void)
     ekf_core_t ekf;
     ekf_core_init(&ekf);
 
-    ekf.state.q[0]     = 0.5f;
-    ekf.state.v_ned[0] = 50.0f;
+    ekf.delayed_state.q[0]     = 0.5f;
+    ekf.delayed_state.v_ned[0] = 50.0f;
     ekf.P[0]           = 9999.0f;
 
     ekf_core_reset(&ekf);
 
-    ASSERT_NEAR(ekf.state.q[0],     1.0f,  1e-6f);
-    ASSERT_NEAR(ekf.state.v_ned[0], 0.0f,  1e-9f);
+    ASSERT_NEAR(ekf.delayed_state.q[0],     1.0f,  1e-6f);
+    ASSERT_NEAR(ekf.delayed_state.v_ned[0], 0.0f,  1e-9f);
     ASSERT_NEAR(ekf.P[0*15 + 0],    0.05f, 1e-6f);
 
     printf("OK\n");
@@ -109,8 +109,8 @@ static void test_covariance_grows_after_predict(void)
 
     symforce_predict_covariance(
         ekf.P,
-        ekf.state.q, ekf.state.v_ned, ekf.state.p_ned,
-        ekf.state.gyro_bias, ekf.state.accel_bias,
+        ekf.delayed_state.q, ekf.delayed_state.v_ned, ekf.delayed_state.p_ned,
+        ekf.delayed_state.gyro_bias, ekf.delayed_state.accel_bias,
         accel, accel_var, gyro, gyro_var, dt
     );
 
@@ -136,8 +136,8 @@ static void test_covariance_stays_finite_over_1s(void)
     for (int i = 0; i < 250; ++i) {
         symforce_predict_covariance(
             ekf.P,
-            ekf.state.q, ekf.state.v_ned, ekf.state.p_ned,
-            ekf.state.gyro_bias, ekf.state.accel_bias,
+            ekf.delayed_state.q, ekf.delayed_state.v_ned, ekf.delayed_state.p_ned,
+            ekf.delayed_state.gyro_bias, ekf.delayed_state.accel_bias,
             accel, accel_var, gyro, gyro_var, dt
         );
     }
@@ -156,7 +156,7 @@ static void test_quaternion_norm_preserved_after_predict(void)
     const float dt       = 0.004f;
 
     for (int i = 0; i < 250; ++i) {
-        float *q    = ekf.state.q;
+        float *q    = ekf.delayed_state.q;
         float ha[3] = { 0.5f*gyro[0]*dt, 0.5f*gyro[1]*dt, 0.5f*gyro[2]*dt };
 
         float q_new[4];
@@ -170,8 +170,8 @@ static void test_quaternion_norm_preserved_after_predict(void)
         for (int j = 0; j < 4; ++j) q[j] = q_new[j] / norm;
     }
 
-    ASSERT_NEAR(quat_norm(ekf.state.q), 1.0f, 1e-5f);
-    printf("OK  (|q| = %.8f)\n", (double)quat_norm(ekf.state.q));
+    ASSERT_NEAR(quat_norm(ekf.delayed_state.q), 1.0f, 1e-5f);
+    printf("OK  (|q| = %.8f)\n", (double)quat_norm(ekf.delayed_state.q));
 }
 
 /* ── Suite runner ───────────────────────────────────────────────────────────── */

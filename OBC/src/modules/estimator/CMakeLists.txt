@@ -121,6 +121,7 @@ if(BUILD_FOR_HOST)
         tests/test_ekf_dynamic.c
         tests/test_ekf_faults.c
         tests/test_ekf_state.c
+        tests/test_ekf_advanced.c
         tests/test_mission_profile.c
     )
 

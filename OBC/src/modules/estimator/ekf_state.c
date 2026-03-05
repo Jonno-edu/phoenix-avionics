@@ -34,7 +34,7 @@
 /**
  * Set pitch/roll from the averaged gravitational acceleration, leaving yaw at 0.
  * g_avg is the average accelerometer output in body frame (m/s²).
- * Populates ekf->state.q with the estimated body-to-NED quaternion.
+ * Populates ekf->delayed_state.q with the estimated body-to-NED quaternion.
  */
 static void _set_attitude_from_gravity(ekf_core_t *ekf, const float g_avg[3])
 {
@@ -65,10 +65,10 @@ static void _set_attitude_from_gravity(ekf_core_t *ekf, const float g_avg[3])
     float n = sqrtf(qw*qw + qx*qx + qy*qy + qz*qz);
     if (n < 1e-6f) return;
 
-    ekf->state.q[0] = qw / n;
-    ekf->state.q[1] = qx / n;
-    ekf->state.q[2] = qy / n;
-    ekf->state.q[3] = qz / n;
+    ekf->delayed_state.q[0] = qw / n;
+    ekf->delayed_state.q[1] = qx / n;
+    ekf->delayed_state.q[2] = qy / n;
+    ekf->delayed_state.q[3] = qz / n;
 }
 
 /**
@@ -118,7 +118,7 @@ static float _heading_from_mag(const float q[4],
 static void _apply_yaw(ekf_core_t *ekf, float psi)
 {
     float cy = cosf(psi * 0.5f), sy = sinf(psi * 0.5f);
-    const float *qc = ekf->state.q;
+    const float *qc = ekf->delayed_state.q;
 
     /* q_z ⊗ q_current:
      *   w' = cy*qw - sy*qz
@@ -136,7 +136,7 @@ static void _apply_yaw(ekf_core_t *ekf, float psi)
     float n = sqrtf(q_new[0]*q_new[0] + q_new[1]*q_new[1] +
                     q_new[2]*q_new[2] + q_new[3]*q_new[3]);
     if (n < 1e-6f) return;
-    for (int i = 0; i < 4; i++) ekf->state.q[i] = q_new[i] / n;
+    for (int i = 0; i < 4; i++) ekf->delayed_state.q[i] = q_new[i] / n;
 }
 
 /**
@@ -189,8 +189,8 @@ void ekf_state_update(ekf_state_ctx_t *ctx,
         const float vel_var[3]  = {1e-6f, 1e-6f, 1e-6f};
         const float gyro_var[3] = {1e-6f, 1e-6f, 1e-6f};
         symforce_update_stationary(
-            ekf->P, ekf->state.q, ekf->state.v_ned, ekf->state.p_ned,
-            ekf->state.gyro_bias, ekf->state.accel_bias,
+            ekf->P, ekf->delayed_state.q, ekf->delayed_state.v_ned, ekf->delayed_state.p_ned,
+            ekf->delayed_state.gyro_bias, ekf->delayed_state.accel_bias,
             gyro_raw, vel_var, gyro_var
         );
 
@@ -222,17 +222,17 @@ void ekf_state_update(ekf_state_ctx_t *ctx,
         const float vel_var[3]  = {1e-6f, 1e-6f, 1e-6f};
         const float gyro_var[3] = {1e-6f, 1e-6f, 1e-6f};
         symforce_update_stationary(
-            ekf->P, ekf->state.q, ekf->state.v_ned, ekf->state.p_ned,
-            ekf->state.gyro_bias, ekf->state.accel_bias,
+            ekf->P, ekf->delayed_state.q, ekf->delayed_state.v_ned, ekf->delayed_state.p_ned,
+            ekf->delayed_state.gyro_bias, ekf->delayed_state.accel_bias,
             gyro_raw, vel_var, gyro_var
         );
 
         if (mag_valid) {
-            float psi = _heading_from_mag(ekf->state.q, mag_body, ctx->mag_ref_ned);
+            float psi = _heading_from_mag(ekf->delayed_state.q, mag_body, ctx->mag_ref_ned);
             _apply_yaw(ekf, psi);
 
             /* Initialise previous bias for convergence monitoring */
-            for (int i = 0; i < 3; i++) ctx->bg_prev[i] = ekf->state.gyro_bias[i];
+            for (int i = 0; i < 3; i++) ctx->bg_prev[i] = ekf->delayed_state.gyro_bias[i];
 
             ctx->mode = EKF_MODE_ZVU_CALIBRATING;
             ekf->flight_mode = EKF_MODE_ZVU_CALIBRATING;
@@ -246,8 +246,8 @@ void ekf_state_update(ekf_state_ctx_t *ctx,
         const float vel_var[3]  = {1e-6f, 1e-6f, 1e-6f};
         const float gyro_var[3] = {1e-6f, 1e-6f, 1e-6f};
         symforce_update_stationary(
-            ekf->P, ekf->state.q, ekf->state.v_ned, ekf->state.p_ned,
-            ekf->state.gyro_bias, ekf->state.accel_bias,
+            ekf->P, ekf->delayed_state.q, ekf->delayed_state.v_ned, ekf->delayed_state.p_ned,
+            ekf->delayed_state.gyro_bias, ekf->delayed_state.accel_bias,
             gyro_raw, vel_var, gyro_var
         );
 
@@ -260,11 +260,11 @@ void ekf_state_update(ekf_state_ctx_t *ctx,
 
         /* Bias convergence check */
         float bg_change_norm = _vec3_norm((float[3]){
-            (ekf->state.gyro_bias[0] - ctx->bg_prev[0]) / dt,
-            (ekf->state.gyro_bias[1] - ctx->bg_prev[1]) / dt,
-            (ekf->state.gyro_bias[2] - ctx->bg_prev[2]) / dt
+            (ekf->delayed_state.gyro_bias[0] - ctx->bg_prev[0]) / dt,
+            (ekf->delayed_state.gyro_bias[1] - ctx->bg_prev[1]) / dt,
+            (ekf->delayed_state.gyro_bias[2] - ctx->bg_prev[2]) / dt
         });
-        for (int i = 0; i < 3; i++) ctx->bg_prev[i] = ekf->state.gyro_bias[i];
+        for (int i = 0; i < 3; i++) ctx->bg_prev[i] = ekf->delayed_state.gyro_bias[i];
 
         if (bg_change_norm < ZVU_BIAS_RATE_THRESHOLD) {
             ctx->zvu_settled_time_s += dt;
@@ -324,15 +324,15 @@ void ekf_state_set_launch_rail(ekf_state_ctx_t *ctx,
 
     float n = sqrtf(qw*qw + qx*qx + qy*qy + qz*qz);
     if (n > 1e-6f) {
-        ekf->state.q[0] = qw / n;
-        ekf->state.q[1] = qx / n;
-        ekf->state.q[2] = qy / n;
-        ekf->state.q[3] = qz / n;
+        ekf->delayed_state.q[0] = qw / n;
+        ekf->delayed_state.q[1] = qx / n;
+        ekf->delayed_state.q[2] = qy / n;
+        ekf->delayed_state.q[3] = qz / n;
     }
 
     /* Seed previous-bias snapshot so ZVU convergence monitor starts cleanly. */
     for (int i = 0; i < 3; i++) {
-        ctx->bg_prev[i] = ekf->state.gyro_bias[i];
+        ctx->bg_prev[i] = ekf->delayed_state.gyro_bias[i];
     }
 
     /* Fast-forward: skip LEVELING and HEADING_ALIGN. */

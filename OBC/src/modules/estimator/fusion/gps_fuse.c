@@ -30,11 +30,11 @@ void gps_fuse(ekf_core_t *ekf, const gps_measurement_t *gps)
      * and GPS is re-enabled automatically once the state drops back below
      * threshold (the re-acquisition dead-band is handled in the simulator).
      */
-    float v0 = ekf->state.v_ned[0];
-    float v1 = ekf->state.v_ned[1];
-    float v2 = ekf->state.v_ned[2];
+    float v0 = ekf->delayed_state.v_ned[0];
+    float v1 = ekf->delayed_state.v_ned[1];
+    float v2 = ekf->delayed_state.v_ned[2];
     float ekf_vel_mag  = sqrtf(v0*v0 + v1*v1 + v2*v2);
-    float ekf_altitude = -ekf->state.p_ned[2];   /* NED Z-down → positive-up */
+    float ekf_altitude = -ekf->delayed_state.p_ned[2];   /* NED Z-down → positive-up */
 
     if (ekf_vel_mag > 500.0f || ekf_altitude > 80000.0f) {
         return;   /* Reject: receiver tracking limits exceeded */
@@ -42,8 +42,8 @@ void gps_fuse(ekf_core_t *ekf, const gps_measurement_t *gps)
 
     /* Per-axis innovation gates */
     for (int i = 0; i < 3; i++) {
-        float pos_innov = gps->pos_ned[i] - ekf->state.p_ned[i];
-        float vel_innov = gps->vel_ned[i] - ekf->state.v_ned[i];
+        float pos_innov = gps->pos_ned[i] - ekf->delayed_state.p_ned[i];
+        float vel_innov = gps->vel_ned[i] - ekf->delayed_state.v_ned[i];
 
         if (fabsf(pos_innov) > GPS_POS_GATE || fabsf(vel_innov) > GPS_VEL_GATE) {
             return;
@@ -52,11 +52,11 @@ void gps_fuse(ekf_core_t *ekf, const gps_measurement_t *gps)
 
     symforce_update_gps(
         ekf->P,
-        ekf->state.q,
-        ekf->state.v_ned,
-        ekf->state.p_ned,
-        ekf->state.gyro_bias,
-        ekf->state.accel_bias,
+        ekf->delayed_state.q,
+        ekf->delayed_state.v_ned,
+        ekf->delayed_state.p_ned,
+        ekf->delayed_state.gyro_bias,
+        ekf->delayed_state.accel_bias,
         gps->pos_ned,
         gps->vel_ned,
         GPS_POS_VAR,

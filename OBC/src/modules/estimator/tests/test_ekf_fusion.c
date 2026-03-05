@@ -42,8 +42,8 @@ static void test_stationary_bias_convergence(void)
         }
 
         symforce_predict_covariance(
-            ekf.P, ekf.state.q, ekf.state.v_ned, ekf.state.p_ned,
-            ekf.state.gyro_bias, ekf.state.accel_bias,
+            ekf.P, ekf.delayed_state.q, ekf.delayed_state.v_ned, ekf.delayed_state.p_ned,
+            ekf.delayed_state.gyro_bias, ekf.delayed_state.accel_bias,
             meas_accel, accel_var, meas_gyro, gyro_var, dt
         );
 
@@ -51,8 +51,8 @@ static void test_stationary_bias_convergence(void)
         const float meas_gyro_var[3] = {1e-6f, 1e-6f, 1e-6f};
 
         symforce_update_stationary(
-            ekf.P, ekf.state.q, ekf.state.v_ned, ekf.state.p_ned,
-            ekf.state.gyro_bias, ekf.state.accel_bias,
+            ekf.P, ekf.delayed_state.q, ekf.delayed_state.v_ned, ekf.delayed_state.p_ned,
+            ekf.delayed_state.gyro_bias, ekf.delayed_state.accel_bias,
             meas_gyro, meas_vel_var, meas_gyro_var
         );
     }
@@ -62,13 +62,13 @@ static void test_stationary_bias_convergence(void)
            (double)hidden_gyro_bias[1],
            (double)hidden_gyro_bias[2]);
     printf("    EKF Gyro Bias:     [%.4f, %.4f, %.4f]\n",
-           (double)ekf.state.gyro_bias[0],
-           (double)ekf.state.gyro_bias[1],
-           (double)ekf.state.gyro_bias[2]);
+           (double)ekf.delayed_state.gyro_bias[0],
+           (double)ekf.delayed_state.gyro_bias[1],
+           (double)ekf.delayed_state.gyro_bias[2]);
 
-    ASSERT_NEAR(ekf.state.gyro_bias[0], hidden_gyro_bias[0], 0.002f);
-    ASSERT_NEAR(ekf.state.gyro_bias[1], hidden_gyro_bias[1], 0.002f);
-    ASSERT_NEAR(ekf.state.gyro_bias[2], hidden_gyro_bias[2], 0.002f);
+    ASSERT_NEAR(ekf.delayed_state.gyro_bias[0], hidden_gyro_bias[0], 0.002f);
+    ASSERT_NEAR(ekf.delayed_state.gyro_bias[1], hidden_gyro_bias[1], 0.002f);
+    ASSERT_NEAR(ekf.delayed_state.gyro_bias[2], hidden_gyro_bias[2], 0.002f);
 
     printf("  OK\n");
 }
@@ -115,8 +115,8 @@ static void test_gps_baro_fusion(void)
         propagate_nominal_state(&ekf, meas_gyro, meas_accel, dt);
 
         symforce_predict_covariance(
-            ekf.P, ekf.state.q, ekf.state.v_ned, ekf.state.p_ned,
-            ekf.state.gyro_bias, ekf.state.accel_bias,
+            ekf.P, ekf.delayed_state.q, ekf.delayed_state.v_ned, ekf.delayed_state.p_ned,
+            ekf.delayed_state.gyro_bias, ekf.delayed_state.accel_bias,
             meas_accel, accel_var, meas_gyro, gyro_var, dt
         );
 
@@ -138,25 +138,25 @@ static void test_gps_baro_fusion(void)
     }
 
     printf("    True  p_ned[2]: %8.3f m   |  EKF: %8.3f m\n",
-           (double)true_pos[2], (double)ekf.state.p_ned[2]);
+           (double)true_pos[2], (double)ekf.delayed_state.p_ned[2]);
     printf("    True  v_ned[2]: %8.3f m/s |  EKF: %8.3f m/s\n",
-           (double)true_vel[2], (double)ekf.state.v_ned[2]);
+           (double)true_vel[2], (double)ekf.delayed_state.v_ned[2]);
     printf("    True  gyro_bias: [%.4f, %.4f, %.4f]\n",
            (double)hidden_gyro_bias[0],
            (double)hidden_gyro_bias[1],
            (double)hidden_gyro_bias[2]);
     printf("    EKF   gyro_bias: [%.4f, %.4f, %.4f]\n",
-           (double)ekf.state.gyro_bias[0],
-           (double)ekf.state.gyro_bias[1],
-           (double)ekf.state.gyro_bias[2]);
+           (double)ekf.delayed_state.gyro_bias[0],
+           (double)ekf.delayed_state.gyro_bias[1],
+           (double)ekf.delayed_state.gyro_bias[2]);
 
     /* Vertical position: within 0.5 m */
-    ASSERT_NEAR(ekf.state.p_ned[2], true_pos[2], 0.5f);
+    ASSERT_NEAR(ekf.delayed_state.p_ned[2], true_pos[2], 0.5f);
     /* Vertical velocity: within 0.2 m/s */
-    ASSERT_NEAR(ekf.state.v_ned[2], true_vel[2], 0.2f);
+    ASSERT_NEAR(ekf.delayed_state.v_ned[2], true_vel[2], 0.2f);
     /* Gyro bias X/Y observable through GPS+Baro (Z/yaw requires magnetometer) */
-    ASSERT_NEAR(ekf.state.gyro_bias[0], hidden_gyro_bias[0], 0.002f);
-    ASSERT_NEAR(ekf.state.gyro_bias[1], hidden_gyro_bias[1], 0.002f);
+    ASSERT_NEAR(ekf.delayed_state.gyro_bias[0], hidden_gyro_bias[0], 0.002f);
+    ASSERT_NEAR(ekf.delayed_state.gyro_bias[1], hidden_gyro_bias[1], 0.002f);
     /* Covariance must remain finite */
     ASSERT_TRUE(all_finite(ekf.P, 225));
 
@@ -215,8 +215,8 @@ static void test_mag_fusion(void)
         }
 
         symforce_predict_covariance(
-            ekf.P, ekf.state.q, ekf.state.v_ned, ekf.state.p_ned,
-            ekf.state.gyro_bias, ekf.state.accel_bias,
+            ekf.P, ekf.delayed_state.q, ekf.delayed_state.v_ned, ekf.delayed_state.p_ned,
+            ekf.delayed_state.gyro_bias, ekf.delayed_state.accel_bias,
             meas_accel, accel_var, meas_gyro, gyro_var, dt
         );
 
@@ -224,8 +224,8 @@ static void test_mag_fusion(void)
         const float vel_var3[3]  = {1e-6f, 1e-6f, 1e-6f};
         const float gyro_var3[3] = {1e-6f, 1e-6f, 1e-6f};
         symforce_update_stationary(
-            ekf.P, ekf.state.q, ekf.state.v_ned, ekf.state.p_ned,
-            ekf.state.gyro_bias, ekf.state.accel_bias,
+            ekf.P, ekf.delayed_state.q, ekf.delayed_state.v_ned, ekf.delayed_state.p_ned,
+            ekf.delayed_state.gyro_bias, ekf.delayed_state.accel_bias,
             meas_gyro, vel_var3, gyro_var3
         );
 
@@ -244,18 +244,18 @@ static void test_mag_fusion(void)
     }
 
     printf("    After 30s ZVU+Mag: gyro_bias [%.4f, %.4f, %.4f]  (truth: [%.4f, %.4f, %.4f])\n",
-           (double)ekf.state.gyro_bias[0], (double)ekf.state.gyro_bias[1],
-           (double)ekf.state.gyro_bias[2],
+           (double)ekf.delayed_state.gyro_bias[0], (double)ekf.delayed_state.gyro_bias[1],
+           (double)ekf.delayed_state.gyro_bias[2],
            (double)hidden_gyro_bias[0], (double)hidden_gyro_bias[1],
            (double)hidden_gyro_bias[2]);
     printf("    P[2,2] (yaw cov): %.6f   <- should decrease with mag fusion\n",
            (double)ekf.P[2*15 + 2]);
 
     /* X/Y gyro bias convergence (same as before) */
-    ASSERT_NEAR(ekf.state.gyro_bias[0], hidden_gyro_bias[0], 0.002f);
-    ASSERT_NEAR(ekf.state.gyro_bias[1], hidden_gyro_bias[1], 0.002f);
+    ASSERT_NEAR(ekf.delayed_state.gyro_bias[0], hidden_gyro_bias[0], 0.002f);
+    ASSERT_NEAR(ekf.delayed_state.gyro_bias[1], hidden_gyro_bias[1], 0.002f);
     /* Z gyro bias (yaw) — now observable with magnetometer */
-    ASSERT_NEAR(ekf.state.gyro_bias[2], hidden_gyro_bias[2], 0.003f);
+    ASSERT_NEAR(ekf.delayed_state.gyro_bias[2], hidden_gyro_bias[2], 0.003f);
     /* Yaw covariance must have reduced significantly from initial 0.05 */
     ASSERT_TRUE(ekf.P[2*15 + 2] < 0.04f);
     /* Full covariance must remain finite */

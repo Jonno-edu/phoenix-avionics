@@ -34,7 +34,7 @@ static int drive_static_imu_no_mag(ekf_state_ctx_t *ctx,
     const float gyro[3]  = { 0.0f, 0.0f, 0.0f };
     const float mag[3]   = { 0.0f, 0.0f, 0.0f };
 
-    vehicle_imu_t imu = {0};
+    imu_history_t imu = {0};
     imu.dt_s = dt;
 
     for (int i = 0; i < steps; i++) {
@@ -66,7 +66,7 @@ static void drive_with_mag(ekf_state_ctx_t *ctx,
         STELLENBOSCH_MAG_NED[2]
     };
 
-    vehicle_imu_t imu = {0};
+    imu_history_t imu = {0};
     imu.dt_s = dt;
 
     for (int i = 0; i < steps; i++) {
@@ -130,10 +130,10 @@ static void test_leveling_to_heading_align(void)
     ASSERT_TRUE(ekf_state_get_mode(&ctx) == EKF_MODE_HEADING_ALIGN);
 
     /* Attitude should be near-identity with level input (q[0] ≈ 1.0) */
-    ASSERT_NEAR(ekf.state.q[0], 1.0f, 0.01f);
-    ASSERT_NEAR(ekf.state.q[1], 0.0f, 0.01f);
-    ASSERT_NEAR(ekf.state.q[2], 0.0f, 0.01f);
-    ASSERT_NEAR(ekf.state.q[3], 0.0f, 0.01f);
+    ASSERT_NEAR(ekf.delayed_state.q[0], 1.0f, 0.01f);
+    ASSERT_NEAR(ekf.delayed_state.q[1], 0.0f, 0.01f);
+    ASSERT_NEAR(ekf.delayed_state.q[2], 0.0f, 0.01f);
+    ASSERT_NEAR(ekf.delayed_state.q[3], 0.0f, 0.01f);
 
     printf("  OK\n");
 }
@@ -197,7 +197,7 @@ static void test_liftoff_detection(void)
     const float gyro[3]         = { 0.0f, 0.0f, 0.0f };
     const float mag_body[3]     = { 0.0f, 0.0f, 0.0f };
 
-    vehicle_imu_t imu = {0};
+    imu_history_t imu = {0};
     imu.dt_s = dt;
     for (int axis = 0; axis < 3; axis++) {
         imu.delta_angle[axis]    = gyro[axis]         * dt;
@@ -240,7 +240,7 @@ static void test_flight_ready_gate(void)
     const float launch_accel[3] = { 0.0f, 0.0f, 39.2266f };
     const float gyro[3]         = { 0.0f, 0.0f, 0.0f };
     const float mag_body[3]     = { 0.0f, 0.0f, 0.0f };
-    vehicle_imu_t imu = {0};
+    imu_history_t imu = {0};
     imu.dt_s = dt;
     for (int axis = 0; axis < 3; axis++) {
         imu.delta_angle[axis]    = gyro[axis]         * dt;

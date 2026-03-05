@@ -18,18 +18,18 @@ static inline void cross_product(const float a[3], const float b[3], float out[3
  * - Nominal state kinematics integration
  * - SymForce covariance propagation
  */
-void imu_predict(ekf_core_t* ekf, const vehicle_imu_t* imu) {
+void imu_predict(ekf_core_t* ekf, const imu_history_t* imu) {
     if (imu->dt_s <= 0.0f) return;
 
     float dt = imu->dt_s;
 
-    // --- State variables ---
-    float* q         = ekf->state.q;
-    float* v_ned     = ekf->state.v_ned;
-    float* p_ned     = ekf->state.p_ned;
-    float* bg        = ekf->state.gyro_bias;
-    float* ba        = ekf->state.accel_bias;
-    float* prev_gyro = ekf->state.prev_gyro;
+    // --- State variables (delayed source of truth) ---
+    float* q         = ekf->delayed_state.q;
+    float* v_ned     = ekf->delayed_state.v_ned;
+    float* p_ned     = ekf->delayed_state.p_ned;
+    float* bg        = ekf->delayed_state.gyro_bias;
+    float* ba        = ekf->delayed_state.accel_bias;
+    float* prev_gyro = ekf->delayed_state.prev_gyro;
 
     // --- IMU lever arm offset from CG (body frame: x=fwd, y=right, z=down) ---
     // TODO: pull from a param/config struct when that system exists
@@ -129,11 +129,11 @@ void imu_predict(ekf_core_t* ekf, const vehicle_imu_t* imu) {
 
     symforce_predict_covariance(
         ekf->P,
-        ekf->state.q,
-        ekf->state.v_ned,
-        ekf->state.p_ned,
-        ekf->state.gyro_bias,
-        ekf->state.accel_bias,
+        ekf->delayed_state.q,
+        ekf->delayed_state.v_ned,
+        ekf->delayed_state.p_ned,
+        ekf->delayed_state.gyro_bias,
+        ekf->delayed_state.accel_bias,
         accel_raw,
         ACCEL_NOISE_VAR,
         gyro_raw,

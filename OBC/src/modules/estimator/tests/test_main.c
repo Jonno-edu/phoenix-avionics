@@ -11,11 +11,20 @@
  *   test_ekf_dynamic.c     — 1D launch profile, high-vibration motor burn
  *   test_ekf_faults.c      — outlier rejection, GPS dropout, NaN guards
  *   test_ekf_state.c       — 5-stage warmup state machine transitions
+ *   test_ekf_advanced.c    — latency, jitter, unmodeled forces
  *   test_mission_profile.c — 60-second scripted pad-to-apogee mission timeline
  */
 
 #include <stdio.h>
 #include "test_utils.h"
+
+void run_core_tests(void);
+void run_fusion_tests(void);
+void run_dynamic_tests(void);
+void run_fault_tests(void);
+void run_state_tests(void);
+void run_advanced_tests(void);
+void run_mission_tests(void);
 
 int main(void)
 {
@@ -28,6 +37,7 @@ int main(void)
     run_dynamic_tests();
     run_fault_tests();
     run_state_tests();
+    run_advanced_tests();
     run_mission_tests();
 
     printf("\n══════════════════════════════════════════════════════\n");

@@ -217,8 +217,8 @@ static void test_full_mission_60s(void)
                              + generate_gaussian_noise(0.0f, vib_noise_std);
         }
 
-        /* Build vehicle_imu_t and predict */
-        vehicle_imu_t imu = {0};
+        /* Build imu_history_t and predict */
+        imu_history_t imu = {0};
         imu.dt_s = dt;
         for (int ax = 0; ax < 3; ax++) {
             imu.delta_angle[ax]    = gyro_meas[ax]  * dt;
@@ -247,11 +247,11 @@ static void test_full_mission_60s(void)
             float t_s   = (float)step * dt;
             int   mode  = (int)ekf_state_get_mode(&ctx);
             float ptrace = matrix_trace(ekf.P, 15);
-            float qn    = quat_norm(ekf.state.q);
+            float qn    = quat_norm(ekf.delayed_state.q);
             printf("    %6.1f  %-5d  %10.2f  %10.2f  %10.3f  %10.3f  %8.6f  %.2f\n",
                    (double)t_s, mode,
-                   (double)true_pos[2], (double)ekf.state.p_ned[2],
-                   (double)true_vel[2], (double)ekf.state.v_ned[2],
+                   (double)true_pos[2], (double)ekf.delayed_state.p_ned[2],
+                   (double)true_vel[2], (double)ekf.delayed_state.v_ned[2],
                    (double)qn, (double)ptrace);
         }
 
@@ -265,10 +265,10 @@ static void test_full_mission_60s(void)
                    calibrating_before_launch ? "YES" : "NO");
             printf("        EKF gyro_bias=[%.5f, %.5f, %.5f]  "
                    "accel_bias=[%.4f, %.4f, %.4f]\n",
-                   (double)ekf.state.gyro_bias[0],  (double)ekf.state.gyro_bias[1],
-                   (double)ekf.state.gyro_bias[2],
-                   (double)ekf.state.accel_bias[0], (double)ekf.state.accel_bias[1],
-                   (double)ekf.state.accel_bias[2]);
+                   (double)ekf.delayed_state.gyro_bias[0],  (double)ekf.delayed_state.gyro_bias[1],
+                   (double)ekf.delayed_state.gyro_bias[2],
+                   (double)ekf.delayed_state.accel_bias[0], (double)ekf.delayed_state.accel_bias[1],
+                   (double)ekf.delayed_state.accel_bias[2]);
             printf("        P diagonal: att=[%.4f,%.4f,%.4f] vel=[%.2f,%.2f,%.2f] "
                    "pos=[%.2f,%.2f,%.2f]\n",
                    (double)ekf.P[0*15+0],  (double)ekf.P[1*15+1],  (double)ekf.P[2*15+2],
@@ -288,11 +288,11 @@ static void test_full_mission_60s(void)
         if (step == pad_steps + burn_steps - 1) {
             printf("    --- End of BURN phase: true_vel[2]=%.2f  ekf_vel[2]=%.2f  "
                    "err=%.2f m/s\n",
-                   (double)true_vel[2], (double)ekf.state.v_ned[2],
-                   (double)(ekf.state.v_ned[2] - true_vel[2]));
+                   (double)true_vel[2], (double)ekf.delayed_state.v_ned[2],
+                   (double)(ekf.delayed_state.v_ned[2] - true_vel[2]));
             printf("        true_pos[2]=%.2f  ekf_pos[2]=%.2f  err=%.2f m\n",
-                   (double)true_pos[2], (double)ekf.state.p_ned[2],
-                   (double)(ekf.state.p_ned[2] - true_pos[2]));
+                   (double)true_pos[2], (double)ekf.delayed_state.p_ned[2],
+                   (double)(ekf.delayed_state.p_ned[2] - true_pos[2]));
             printf("        P_vz=%.3f  P_pz=%.3f  P_trace=%.1f\n",
                    (double)ekf.P[5*15+5], (double)ekf.P[8*15+8],
                    (double)matrix_trace(ekf.P, 15));
@@ -335,13 +335,13 @@ static void test_full_mission_60s(void)
            flight_mode_triggered     ? "YES" : "NO");
     printf("    Covariance finite: %s  |q|=%.8f\n",
            all_finite(ekf.P, 225)  ? "YES" : "NO",
-           (double)quat_norm(ekf.state.q));
+           (double)quat_norm(ekf.delayed_state.q));
     printf("    EKF gyro_bias  = [%.5f, %.5f, %.5f] rad/s\n",
-           (double)ekf.state.gyro_bias[0], (double)ekf.state.gyro_bias[1],
-           (double)ekf.state.gyro_bias[2]);
+           (double)ekf.delayed_state.gyro_bias[0], (double)ekf.delayed_state.gyro_bias[1],
+           (double)ekf.delayed_state.gyro_bias[2]);
     printf("    EKF accel_bias = [%.4f, %.4f, %.4f] m/s²  (truth=[%.4f,%.4f,%.4f])\n",
-           (double)ekf.state.accel_bias[0], (double)ekf.state.accel_bias[1],
-           (double)ekf.state.accel_bias[2],
+           (double)ekf.delayed_state.accel_bias[0], (double)ekf.delayed_state.accel_bias[1],
+           (double)ekf.delayed_state.accel_bias[2],
            (double)accel_bias_true[0], (double)accel_bias_true[1],
            (double)accel_bias_true[2]);
     printf("    P diagonal (last 3 att, vel_z, pos_z):  att_z=%.5f  vel_z=%.4f  pos_z=%.3f\n",
@@ -355,29 +355,29 @@ static void test_full_mission_60s(void)
 
     /* Math stability — the critical flight-software guarantee */
     ASSERT_TRUE(all_finite(ekf.P, 225));
-    ASSERT_NEAR(quat_norm(ekf.state.q), 1.0f, 0.001f);
+    ASSERT_NEAR(quat_norm(ekf.delayed_state.q), 1.0f, 0.001f);
 
     /* Kinematic tracking (at end of 40 s coast) */
     printf("\n    Kinematic tracking error:\n");
     printf("    true_pos = [%.2f, %.2f, %.2f] m\n",
            (double)true_pos[0], (double)true_pos[1], (double)true_pos[2]);
     printf("    ekf_pos  = [%.2f, %.2f, %.2f] m\n",
-           (double)ekf.state.p_ned[0], (double)ekf.state.p_ned[1], (double)ekf.state.p_ned[2]);
+           (double)ekf.delayed_state.p_ned[0], (double)ekf.delayed_state.p_ned[1], (double)ekf.delayed_state.p_ned[2]);
     printf("    err_pos  = [%.2f, %.2f, %.2f] m\n",
-           (double)(ekf.state.p_ned[0]-true_pos[0]),
-           (double)(ekf.state.p_ned[1]-true_pos[1]),
-           (double)(ekf.state.p_ned[2]-true_pos[2]));
+           (double)(ekf.delayed_state.p_ned[0]-true_pos[0]),
+           (double)(ekf.delayed_state.p_ned[1]-true_pos[1]),
+           (double)(ekf.delayed_state.p_ned[2]-true_pos[2]));
     printf("    true_vel = [%.3f, %.3f, %.3f] m/s\n",
            (double)true_vel[0], (double)true_vel[1], (double)true_vel[2]);
     printf("    ekf_vel  = [%.3f, %.3f, %.3f] m/s\n",
-           (double)ekf.state.v_ned[0], (double)ekf.state.v_ned[1], (double)ekf.state.v_ned[2]);
+           (double)ekf.delayed_state.v_ned[0], (double)ekf.delayed_state.v_ned[1], (double)ekf.delayed_state.v_ned[2]);
     printf("    err_vel  = [%.3f, %.3f, %.3f] m/s\n",
-           (double)(ekf.state.v_ned[0]-true_vel[0]),
-           (double)(ekf.state.v_ned[1]-true_vel[1]),
-           (double)(ekf.state.v_ned[2]-true_vel[2]));
+           (double)(ekf.delayed_state.v_ned[0]-true_vel[0]),
+           (double)(ekf.delayed_state.v_ned[1]-true_vel[1]),
+           (double)(ekf.delayed_state.v_ned[2]-true_vel[2]));
 
-    ASSERT_NEAR(ekf.state.p_ned[2], true_pos[2], 15.0f);   /* pos within 15 m  */
-    ASSERT_NEAR(ekf.state.v_ned[2], true_vel[2],  3.0f);   /* vel within 3 m/s */
+    ASSERT_NEAR(ekf.delayed_state.p_ned[2], true_pos[2], 15.0f);   /* pos within 15 m  */
+    ASSERT_NEAR(ekf.delayed_state.v_ned[2], true_vel[2],  3.0f);   /* vel within 3 m/s */
 
     printf("  OK\n");
 }

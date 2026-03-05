@@ -2,7 +2,7 @@
  * @file test_ekf_dynamic.c
  * @brief Adversarial dynamic-flight tests.
  *
- * These tests call imu_predict(vehicle_imu_t*) for a genuine end-to-end
+ * These tests call imu_predict(imu_history_t*) for a genuine end-to-end
  * integration test that exercises the same code path used during flight.
  *
  * Ground-truth model uses NED convention (Z+ down).
@@ -80,7 +80,7 @@ static void test_launch_profile(void)
         true_pos[2] += true_vel[2] * dt;
 
         /* ── 2. Generate noisy IMU measurement ── */
-        vehicle_imu_t imu;
+        imu_history_t imu;
         imu.timestamp_us = (uint64_t)(step * (uint64_t)(dt * 1e6f));
         imu.dt_s         = dt;
 
@@ -104,8 +104,8 @@ static void test_launch_profile(void)
                               : step < idle_steps + burn_steps ? "BURN" : "coast";
             printf("    %5.1f  %-8s  %10.2f  %10.2f  %10.3f  %10.3f\n",
                    (double)(step * dt), phase,
-                   (double)true_pos[2], (double)ekf.state.p_ned[2],
-                   (double)true_vel[2], (double)ekf.state.v_ned[2]);
+                   (double)true_pos[2], (double)ekf.delayed_state.p_ned[2],
+                   (double)true_vel[2], (double)ekf.delayed_state.v_ned[2]);
         }
 
         /* ── Phase transition snapshots ── */
@@ -113,18 +113,18 @@ static void test_launch_profile(void)
             printf("    --- IGNITION (step %d, T=%.1fs)  "
                    "true_vel[2]=%.2f  ekf_vel[2]=%.2f\n",
                    step, (double)(step * dt),
-                   (double)true_vel[2], (double)ekf.state.v_ned[2]);
+                   (double)true_vel[2], (double)ekf.delayed_state.v_ned[2]);
         }
         if (step == idle_steps + burn_steps) {
             printf("    --- BURNOUT  (step %d, T=%.1fs)  "
                    "true_vel[2]=%.2f  ekf_vel[2]=%.2f  "
                    "true_pos[2]=%.1f  ekf_pos[2]=%.1f\n",
                    step, (double)(step * dt),
-                   (double)true_vel[2], (double)ekf.state.v_ned[2],
-                   (double)true_pos[2], (double)ekf.state.p_ned[2]);
+                   (double)true_vel[2], (double)ekf.delayed_state.v_ned[2],
+                   (double)true_pos[2], (double)ekf.delayed_state.p_ned[2]);
             printf("            P_vz=%.3f  P_pz=%.3f  |q|=%.8f\n",
                    (double)ekf.P[5*15+5], (double)ekf.P[8*15+8],
-                   (double)quat_norm(ekf.state.q));
+                   (double)quat_norm(ekf.delayed_state.q));
         }
 
         /* ── 4. Barometer update at 50 Hz (every 5 steps) ── */
@@ -150,37 +150,37 @@ static void test_launch_profile(void)
     printf("    true_pos = [%.2f, %.2f, %.2f] m\n",
            (double)true_pos[0], (double)true_pos[1], (double)true_pos[2]);
     printf("    ekf_pos  = [%.2f, %.2f, %.2f] m  err_z=%.2f m\n",
-           (double)ekf.state.p_ned[0], (double)ekf.state.p_ned[1], (double)ekf.state.p_ned[2],
-           (double)(ekf.state.p_ned[2] - true_pos[2]));
+           (double)ekf.delayed_state.p_ned[0], (double)ekf.delayed_state.p_ned[1], (double)ekf.delayed_state.p_ned[2],
+           (double)(ekf.delayed_state.p_ned[2] - true_pos[2]));
     printf("    true_vel = [%.3f, %.3f, %.3f] m/s\n",
            (double)true_vel[0], (double)true_vel[1], (double)true_vel[2]);
     printf("    ekf_vel  = [%.3f, %.3f, %.3f] m/s  err_z=%.3f m/s\n",
-           (double)ekf.state.v_ned[0], (double)ekf.state.v_ned[1], (double)ekf.state.v_ned[2],
-           (double)(ekf.state.v_ned[2] - true_vel[2]));
+           (double)ekf.delayed_state.v_ned[0], (double)ekf.delayed_state.v_ned[1], (double)ekf.delayed_state.v_ned[2],
+           (double)(ekf.delayed_state.v_ned[2] - true_vel[2]));
     printf("    EKF accel_bias = [%.4f, %.4f, %.4f] m/s²  (truth=[%.4f, %.4f, %.4f])\n",
-           (double)ekf.state.accel_bias[0], (double)ekf.state.accel_bias[1],
-           (double)ekf.state.accel_bias[2],
+           (double)ekf.delayed_state.accel_bias[0], (double)ekf.delayed_state.accel_bias[1],
+           (double)ekf.delayed_state.accel_bias[2],
            (double)hidden_accel_bias[0], (double)hidden_accel_bias[1],
            (double)hidden_accel_bias[2]);
     printf("    EKF gyro_bias  = [%.5f, %.5f, %.5f] rad/s\n",
-           (double)ekf.state.gyro_bias[0], (double)ekf.state.gyro_bias[1],
-           (double)ekf.state.gyro_bias[2]);
+           (double)ekf.delayed_state.gyro_bias[0], (double)ekf.delayed_state.gyro_bias[1],
+           (double)ekf.delayed_state.gyro_bias[2]);
     printf("    P trace=%.2f  P_vz=%.4f  P_pz=%.4f  |q|=%.8f\n",
            (double)matrix_trace(ekf.P, 15),
            (double)ekf.P[5*15+5], (double)ekf.P[8*15+8],
-           (double)quat_norm(ekf.state.q));
+           (double)quat_norm(ekf.delayed_state.q));
 
     /* Covariance must remain finite — highest-priority assertion */
     ASSERT_TRUE(all_finite(ekf.P, 225));
 
     /* Quaternion must remain unit-norm */
-    ASSERT_NEAR(quat_norm(ekf.state.q), 1.0f, 1e-4f);
+    ASSERT_NEAR(quat_norm(ekf.delayed_state.q), 1.0f, 1e-4f);
 
     /* Vertical position: within 5 m (GPS+Baro fused across all phases) */
-    ASSERT_NEAR(ekf.state.p_ned[2], true_pos[2], 5.0f);
+    ASSERT_NEAR(ekf.delayed_state.p_ned[2], true_pos[2], 5.0f);
 
     /* Vertical velocity: within 2 m/s */
-    ASSERT_NEAR(ekf.state.v_ned[2], true_vel[2], 2.0f);
+    ASSERT_NEAR(ekf.delayed_state.v_ned[2], true_vel[2], 2.0f);
 
     printf("  OK\n");
 }
@@ -212,7 +212,7 @@ static void test_motor_vibration(void)
 
     for (int step = 0; step < total_steps; step++) {
 
-        vehicle_imu_t imu;
+        imu_history_t imu;
         imu.timestamp_us = (uint64_t)(step * (uint64_t)(dt * 1e6f));
         imu.dt_s         = dt;
 
@@ -236,11 +236,11 @@ static void test_motor_vibration(void)
 
     printf("    P trace after vibration: %.4f\n",
            (double)matrix_trace(ekf.P, 15));
-    printf("    |q| = %.8f\n", (double)quat_norm(ekf.state.q));
+    printf("    |q| = %.8f\n", (double)quat_norm(ekf.delayed_state.q));
 
     /* These are the only invariants that must always hold under vibration */
     ASSERT_TRUE(all_finite(ekf.P, 225));
-    ASSERT_NEAR(quat_norm(ekf.state.q), 1.0f, 1e-4f);
+    ASSERT_NEAR(quat_norm(ekf.delayed_state.q), 1.0f, 1e-4f);
 
     printf("  OK\n");
 }
@@ -279,7 +279,7 @@ static void test_high_roll_rate(void)
     const float centripetal_x = -(pitch_rate * pitch_rate) * lever_arm_x; // -10 m/s^2
 
     for (int step = 0; step < total_steps; step++) {
-        vehicle_imu_t imu;
+        imu_history_t imu;
         imu.timestamp_us = (uint64_t)(step * (uint64_t)(dt * 1e6f));
         imu.dt_s         = dt;
 
@@ -296,18 +296,18 @@ static void test_high_roll_rate(void)
         imu_predict(&ekf, &imu);
     }
 
-    printf("    |q| = %.8f\n",          (double)quat_norm(ekf.state.q));
+    printf("    |q| = %.8f\n",          (double)quat_norm(ekf.delayed_state.q));
     printf("    v_ned = [%.3f, %.3f, %.3f] m/s\n",
-           (double)ekf.state.v_ned[0],
-           (double)ekf.state.v_ned[1],
-           (double)ekf.state.v_ned[2]);
+           (double)ekf.delayed_state.v_ned[0],
+           (double)ekf.delayed_state.v_ned[1],
+           (double)ekf.delayed_state.v_ned[2]);
 
     // Quaternion must remain unit-norm at high body rates
-    ASSERT_NEAR(quat_norm(ekf.state.q), 1.0f, 1e-4f);
+    ASSERT_NEAR(quat_norm(ekf.delayed_state.q), 1.0f, 1e-4f);
 
     // Lever arm compensation strips the centripetal acceleration in body-X.
     // v_ned[0] should remain near zero despite the ~10 m/s^2 centripetal injection.
-    ASSERT_NEAR(ekf.state.v_ned[0], 0.0f, 1.0f);
+    ASSERT_NEAR(ekf.delayed_state.v_ned[0], 0.0f, 1.0f);
 
     // NOTE: v_ned[2] is NOT asserted here. It accumulates ~g*(T - sin(wT)/w) ≈ 49 m/s
     // because the test injects a constant body-Z gravity while the body pitches through
