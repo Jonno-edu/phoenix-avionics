@@ -30,6 +30,7 @@
 #define TC_COMMON_RESET         0x00
 #define TLM_COMMON_IDENT        0x00
 #define EVENT_COMMON_LOG        0x01
+#define EVENT_OBC_NORB_STREAM   0x02  // Payload: [uint8_t topic_id][uint32_t timestamp_ms][raw struct bytes]
 
 #define LOG_LEVEL_ERROR         0
 #define LOG_LEVEL_WARN          1

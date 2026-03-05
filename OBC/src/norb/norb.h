@@ -32,6 +32,24 @@
 #include "norb/topics.h"
 
 /**
+ * @brief Callback fired immediately after norb_publish() overwrites a topic.
+ *
+ * Executes in the publisher's task context — must be ISR-safe (no blocking).
+ */
+typedef void (*norb_publish_cb_t)(topic_id_t topic);
+
+/**
+ * @brief Register a callback to be fired whenever a specific topic is published.
+ *
+ * Only one callback per topic. Calling again for the same topic replaces the
+ * previous registration. Pass NULL to clear.
+ *
+ * @param topic  Topic ID to watch.
+ * @param cb     Callback function pointer (must not block).
+ */
+void norb_set_publish_callback(topic_id_t topic, norb_publish_cb_t cb);
+
+/**
  * @brief Initialise NORB.
  *
  * Creates all topic queues. MUST be called once before any publish or

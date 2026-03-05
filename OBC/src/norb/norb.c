@@ -29,10 +29,17 @@
  * To add a topic: create a .msg file in msg/ and rebuild. */
 extern void norb_autogen_init_queues(QueueHandle_t *queues);
 
-static QueueHandle_t topic_queues[TOPIC_COUNT];
+static QueueHandle_t    topic_queues[TOPIC_COUNT];
+static norb_publish_cb_t g_callbacks[TOPIC_COUNT];
 
 void norb_init(void) {
     norb_autogen_init_queues(topic_queues);
+}
+
+void norb_set_publish_callback(topic_id_t topic, norb_publish_cb_t cb) {
+    if (topic < TOPIC_COUNT) {
+        g_callbacks[topic] = cb;
+    }
 }
 
 void norb_publish(topic_id_t topic, const void *data) {
@@ -42,6 +49,11 @@ void norb_publish(topic_id_t topic, const void *data) {
     // xQueueOverwrite: always succeeds, never blocks.
     // If the queue already holds a value, it is replaced immediately.
     xQueueOverwrite(topic_queues[topic], data);
+
+    // Fire publish callback in the publisher's context (must not block).
+    if (g_callbacks[topic] != NULL) {
+        g_callbacks[topic](topic);
+    }
 
 }
 

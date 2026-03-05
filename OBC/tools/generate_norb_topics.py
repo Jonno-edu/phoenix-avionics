@@ -5,12 +5,14 @@ generate_norb_topics.py — nORB message code generator
 ======================================================
 Reads .msg topic definition files and emits:
   - norb/topic_defs/<topic>.h   — per-topic struct (or extern-type alias)
-  - norb/topics.h               — topic_id_t enum (replaces hand-written version)
-  - norb_autogen.c              — queue creation; norb.c calls norb_autogen_init_queues()
+  - norb/topics.h               — topic_id_t enum, sizes array extern declaration
+  - norb_autogen.c              — queue creation and topic sizes array definition
+  - gsu_norb_dict.py            — Python unpackers for GSU telemetry stream
 
 Usage (called by CMake add_custom_command):
   python3 generate_norb_topics.py --outdir <build_dir>/norb_generated \
-      --topics msg/sensor_imu.msg msg/vehicle_state.msg ...
+      --topics msg/sensor_imu.msg msg/vehicle_state.msg ... \
+      --icd-include lib/phoenix-icd/include/phoenix_icd.h
 
 .msg File Format:
   # Comments begin with '#'.
@@ -43,11 +45,20 @@ import sys
 from pathlib import Path
 from datetime import datetime, timezone
 
-# ── Supported primitive types ─────────────────────────────────────────────────
+# ── Supported primitive types & Python struct format mapping ──────────────────
 PRIMITIVE_TYPES = {
     "uint8_t", "uint16_t", "uint32_t", "uint64_t",
     "int8_t",  "int16_t",  "int32_t",  "int64_t",
     "float", "double", "bool", "char",
+}
+
+TYPE_FORMAT_MAP = {
+    "uint8_t":  "B", "int8_t":  "b",
+    "uint16_t": "H", "int16_t": "h",
+    "uint32_t": "I", "int32_t": "i",
+    "uint64_t": "Q", "int64_t": "q",
+    "float":    "f", "double":  "d",
+    "bool":     "B", "char":    "c",
 }
 
 BANNER = """\
@@ -170,6 +181,47 @@ def parse_msg_file(path: Path) -> MsgTopic:
     return topic
 
 
+def parse_icd_struct(icd_content: str, struct_name: str) -> "list[MsgField] | str | None":
+    """
+    Regex-based parser to extract fields from phoenix_icd.h for @extern structs.
+
+    Returns:
+      - list[MsgField]  if fields were successfully parsed
+      - "BITFIELD"      if the struct contains bitfield members (cannot use struct.unpack)
+      - None            if the struct was not found in icd_content
+    """
+    pattern = (
+        r"typedef\s+struct\s*\{([^}]*)\}"
+        r"\s*(?:PACKED_STRUCT\s*)?" + re.escape(struct_name) + r"\s*;"
+    )
+    match = re.search(pattern, icd_content)
+    if not match:
+        return None
+
+    body = match.group(1)
+    fields: list[MsgField] = []
+    has_bitfields = False
+
+    for line in body.splitlines():
+        line = line.strip()
+        if not line or line.startswith("//"):
+            continue
+        if ":" in line:
+            has_bitfields = True
+        field_match = re.match(
+            r"^(\w+)\s+(\w+)(?:\[(\d+)\])?\s*(?::\s*\d+)?\s*;", line
+        )
+        if field_match:
+            base_type, name, arr_size = field_match.groups()
+            fields.append(
+                MsgField(base_type, name, int(arr_size) if arr_size else None, "")
+            )
+
+    if has_bitfields:
+        return "BITFIELD"
+    return fields
+
+
 # ── Code generators ───────────────────────────────────────────────────────────
 
 def banner() -> str:
@@ -229,11 +281,13 @@ def generate_topic_header(topic: MsgTopic) -> str:
 
 
 def generate_topics_enum(topics: list[MsgTopic]) -> str:
-    """Emit norb/topics.h — the topic_id_t enum."""
+    """Emit norb/topics.h — the topic_id_t enum and sizes array extern declaration."""
     lines: list[str] = []
     lines.append(banner())
     lines.append("#ifndef NORB_TOPICS_H")
     lines.append("#define NORB_TOPICS_H")
+    lines.append("")
+    lines.append("#include <stdint.h>")
     lines.append("")
     lines.append("typedef enum {")
 
@@ -244,13 +298,18 @@ def generate_topics_enum(topics: list[MsgTopic]) -> str:
     lines.append("    TOPIC_COUNT   /* always last — sizes the queue array */")
     lines.append("} topic_id_t;")
     lines.append("")
+    lines.append("/* Auto-generated lookup table: struct size in bytes for each topic.")
+    lines.append(" * Defined in norb_autogen.c. Used by norb_streamer to build packets")
+    lines.append(" * without knowing individual topic struct types. */")
+    lines.append("extern const uint8_t norb_topic_sizes[TOPIC_COUNT];")
+    lines.append("")
     lines.append("#endif /* NORB_TOPICS_H */")
     lines.append("")
     return "\n".join(lines)
 
 
 def generate_autogen_c(topics: list[MsgTopic]) -> str:
-    """Emit norb_autogen.c — FreeRTOS queue creation, called from norb_init()."""
+    """Emit norb_autogen.c — sizes array + FreeRTOS queue creation."""
     lines: list[str] = []
     lines.append(banner())
     lines.append("/* This file is compiled into the firmware alongside norb.c.        */")
@@ -259,12 +318,19 @@ def generate_autogen_c(topics: list[MsgTopic]) -> str:
     lines.append("#include <FreeRTOS.h>")
     lines.append("#include <queue.h>")
     lines.append("")
-    lines.append('/* Generated topic headers */')
+    lines.append("/* Generated topic headers */")
     for topic in topics:
         lines.append(f'#include "norb/topic_defs/{topic.name}.h"')
     lines.append("")
-    lines.append('/* Generated enum (topic_id_t + TOPIC_COUNT) */')
+    lines.append("/* Generated enum (topic_id_t + TOPIC_COUNT) */")
     lines.append('#include "norb/topics.h"')
+    lines.append("")
+    lines.append("/* Auto-generated size lookup table.")
+    lines.append(" * norb_streamer uses this to build packets without including topic headers. */")
+    lines.append("const uint8_t norb_topic_sizes[TOPIC_COUNT] = {")
+    for topic in topics:
+        lines.append(f"    [{topic.topic_id}] = (uint8_t)sizeof({topic.struct_type}),")
+    lines.append("};")
     lines.append("")
     lines.append("/* Static memory for each topic queue (no dynamic allocation) */")
     for topic in topics:
@@ -293,6 +359,98 @@ def generate_autogen_c(topics: list[MsgTopic]) -> str:
     return "\n".join(lines)
 
 
+def generate_gsu_dict(topics: list[MsgTopic], icd_content: str) -> str:
+    """Emit gsu_norb_dict.py — Python unpack functions for the GSU."""
+    lines: list[str] = [
+        "# AUTO-GENERATED — DO NOT EDIT",
+        "# Generated by: tools/generate_norb_topics.py",
+        "# Re-run CMake build to regenerate after adding/changing .msg files.",
+        "",
+        "import struct",
+        "from typing import Any, Dict",
+        "",
+    ]
+
+    # Topic ID constants
+    for i, topic in enumerate(topics):
+        lines.append(f"{topic.topic_id} = {i}")
+
+    lines.extend([
+        "",
+        "TOPIC_NAMES: Dict[int, str] = {",
+    ])
+    for i, topic in enumerate(topics):
+        lines.append(f"    {i}: '{topic.name.upper()}',")
+    lines.extend(["}", ""])
+
+    unpack_fns: list[tuple[int, str]] = []
+
+    for i, topic in enumerate(topics):
+        fn_name = f"unpack_{topic.name}"
+        lines.append(f"def {fn_name}(raw: bytes) -> Dict[str, Any]:")
+        lines.append(f'    """Unpack EVENT_OBC_NORB_STREAM payload for topic {topic.name.upper()}.')
+        lines.append(f'    raw = payload[1:] (strips the leading topic_id byte).')
+        lines.append(f'    Byte layout: [uint32 timestamp_ms][{topic.struct_type} fields...]')
+        lines.append(f'    """')
+
+        fields = topic.fields
+
+        if topic.is_extern:
+            parsed = parse_icd_struct(icd_content, topic.extern_type)
+            if parsed == "BITFIELD":
+                lines.append(f"    # Bitfield struct {topic.extern_type}: cannot use struct.unpack directly.")
+                lines.append(f"    # Returns raw bytes for manual interpretation.")
+                lines.append(f"    ts_ms = struct.unpack_from('<I', raw)[0]")
+                lines.append(f"    return {{'timestamp_ms': ts_ms, 'raw_data': list(raw[4:])}}")
+                lines.append("")
+                unpack_fns.append((i, fn_name))
+                continue
+            elif parsed:
+                fields = parsed
+            else:
+                lines.append(f"    # Could not locate {topic.extern_type} in phoenix_icd.h.")
+                lines.append(f"    ts_ms = struct.unpack_from('<I', raw)[0]")
+                lines.append(f"    return {{'timestamp_ms': ts_ms, 'raw_data': list(raw[4:])}}")
+                lines.append("")
+                unpack_fns.append((i, fn_name))
+                continue
+
+        # Build struct format string: little-endian, 4-byte timestamp header, then fields
+        fmt = "<I"
+        for f in fields:
+            char = TYPE_FORMAT_MAP.get(f.base_type, "B")
+            fmt += f"{f.array_size}{char}" if f.array_size else char
+
+        lines.append(f"    unpacked = struct.unpack_from('{fmt}', raw)")
+        lines.append(f"    return {{")
+        lines.append(f"        'timestamp_ms': unpacked[0],")
+
+        idx = 1
+        for f in fields:
+            if f.array_size:
+                lines.append(f"        '{f.name}': list(unpacked[{idx}:{idx + f.array_size}]),")
+                idx += f.array_size
+            else:
+                lines.append(f"        '{f.name}': unpacked[{idx}],")
+                idx += 1
+
+        lines.append(f"    }}")
+        lines.append("")
+        unpack_fns.append((i, fn_name))
+
+    lines.extend([
+        "# Map topic_id integer → unpack function.",
+        "# Usage: parsed = UNPACK_FNS[topic_id](payload[1:])",
+        "UNPACK_FNS: Dict[int, Any] = {",
+    ])
+    for tid, fn in unpack_fns:
+        lines.append(f"    {tid}: {fn},")
+    lines.append("}")
+    lines.append("")
+
+    return "\n".join(lines)
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -305,11 +463,28 @@ def main() -> None:
         "--topics", nargs="+", required=True,
         help="List of .msg files to process"
     )
+    parser.add_argument(
+        "--icd-include", required=False,
+        help="Path to phoenix_icd.h for parsing @extern struct layouts"
+    )
+    parser.add_argument(
+        "--gsu-outdir", required=False,
+        help="If provided, also write gsu_norb_dict.py to this directory (e.g. ../GSU)"
+    )
     args = parser.parse_args()
 
     out_root   = Path(args.outdir)
     topic_defs = out_root / "norb" / "topic_defs"
     topic_defs.mkdir(parents=True, exist_ok=True)
+
+    # Load ICD content for @extern struct parsing
+    icd_content = ""
+    if args.icd_include:
+        icd_path = Path(args.icd_include)
+        if icd_path.exists():
+            icd_content = icd_path.read_text()
+        else:
+            print(f"[norb_gen] WARNING: --icd-include path not found: {icd_path}", file=sys.stderr)
 
     # 1 ── Parse every .msg file ───────────────────────────────────────────────
     topics: list[MsgTopic] = []
@@ -326,18 +501,29 @@ def main() -> None:
     for topic in topics:
         header_path = topic_defs / f"{topic.name}.h"
         header_path.write_text(generate_topic_header(topic))
-        print(f"[norb_gen]   wrote {header_path.relative_to(out_root)}")
 
     # 3 ── norb/topics.h ───────────────────────────────────────────────────────
     (out_root / "norb").mkdir(parents=True, exist_ok=True)
     topics_h = out_root / "norb" / "topics.h"
     topics_h.write_text(generate_topics_enum(topics))
-    print(f"[norb_gen]   wrote {topics_h.relative_to(out_root)}")
 
     # 4 ── norb_autogen.c ──────────────────────────────────────────────────────
     autogen_c = out_root / "norb_autogen.c"
     autogen_c.write_text(generate_autogen_c(topics))
-    print(f"[norb_gen]   wrote {autogen_c.relative_to(out_root)}")
+
+    # 5 ── gsu_norb_dict.py ───────────────────────────────────────────────────
+    gsu_dict_content = generate_gsu_dict(topics, icd_content)
+    gsu_dict_path = out_root / "gsu_norb_dict.py"
+    gsu_dict_path.write_text(gsu_dict_content)
+    print(f"[norb_gen]   wrote {gsu_dict_path.relative_to(out_root)}")
+
+    # 5b ── Copy to GSU directory if requested (Rockchip sync target) ─────────
+    if args.gsu_outdir:
+        gsu_out = Path(args.gsu_outdir)
+        gsu_out.mkdir(parents=True, exist_ok=True)
+        gsu_copy = gsu_out / "gsu_norb_dict.py"
+        gsu_copy.write_text(gsu_dict_content)
+        print(f"[norb_gen]   copied gsu_norb_dict.py -> {gsu_copy}")
 
     print(f"[norb_gen] Done. Output in: {out_root}")
 

@@ -10,3 +10,6 @@
 [submodule "OBC/lib/FreeRTOS-Kernel"]
 	path = OBC/lib/FreeRTOS-Kernel
 	url = https://github.com/FreeRTOS/FreeRTOS-Kernel.git
+[submodule "OBC/lib/eigen3"]
+	path = OBC/lib/eigen3
+	url = https://gitlab.com/libeigen/eigen.git
