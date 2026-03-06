@@ -30,24 +30,33 @@ void baro_fuse(ekf_core_t *ekf, const baro_measurement_t *baro)
 
     /* ------------------------------------------------------------------ */
     /* 2. Flight / Coast Phase — 1D baro bias estimator                   */
-    /*    Only update when GPS is actively anchoring altitude so that the  */
-    /*    bias does not drift during un-observed coast.                    */
+    /*    Gated on three conditions:                                       */
+    /*      a) GPS is actively anchoring altitude (!gps_rejected)          */
+    /*      b) Low-dynamics: |v_ned[2]| < 50.0 m/s — freezes bias during  */
+    /*         boost and transonic flight where aero dynamic pressure       */
+    /*         corrupts the static port reading                            */
+    /*      c) Innovation gate: |bias_innov| < 20.0 m — rejects sudden    */
+    /*         transonic pressure spikes; weather drift is slow            */
     /* ------------------------------------------------------------------ */
-    if (!ekf->debug.gps_rejected) {
+    float current_vert_vel = fabsf(ekf->delayed_state.v_ned[2]);
+
+    if (!ekf->debug.gps_rejected && current_vert_vel < 50.0f) {
         /* Innovation: raw baro altitude vs GPS-anchored EKF altitude + current bias. */
         float bias_innov = baro->altitude_m
                          - (-ekf->delayed_state.p_ned[2] + ekf->delayed_state.baro_bias);
 
-        /* 1D Kalman gain. */
-        float bias_innov_var = ekf->delayed_state.baro_bias_var + ekf->params.baro_noise_var;
-        float K_bias         = ekf->delayed_state.baro_bias_var / bias_innov_var;
+        if (fabsf(bias_innov) < 20.0f) {
+            /* 1D Kalman gain. */
+            float bias_innov_var = ekf->delayed_state.baro_bias_var + ekf->params.baro_noise_var;
+            float K_bias         = ekf->delayed_state.baro_bias_var / bias_innov_var;
 
-        /* State and covariance update. */
-        ekf->delayed_state.baro_bias     += K_bias * bias_innov;
-        ekf->delayed_state.baro_bias_var  = (1.0f - K_bias) * ekf->delayed_state.baro_bias_var;
+            /* State and covariance update. */
+            ekf->delayed_state.baro_bias     += K_bias * bias_innov;
+            ekf->delayed_state.baro_bias_var  = (1.0f - K_bias) * ekf->delayed_state.baro_bias_var;
 
-        /* Process noise: keeps the filter responsive over long coast phases. */
-        ekf->delayed_state.baro_bias_var += 1e-4f;
+            /* Process noise: keeps the filter responsive over long coast phases. */
+            ekf->delayed_state.baro_bias_var += 1e-4f;
+        }
     }
 
     /* ------------------------------------------------------------------ */
