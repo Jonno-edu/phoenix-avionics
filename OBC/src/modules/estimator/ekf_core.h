@@ -52,7 +52,12 @@ typedef struct {
 } imu_history_t;
 
 /**
- * @brief EKF 15-state definition.
+ * @brief EKF 15-state definition (plus standalone 1D baro bias estimator).
+ *
+ * The baro_bias and baro_bias_var fields are intentionally kept outside
+ * the 15x15 P matrix.  They are tracked by a separate 1D Kalman filter
+ * that is anchored to GPS altitude during flight, completely firewalling
+ * the attitude/velocity/position states from barometric weather drift.
  */
 typedef struct {
     float q[4];          /**< Orientation [w, x, y, z] (body to NED). */
@@ -60,6 +65,8 @@ typedef struct {
     float p_ned[3];      /**< Position [x, y, z] (m). */
     float gyro_bias[3];  /**< Gyro bias [wx, wy, wz] (rad/s). */
     float accel_bias[3]; /**< Accel bias [ax, ay, az] (m/s^2). */
+    float baro_bias;     /**< Standalone baro offset from WGS84 (m). */
+    float baro_bias_var; /**< Standalone 1D variance for the baro bias (m^2). */
     float prev_gyro[3];  /**< Previous unbiased gyro rate — bookkeeping for angular accel (NOT a filter state). */
 } ekf_state_t;
 

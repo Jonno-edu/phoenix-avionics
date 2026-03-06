@@ -65,8 +65,15 @@ void ekf_core_reset(ekf_core_t* ekf) {
         ekf->delayed_state.prev_gyro[i]  = 0.0f;
     }
 
+    /* Baro bias 1D estimator: zero on reset so the EMA catches the first
+     * valid pad reading and hard-initializes from it. */
+    ekf->delayed_state.baro_bias     = 0.0f;
+    ekf->delayed_state.baro_bias_var = 0.0f;
+
     /* Sync head state to the initial delayed state. */
     ekf->head_state = ekf->delayed_state;
+    ekf->head_state.baro_bias     = 0.0f;
+    ekf->head_state.baro_bias_var = 0.0f;
 
     /* Reset ring buffer indices. */
     ekf->head_idx = 0;

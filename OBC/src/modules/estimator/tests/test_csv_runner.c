@@ -63,7 +63,7 @@ typedef unsigned long long uint64_t;
 // ============================================================================
 // Fixed linting: ensured stdint.h is at the very top.
 #define FUSE_GPS  true   // Set false to dead-reckon position/velocity
-#define FUSE_BARO false  // Set false to ignore pressure altitude
+#define FUSE_BARO true  // Set false to ignore pressure altitude
 #define FUSE_MAG  false // Set false to bypass pad heading alignment
 // ============================================================================
 
@@ -147,7 +147,8 @@ int main(void) {
                   "roll,pitch,yaw,bg_x,bg_y,bg_z,ba_x,ba_y,ba_z,"
                   "std_pN,std_pE,std_pD,std_vD,std_yaw,"
                   "baro_innov,baro_ratio,baro_rej,"
-                  "gps_innov_pD,gps_ratio_pD,gps_rej\n");
+                  "gps_innov_pD,gps_ratio_pD,gps_rej,"
+                  "baro_bias\n");
 
     char line[512];
     fgets(line, sizeof(line), fin); // Skip header row
@@ -373,7 +374,8 @@ int main(void) {
                           "%.3f,%.3f,%.3f,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,"
                           "%.4f,%.4f,%.4f,%.4f,%.4f,"
                           "%.3f,%.3f,%d,"
-                          "%.3f,%.3f,%d\n",
+                          "%.3f,%.3f,%d,"
+                          "%.4f\n",
                     time, state_ctx.mode,
                     ekf.head_state.p_ned[0], ekf.head_state.p_ned[1], ekf.head_state.p_ned[2],
                     ekf.head_state.v_ned[0], ekf.head_state.v_ned[1], ekf.head_state.v_ned[2],
@@ -382,7 +384,8 @@ int main(void) {
                     ekf.head_state.accel_bias[0], ekf.head_state.accel_bias[1], ekf.head_state.accel_bias[2],
                     std_pN, std_pE, std_pD, std_vD, std_yaw,
                     ekf.debug.baro_innov, ekf.debug.baro_test_ratio, (int)ekf.debug.baro_rejected,
-                    ekf.debug.gps_innov_pos[2], ekf.debug.gps_test_ratio_pos[2], (int)ekf.debug.gps_rejected);
+                    ekf.debug.gps_innov_pos[2], ekf.debug.gps_test_ratio_pos[2], (int)ekf.debug.gps_rejected,
+                    ekf.delayed_state.baro_bias);
 
             // ── Throttled Terminal Readout (0.5 Hz) ──────────────────────────
             static float last_print_time = -2.0f;
@@ -404,6 +407,7 @@ int main(void) {
                     "  EKF NED : N: %8.2f m  E: %8.2f m  D: %8.2f m  (ALT: %.1f m)\n"
                     "  EKF VEL : VN: %7.2f m/s  VE: %7.2f m/s  VD: %7.2f m/s  YAW: %6.1f deg\n"
                     "  EKF BIAS: GYR X:%7.4f Y:%7.4f Z:%7.4f  ACC X:%7.3f Y:%7.3f Z:%7.3f\n"
+                    "  BARO BIAS: %8.3f m  (var: %.4f m²)\n"
                     "  UNCERT  : sPN: %5.2f  sPE: %5.2f  sPD: %5.2f  sVD: %5.2f  sYAW: %5.2f\n"
                     "  INNOV   : POS N: %6.2fm (TR: %5.2f)  E: %6.2fm (TR: %5.2f)  D: %6.2fm (TR: %5.2f)\n"
                     "  VEL_TR  : VN_TR: %5.2f  VE_TR: %5.2f  VD_TR: %5.2f\n"
@@ -417,6 +421,7 @@ int main(void) {
                     ekf.head_state.v_ned[0], ekf.head_state.v_ned[1], ekf.head_state.v_ned[2], yaw * 57.2958f,
                     ekf.head_state.gyro_bias[0], ekf.head_state.gyro_bias[1], ekf.head_state.gyro_bias[2],
                     ekf.head_state.accel_bias[0], ekf.head_state.accel_bias[1], ekf.head_state.accel_bias[2],
+                    ekf.delayed_state.baro_bias, ekf.delayed_state.baro_bias_var,
                     std_pN, std_pE, std_pD, std_vD, std_yaw,
                     ekf.debug.gps_innov_pos[0], ekf.debug.gps_test_ratio_pos[0],
                     ekf.debug.gps_innov_pos[1], ekf.debug.gps_test_ratio_pos[1],

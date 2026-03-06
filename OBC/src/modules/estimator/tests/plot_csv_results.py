@@ -29,13 +29,14 @@ Phase shading on every panel:
     UNINIT/LEVEL/ALIGN/ZVU  →  steel-blue tint  (warmup)
     FLIGHT                  →  green tint        (navigation)
 
-CSV columns expected from test_csv_runner (25 columns):
+CSV columns expected from test_csv_runner (26 columns):
     time, flight_mode,
     p_N, p_E, p_D, v_N, v_E, v_D,
-    roll, pitch, yaw, bg_x, bg_y, bg_z,
+    roll, pitch, yaw, bg_x, bg_y, bg_z, ba_x, ba_y, ba_z,
     std_pN, std_pE, std_pD, std_vD, std_yaw,
     baro_innov, baro_ratio, baro_rej,
-    gps_innov_pD, gps_ratio_pD, gps_rej
+    gps_innov_pD, gps_ratio_pD, gps_rej,
+    baro_bias
 """
 
 import argparse
@@ -176,7 +177,8 @@ def _grid(ax: plt.Axes) -> None:
 # ---------------------------------------------------------------------------
 
 def plot_altitude(ax: plt.Axes, raw_df: pd.DataFrame, ekf_df: pd.DataFrame) -> None:
-    """Altitude tracking: raw baro, raw GPS, EKF ±3σ, GPS rejection shading."""
+    """Altitude tracking: raw baro, raw GPS, EKF ±3σ, GPS rejection shading.
+    Twin-axis overlay shows the learned baro bias (m)."""
     t_raw    = raw_df["time"]
     t_ekf    = ekf_df["time"]
     alt_ekf  = -ekf_df["p_D"]
@@ -196,9 +198,25 @@ def plot_altitude(ax: plt.Axes, raw_df: pd.DataFrame, ekf_df: pd.DataFrame) -> N
                     color="#4DD0E1", alpha=0.35, label="±3σ Bound", zorder=1)
 
     ax.set_ylabel("Altitude (m)", fontsize=9)
-    ax.set_title("Altitude Tracking  |  EKF ±3σ Confidence Ribbon",
+    ax.set_title("Altitude Tracking  |  EKF ±3σ Confidence Ribbon  |  Dashed: Baro Bias",
                  fontsize=10, fontweight="bold")
-    ax.legend(loc="upper left", fontsize=8)
+
+    # ── Baro bias twinx ──────────────────────────────────────────────────
+    if "baro_bias" in ekf_df.columns:
+        ax2 = ax.twinx()
+        ax2.plot(t_ekf, ekf_df["baro_bias"],
+                 color="#FF8F00", linewidth=1.2, linestyle="--",
+                 alpha=0.85, label="Baro Bias (m)", zorder=4)
+        ax2.set_ylabel("Baro Bias (m)", fontsize=8, color="#FF8F00")
+        ax2.tick_params(axis="y", labelcolor="#FF8F00", labelsize=7)
+        ax2.yaxis.set_major_formatter(ticker.FormatStrFormatter("%.1f"))
+        # Merge legends
+        lines1, labels1 = ax.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        ax.legend(lines1 + lines2, labels1 + labels2, loc="upper left", fontsize=8)
+    else:
+        ax.legend(loc="upper left", fontsize=8)
+
     _grid(ax)
 
 
@@ -413,6 +431,11 @@ def print_statistics(raw_df: pd.DataFrame, ekf_df: pd.DataFrame) -> None:
           f"Y={final_bg['bg_y']:.5f}  Z={final_bg['bg_z']:.5f}  rad/s")
     print(f"│  Final accel bias:   X={final_ba['ba_x']:.5f}  "
           f"Y={final_ba['ba_y']:.5f}  Z={final_ba['ba_z']:.5f}  m/s²")
+    if "baro_bias" in ekf_df.columns:
+        final_baro_bias = ekf_df["baro_bias"].iloc[-1]
+        pad_baro_bias   = ekf_df.loc[ekf_df["flight_mode"] < 4, "baro_bias"].iloc[-1] \
+                          if (ekf_df["flight_mode"] < 4).any() else float("nan")
+        print(f"│  Baro bias (pad→final): {pad_baro_bias:.3f} m  →  {final_baro_bias:.3f} m")
     print("└────────────────────────────────────────────────────────────────────┘")
     print()
 
