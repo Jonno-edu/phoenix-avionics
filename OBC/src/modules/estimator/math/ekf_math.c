@@ -67,6 +67,43 @@ void quat_integrate_small_angle(float q[4], const float gyro_corrected[3], float
     quat_normalize(q);
 }
 
+void quat_integrate_exact(float q[4], const float gyro_corrected[3], float dt) {
+    const float dx = gyro_corrected[0] * dt;
+    const float dy = gyro_corrected[1] * dt;
+    const float dz = gyro_corrected[2] * dt;
+    const float mag = sqrtf(dx*dx + dy*dy + dz*dz);
+
+    float dq[4];
+    if (mag > 1.0e-4f) {
+        /* Exact exponential map: exp(0.5 * angle_vec) */
+        const float half_mag = 0.5f * mag;
+        const float s = sinf(half_mag) / mag;
+        dq[0] = cosf(half_mag);
+        dq[1] = dx * s;
+        dq[2] = dy * s;
+        dq[3] = dz * s;
+    } else {
+        /* Small-angle fallback to avoid division by zero */
+        dq[0] = 1.0f;
+        dq[1] = 0.5f * dx;
+        dq[2] = 0.5f * dy;
+        dq[3] = 0.5f * dz;
+    }
+
+    /* Hamilton product: q_new = q_old ⊗ dq */
+    const float w = q[0]*dq[0] - q[1]*dq[1] - q[2]*dq[2] - q[3]*dq[3];
+    const float x = q[0]*dq[1] + q[1]*dq[0] + q[2]*dq[3] - q[3]*dq[2];
+    const float y = q[0]*dq[2] - q[1]*dq[3] + q[2]*dq[0] + q[3]*dq[1];
+    const float z = q[0]*dq[3] + q[1]*dq[2] - q[2]*dq[1] + q[3]*dq[0];
+
+    /* Normalize to suppress floating-point drift */
+    const float n = sqrtf(w*w + x*x + y*y + z*z);
+    q[0] = w / n;
+    q[1] = x / n;
+    q[2] = y / n;
+    q[3] = z / n;
+}
+
 /* ── Rotations and DCMs ───────────────────────────────────────────────────── */
 
 void dcm_from_quat(const float q[4], float R[3][3]) {

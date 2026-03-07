@@ -20,23 +20,37 @@ static void _load_default_params(ekf_params_t* p) {
     p->imu_lever_arm[2] = 0.0f;
     p->gravity_ms2 = 9.80665f;
 
-    /* Process noise */
-    p->accel_noise_var[0] = 1.0e-2f;
-    p->accel_noise_var[1] = 1.0e-2f;
-    p->accel_noise_var[2] = 1.0e-2f;
-    p->gyro_noise_var = 1.0e-4f;
+    /* Process noise (The EKF's internal doubt about the IMU) */
+    // Increased massively. A solid rocket motor is essentially a continuous explosion.
+    // The filter must not blindly trust integrated accelerometer data during boost.
+    p->accel_noise_var[0] = 4.0f;   // 2.0 m/s² std dev (assuming X is longitudinal/thrust axis)
+    p->accel_noise_var[1] = 2.0f;   // 1.4 m/s² std dev (lateral vibration)
+    p->accel_noise_var[2] = 2.0f;   // 1.4 m/s² std dev (lateral vibration)
+    
+    // Increased to account for coning, nutation, and your 32 rad/s spin rate.
+    p->gyro_noise_var = 1.0e-2f;    // ~0.1 rad/s (~5.7 deg/s) std dev
 
-    /* Sensor noise */
-    p->gps_pos_var[0] = 2.25f; p->gps_pos_var[1] = 2.25f; p->gps_pos_var[2] = 2.25f;
-    p->gps_vel_var[0] = 0.01f; p->gps_vel_var[1] = 0.01f; p->gps_vel_var[2] = 0.01f;
-    p->baro_noise_var = 0.25f;
+    /* Sensor noise (The EKF's doubt about external measurements) */
+    // U-blox M9N is excellent, but airborne dynamic modes under high G-loading 
+    // degrade positional and velocity accuracy compared to a hovering drone.
+    p->gps_pos_var[0] = 4.0f; p->gps_pos_var[1] = 4.0f; p->gps_pos_var[2] = 9.0f; // Relaxed Z-axis (3m std dev)
+    
+    // The biggest culprit from the log. 0.01f assumed GPS velocity was perfect to within 10 cm/s.
+    // Relaxed to assume ~1.4 m/s uncertainty under high dynamics.
+    p->gps_vel_var[0] = 2.0f; p->gps_vel_var[1] = 2.0f; p->gps_vel_var[2] = 2.0f;
+    
+    // Increased to handle transonic pressure ripples and turbulent bay flow during descent.
+    p->baro_noise_var = 4.0f;       // 2.0m std dev
+    
     p->mag_noise_var_pad    = 0.05f;
     p->mag_noise_var_flight = 5.0f;
 
     /* Chi-squared gates (sigma multiples) */
     p->gps_pos_gate       = 3.0f;
     p->gps_vel_gate       = 3.0f;
-    p->baro_gate          = 5.0f;
+    // Widened slightly to prevent the baro from being permanently rejected 
+    // if the parachute deploys roughly and causes a pressure spike.
+    p->baro_gate          = 6.0f;   
     p->mag_magnitude_gate = 3.0f;
 
     /* Recovery timeout */
@@ -210,10 +224,10 @@ void imu_propagate_kinematics(ekf_state_t* state, const imu_history_t* imu,
     vec3_rotate_body_to_ned(state->q, accel_corrected, acc_n);
     acc_n[2] += params->gravity_ms2;
 
-    /* 4. Integrate velocity and position. */
+    /* 4. Integrate position then velocity (trapezoidal: p uses old v + ½a·dt²). */
     for (int i = 0; i < 3; i++) {
+        state->p_ned[i] += state->v_ned[i] * dt + 0.5f * acc_n[i] * dt * dt;
         state->v_ned[i] += acc_n[i] * dt;
-        state->p_ned[i] += state->v_ned[i] * dt;
     }
 }
 

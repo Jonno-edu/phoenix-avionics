@@ -59,6 +59,21 @@ void quat_apply_yaw(float q_current[4], float psi, float q_out[4]);
  */
 void quat_integrate_small_angle(float q[4], const float gyro_corrected[3], float dt);
 
+/**
+ * @brief Exact quaternion integration using trigonometric exponential map.
+ *
+ * Computes dq = exp(0.5 * ω·dt) exactly via sin/cos, then applies
+ *   q_new = q ⊗ dq
+ * Safe for high spin rates where the small-angle approximation breaks down.
+ * Falls back to the small-angle polynomial when |ω·dt| < 1e-4 rad to
+ * avoid division by zero.
+ *
+ * @param q               Quaternion to update [w,x,y,z] (in-place).
+ * @param gyro_corrected  Bias-corrected angular rate (rad/s), body frame.
+ * @param dt              Integration interval (seconds).
+ */
+void quat_integrate_exact(float q[4], const float gyro_corrected[3], float dt);
+
 /* ── Rotations and Direction Cosine Matrices ──────────────────────────────── */
 
 /**

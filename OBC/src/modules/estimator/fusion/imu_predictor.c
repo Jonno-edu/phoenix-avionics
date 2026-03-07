@@ -64,21 +64,18 @@ void imu_predict(ekf_core_t* ekf, const imu_history_t* imu) {
 
     // --- 3. Nominal State Integration (Non-linear Kinematics) ---
 
-    // a. Update Orientation using math lib small-angle integrator
-    quat_integrate_small_angle(q, gyro_corrected, dt);
+    // a. Update Orientation — exact trigonometric exponential map
+    quat_integrate_exact(q, gyro_corrected, dt);
 
     // b. Rotate bias-corrected CG acceleration to NED and add gravity
     float acc_n[3];
     vec3_rotate_body_to_ned(q, accel_corrected, acc_n);
     acc_n[2] += ekf->params.gravity_ms2;
 
+    // c. Position then velocity — trapezoidal: p uses old v + ½a·dt²
     for (int i = 0; i < 3; i++) {
+        p_ned[i] += v_ned[i] * dt + 0.5f * acc_n[i] * dt * dt;
         v_ned[i] += acc_n[i] * dt;
-    }
-
-    // c. Update Position
-    for (int i = 0; i < 3; i++) {
-        p_ned[i] += v_ned[i] * dt;
     }
 
     // --- 4. Covariance Propagation (SymForce) ---

@@ -48,9 +48,29 @@ static void integrator_task(void *params)
         }
 
         /* Accumulate this sample */
+        /* 1. Raw delta-angle and delta-velocity for this 1 ms step */
+        float d_alpha[3], d_nu[3];
         for (int i = 0; i < 3; i++) {
-            da[i] += imu.gyro_rads[i] * INTEGRATOR_SAMPLE_DT_S;
-            dv[i] += imu.accel_ms2[i] * INTEGRATOR_SAMPLE_DT_S;
+            d_alpha[i] = imu.gyro_rads[i] * INTEGRATOR_SAMPLE_DT_S;
+            d_nu[i]    = imu.accel_ms2[i] * INTEGRATOR_SAMPLE_DT_S;
+        }
+
+        /* 2. Coning correction: 0.5 * (da_accum x d_alpha) */
+        float coning[3];
+        coning[0] = 0.5f * (da[1] * d_alpha[2] - da[2] * d_alpha[1]);
+        coning[1] = 0.5f * (da[2] * d_alpha[0] - da[0] * d_alpha[2]);
+        coning[2] = 0.5f * (da[0] * d_alpha[1] - da[1] * d_alpha[0]);
+
+        /* 3. Sculling correction: 0.5 * [(da_accum x d_nu) + (dv_accum x d_alpha)] */
+        float sculling[3];
+        sculling[0] = 0.5f * ((da[1]*d_nu[2]    - da[2]*d_nu[1])    + (dv[1]*d_alpha[2] - dv[2]*d_alpha[1]));
+        sculling[1] = 0.5f * ((da[2]*d_nu[0]    - da[0]*d_nu[2])    + (dv[2]*d_alpha[0] - dv[0]*d_alpha[2]));
+        sculling[2] = 0.5f * ((da[0]*d_nu[1]    - da[1]*d_nu[0])    + (dv[0]*d_alpha[1] - dv[1]*d_alpha[0]));
+
+        /* 4. Accumulate with corrections */
+        for (int i = 0; i < 3; i++) {
+            da[i] += d_alpha[i] + coning[i];
+            dv[i] += d_nu[i]   + sculling[i];
         }
         count++;
 

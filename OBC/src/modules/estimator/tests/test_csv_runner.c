@@ -108,6 +108,29 @@ int main(void) {
     ekf_core_init(&ekf);
     ekf_state_init(&state_ctx, MAG_REF_NED, 0.004f);
 
+    // ── SIL Parameter Overrides (bypass default loader) ──────────────────────
+    // SymForce trap: noise enters the state equation multiplied by dt, so the
+    // covariance update scales by dt².  Dividing by dt here cancels that factor
+    // and gives the intended variance-growth-per-second (continuous-time) rate.
+    {
+        const float dt = 0.004f;  // 250 Hz EKF step
+
+        // Measurement noise (external doubt)
+        ekf.params.gps_pos_var[0] = 4.0f;   // (2 m)² horizontal
+        ekf.params.gps_pos_var[1] = 4.0f;
+        ekf.params.gps_pos_var[2] = 9.0f;   // (3 m)² vertical
+        ekf.params.gps_vel_var[0] = 2.0f;   // (1.4 m/s)² NED
+        ekf.params.gps_vel_var[1] = 2.0f;
+        ekf.params.gps_vel_var[2] = 2.0f;
+        ekf.params.baro_noise_var = 4.0f;
+        ekf.params.baro_gate      = 6.0f;
+
+        // Process noise (internal doubt) — scaled by 1/dt for SymForce math.
+        // Target: 0.01 rad²/s gyro variance growth per second.
+        ekf.params.gyro_noise_var = 0.01f / dt;  // → 2.5 rad²/s² per step
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     if (!FUSE_MAG) {
         // Without the magnetometer we cannot find North via HEADING_ALIGN.
         // Bypass that phase by hard-locking the attitude to the known launch rail
@@ -169,14 +192,8 @@ int main(void) {
     double latest_lon = 0.0;
     float  latest_alt = 0.0f;
 
-    // --- Relax GPS parameters for this specific noisy receiver ---
-    for (int i = 0; i < 3; i++) {
-        ekf.params.gps_pos_var[i] = 25.0f; // Expect 5m std deviation (5^2 = 25)
-        ekf.params.gps_vel_var[i] = 10.0f; // Expect 3.1m/s std deviation
-    }
-    // Widen the Chi-Squared gate from the default 3-sigma to 5-sigma
-    ekf.params.gps_pos_gate = 5.0f;
-    ekf.params.gps_vel_gate = 5.0f;
+    // Process-noise overrides are applied above (SIL override block).
+    // Dynamic accel noise is scaled per-mode inside the EKF step loop below.
 
     // ── PX4-style trapezoidal integrator state ────────────────────────────────
     // 1000 Hz raw samples are averaged (prev + curr) × dt before accumulation,
@@ -278,17 +295,21 @@ int main(void) {
                     printf("\n>>> LIFTOFF DETECTED: IMU Biases Locked for Flight <<<\n\n");
                 }
 
-                // 2. Inflate accel noise during boost to encompass scale-factor error.
-                // This ensures the 3-sigma bounds grow wide enough to accept the GPS at burnout.
-                float acc_mag = sqrtf(accel[0]*accel[1] + accel[1]*accel[1] + accel[2]*accel[2]);
+                // 2. Inflate accel noise during boost — scaled by 1/dt (SymForce rule).
+                // The state equation has noise × dt, so covariance grows by var × dt².
+                // Dividing the target variance-per-second by dt recovers the linear growth.
+                const float dt_step = 0.004f;
+                float acc_mag = sqrtf(accel[0]*accel[0] + accel[1]*accel[1] + accel[2]*accel[2]);
                 if (acc_mag > 25.0f) {
-                    ekf.params.accel_noise_var[0] = 5.0f; 
-                    ekf.params.accel_noise_var[1] = 5.0f;
-                    ekf.params.accel_noise_var[2] = 5.0f;
+                    // BOOST: target 10.0 (m/s)² variance growth per second under ~7 G.
+                    ekf.params.accel_noise_var[0] = 10.0f / dt_step;
+                    ekf.params.accel_noise_var[1] = 10.0f / dt_step;
+                    ekf.params.accel_noise_var[2] = 10.0f / dt_step;
                 } else {
-                    ekf.params.accel_noise_var[0] = 0.05f; // Normal coast phase noise
-                    ekf.params.accel_noise_var[1] = 0.05f;
-                    ekf.params.accel_noise_var[2] = 0.05f;
+                    // COAST/DESCENT: target 1.0 (m/s)² variance growth per second.
+                    ekf.params.accel_noise_var[0] = 1.0f / dt_step;
+                    ekf.params.accel_noise_var[1] = 1.0f / dt_step;
+                    ekf.params.accel_noise_var[2] = 1.0f / dt_step;
                 }
             }
             // ──────────────────────────────────────────────────────────────────
